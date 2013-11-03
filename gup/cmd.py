@@ -2,13 +2,14 @@ from __future__ import print_function
 import sys
 import logging
 import optparse
+import os
 
 from . import builder
 from .error import *
 
 logging.basicConfig(level=logging.DEBUG)
 
-def main(args):
+def _main(args):
 	p = optparse.OptionParser('Usage: gup [OPTIONS] [target [...]]')
 	p.add_option('-u', '--update', action='store_true', help='Only rebuild stale targets', default=False)
 	p.add_option('--xxx', action='store_const', const=None, dest='action', default=build, help='TODO')
@@ -24,11 +25,14 @@ def build(opts, targets):
 		task = builder.prepare_build(target)
 		logging.debug('prepare_build(%r) -> %r' % (target, task))
 		if task is None:
-			if opts.update:
+			if opts.update and os.path.exists(target):
 				logging.debug("--update on source file: noop")
 				return
 			raise Unbuildable("Don't know how to build %s" % (target))
 		task.build(force = not opts.update)
 
+def main():
+	_main(sys.argv[1:])
+
 if __name__ == '__main__':
-	main(sys.argv[1:])
+	main()

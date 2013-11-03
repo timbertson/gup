@@ -12,8 +12,9 @@
 	<feed-for interface="http://gfxmonk.net/dist/0install/DONT_PUBLISH.xml"/>
 
 	<group>
+		<environment insert="bin" name="PATH" mode="prepend"/>
+		<environment insert="" name="PYTHONPATH"/>
 		<command name="run">
-			<environment insert="" name="PYTHONPATH"/>
 			<runner interface="http://repo.roscidus.com/python/python"/>
 			<arg>-m</arg>
 			<arg>gup.cmd</arg>

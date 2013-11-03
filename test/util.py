@@ -18,8 +18,9 @@ def mkdirp(p):
 	if not os.path.exists(p):
 		os.makedirs(p)
 
+BASH = '#!/bin/bash\nset -eu\n'
 def echo_to_target(contents):
-	return '#!/bin/bash\necho -n "%s" > "$1"' % (contents,)
+	return BASH + 'echo -n "%s" > "$1"' % (contents,)
 
 class TestCase(mocktest.TestCase):
 	def setUp(self):
@@ -56,13 +57,20 @@ class TestCase(mocktest.TestCase):
 
 	def build(self, *targets):
 		with self._root_cwd():
-			cmd.main(list(targets))
+			cmd._main(list(targets))
+
+	def mtime(self, p):
+		return os.stat(os.path.join(self.ROOT, p)).st_mtime
 
 	def build_u(self, *targets):
 		with self._root_cwd():
-			cmd.main(['--update'] + list(targets))
+			cmd._main(['--update'] + list(targets))
 	
 	def build_assert(self, target, contents):
+		self.build(target)
+		self.assertEqual(self.read(target), contents)
+
+	def build_u_assert(self, target, contents):
 		self.build(target)
 		self.assertEqual(self.read(target), contents)
 

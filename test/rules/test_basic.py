@@ -12,7 +12,10 @@ class TestBasicRules(TestCase):
 
 		self.build_u("source.txt")
 		self.assertEqual(self.read("source.txt"), self.source_contents)
-	
+
+	def test_fails_on_updating_nonexitent_file(self):
+		self.assertRaises(Unbuildable, lambda: self.build_u("nonexistent.txt"))
+
 	def test_only_creates_new_files_matching_pattern(self):
 		self.assertRaises(Unbuildable, lambda: self.build("output.txt"))
 
