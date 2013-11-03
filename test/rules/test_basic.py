@@ -55,13 +55,15 @@ class TestGupdirectory(TestCase):
 		self.build_assert('a/b/c/d', 'ok')
 		self.build_assert('a/b/xyz/d', 'ok')
 		self.assertRaises(Unbuildable, lambda: self.build("x/b/cd"))
-		self.assertEquals(os.listdir(self.ROOT), ['a'])
+	
+	def test_leaves_nothing_for_unbuildable_target(self):
+		self.assertRaises(Unbuildable, lambda: self.build("a/b/c/d"))
+		self.assertEquals(os.listdir(self.ROOT), [])
 
-	def test_patterns_match_against_path_from_gupfile_ignoring(self):
-		self.write("a/default.gup", echo_to_target('ok'))
-		self.write("a/Gupfile", 'default.gup:\n\tb/*/d')
+	def test_gupfile_patterns_ignore_gup_dir(self):
+		self.write("gup/a/default.gup", echo_to_target('ok'))
+		self.write("gup/a/Gupfile", 'default.gup:\n\tb/*/d')
 
 		self.build_assert('a/b/c/d', 'ok')
 		self.build_assert('a/b/xyz/d', 'ok')
 		self.assertRaises(Unbuildable, lambda: self.build("x/b/cd"))
-		self.assertEquals(os.listdir(self.ROOT), ['a'])

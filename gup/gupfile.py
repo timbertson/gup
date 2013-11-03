@@ -17,9 +17,10 @@ def _up_path(n):
 	return '/'.join(itertools.repeat('..',n))
 
 class PossibleGupFile(object):
-	def __init__(self, target_path, gupdir, gupfile):
+	def __init__(self, gupdir, gupfile, target):
 		self.gupdir = os.path.normpath(gupdir)
 		self.gupfile = gupfile
+		self.target = target
 	
 	@property
 	def guppath(self):
@@ -37,34 +38,35 @@ def possible_gup_files(p):
 		gupdir:	  folder containing .gup file
 		gupfile:   filename of .gup file
 
-	>>> for g in possible_gup_files('/a/b/c/d/e.ext'):
-	...		print(os.path.join(g.gupdir, g.gupfile))
-	/a/b/c/d/e.ext.gup
-	/a/b/c/d/gup/e.ext.gup
-	/a/b/c/gup/d/e.ext.gup
-	/a/b/gup/c/d/e.ext.gup
-	/a/gup/b/c/d/e.ext.gup
-	/gup/a/b/c/d/e.ext.gup
-	/a/b/c/d/Gupfile
-	/a/b/c/d/gup/Gupfile
-	/a/b/c/gup/d/Gupfile
-	/a/b/gup/c/d/Gupfile
-	/a/gup/b/c/d/Gupfile
-	/gup/a/b/c/d/Gupfile
-	/a/b/c/Gupfile
-	/a/b/c/gup/Gupfile
-	/a/b/gup/c/Gupfile
-	/a/gup/b/c/Gupfile
-	/gup/a/b/c/Gupfile
-	/a/b/Gupfile
-	/a/b/gup/Gupfile
-	/a/gup/b/Gupfile
-	/gup/a/b/Gupfile
-	/a/Gupfile
-	/a/gup/Gupfile
-	/gup/a/Gupfile
-	/Gupfile
-	/gup/Gupfile
+	>>> def p(g):
+	...   print(' | '.join([os.path.join(g.gupdir, g.gupfile), g.target]))
+	>>> for g in possible_gup_files('/a/b/c/d/e'): p(g)
+	/a/b/c/d/e.gup | e
+	/a/b/c/d/gup/e.gup | e
+	/a/b/c/gup/d/e.gup | e
+	/a/b/gup/c/d/e.gup | e
+	/a/gup/b/c/d/e.gup | e
+	/gup/a/b/c/d/e.gup | e
+	/a/b/c/d/Gupfile | e
+	/a/b/c/d/gup/Gupfile | e
+	/a/b/c/gup/d/Gupfile | e
+	/a/b/gup/c/d/Gupfile | e
+	/a/gup/b/c/d/Gupfile | e
+	/gup/a/b/c/d/Gupfile | e
+	/a/b/c/Gupfile | d/e
+	/a/b/c/gup/Gupfile | d/e
+	/a/b/gup/c/Gupfile | d/e
+	/a/gup/b/c/Gupfile | d/e
+	/gup/a/b/c/Gupfile | d/e
+	/a/b/Gupfile | c/d/e
+	/a/b/gup/Gupfile | c/d/e
+	/a/gup/b/Gupfile | c/d/e
+	/gup/a/b/Gupfile | c/d/e
+	/a/Gupfile | b/c/d/e
+	/a/gup/Gupfile | b/c/d/e
+	/gup/a/Gupfile | b/c/d/e
+	/Gupfile | a/b/c/d/e
+	/gup/Gupfile | a/b/c/d/e
 
 	>>> for g in itertools.islice(possible_gup_files('x/y/somefile'), 0, 3):
 	...		print(os.path.join(g.gupdir, g.gupfile))
@@ -85,11 +87,11 @@ def possible_gup_files(p):
 	gupfilename = filename + '.gup'
 
 	# find direct match for `{target}.gup` in all possible `/gup` dirs
-	yield PossibleGupFile(p, dirname, gupfilename)
+	yield PossibleGupFile(dirname, gupfilename, filename)
 	for i in xrange(0, dirdepth):
 		suff = '/'.join(dirparts[dirdepth - i:])
 		base = path.join(dirname, _up_path(i))
-		yield PossibleGupFile(p, path.join(base, 'gup', suff), gupfilename)
+		yield PossibleGupFile(path.join(base, 'gup', suff), gupfilename, filename)
 
 	for up in xrange(0, dirdepth):
 		# `up` controls how "fuzzy" the match is, in terms
@@ -98,12 +100,13 @@ def possible_gup_files(p):
 		# As `up` increments, we discard a folder on the base path.
 		base_suff = '/'.join(dirparts[dirdepth - up:])
 		parent_base = path.join(dirname, _up_path(up))
-		yield PossibleGupFile(p, parent_base, GUPFILE)
+		target_id = os.path.join(base_suff, filename)
+		yield PossibleGupFile(parent_base, GUPFILE, target_id)
 		for i in xrange(0, dirdepth - up):
 			# `i` is how far up the directory tree we're looking for the gup/ directory
 			suff = '/'.join(dirparts[dirdepth - i - up:dirdepth - up])
 			base = path.join(parent_base, _up_path(i))
-			yield PossibleGupFile(p, path.join(base, 'gup', suff), GUPFILE)
+			yield PossibleGupFile(path.join(base, 'gup', suff), GUPFILE, target_id)
 
 GUPFILE = 'Gupfile'
 
@@ -115,12 +118,10 @@ class Gupfile(object):
 			self.rules = parse_gupfile(f)
 			log.debug("Parsed gupfile: %r" % self.rules)
 	
-	def builder(self, p):
-		base = os.path.dirname(self.path)
-		rel_path = os.path.relpath(p, base)
-		for gupfile, rules in self.rules:
-			if rules.match(rel_path):
-				return os.path.join(base, gupfile)
+	def builder(self, target):
+		for script, rules in self.rules:
+			if rules.match(target):
+				return os.path.join(os.path.dirname(self.path), script)
 		return None
 
 class Guprules(object):

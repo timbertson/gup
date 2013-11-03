@@ -27,7 +27,7 @@ def prepare_build(p):
 		if path.exists(guppath):
 			log.debug("gupfile candidate exists: %s" % (guppath,))
 			if candidate.indirect:
-				builder = Gupfile(guppath).builder(p)
+				builder = Gupfile(guppath).builder(candidate.target)
 				if builder is not None:
 					target.set_builder(builder)
 					return target
