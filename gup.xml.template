@@ -21,6 +21,7 @@
 		<command name="test">
 			<requires interface="http://gfxmonk.net/dist/0install/mocktest.xml"/>
 			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml"/>
+			<arg>--with-doctest</arg>
 		</command>
 		<implementation version="{version}" released="{date}">
 			<manifest-digest/>
