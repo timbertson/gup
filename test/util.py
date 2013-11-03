@@ -18,6 +18,9 @@ def mkdirp(p):
 	if not os.path.exists(p):
 		os.makedirs(p)
 
+def echo_to_target(contents):
+	return '#!/bin/bash\necho -n "%s" > "$1"' % (contents,)
+
 class TestCase(mocktest.TestCase):
 	def setUp(self):
 		super(TestCase, self).setUp()
@@ -58,4 +61,8 @@ class TestCase(mocktest.TestCase):
 	def build_u(self, *targets):
 		with self._root_cwd():
 			cmd.main(['--update'] + list(targets))
+	
+	def build_assert(self, target, contents):
+		self.build(target)
+		self.assertEqual(self.read(target), contents)
 

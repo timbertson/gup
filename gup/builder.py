@@ -21,12 +21,13 @@ def prepare_build(p):
 	- returns None if the file is not buildable, a Target object otherwise
 	'''
 	target = Target(p)
-	for (base, gupfilename) in possible_gup_files(p):
-		guppath = path.join(base, gupfilename)
+	for candidate in possible_gup_files(p):
+		guppath = candidate.guppath
+		# log.debug("gupfile candidate: %s" % (guppath,))
 		if path.exists(guppath):
-			if gupfilename == GUPFILE:
-				gupfile = Gupfile(guppath)
-				builder = gupfile.builder(p)
+			log.debug("gupfile candidate exists: %s" % (guppath,))
+			if candidate.indirect:
+				builder = Gupfile(guppath).builder(p)
 				if builder is not None:
 					target.set_builder(builder)
 					return target
@@ -63,6 +64,13 @@ class Target(object):
 		# XXX: force
 		assert self.gupscript is not None
 		basedir = path.dirname(self.path) or '.'
+
+		# dest may not exist, if a /gup/ directory is in use
+		try:
+			os.makedirs(basedir)
+		except OSError as e:
+			if e.errno != errno.EEXIST: raise
+
 		with tempfile.NamedTemporaryFile(prefix='.gup-tmp-', dir=basedir, delete=False) as temp:
 			MOVED = False
 			try:
@@ -72,7 +80,7 @@ class Target(object):
 				try:
 					proc = subprocess.Popen(args, cwd = basedir)
 				except OSError as e:
-					if e.errno != errno.EACCES: raise e
+					if e.errno != errno.EACCES: raise
 					# not executable - read shebang ourselves
 					args = guess_executable(self.gupscript) + args
 					proc = subprocess.Popen(args, cwd = basedir)
