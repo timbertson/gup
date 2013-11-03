@@ -1,0 +1,32 @@
+<?xml version="1.0" ?>
+<?xml-stylesheet type='text/xsl' href='interface.xsl'?>
+<interface
+	xmlns="http://zero-install.sourceforge.net/2004/injector/interface"
+	xmlns:compile="http://zero-install.sourceforge.net/2006/namespaces/0compile"
+	xmlns:release="http://zero-install.sourceforge.net/2007/namespaces/0release">
+
+	<name>gup</name>
+	<summary>gup</summary>
+	<description>
+	</description>
+	<feed-for interface="http://gfxmonk.net/dist/0install/DONT_PUBLISH.xml"/>
+
+	<group>
+		<command name="run">
+			<environment insert="" name="PYTHONPATH"/>
+			<runner interface="http://repo.roscidus.com/python/python"/>
+			<arg>-m</arg>
+			<arg>gup.cmd</arg>
+		</command>
+		<command name="test">
+			<requires interface="http://gfxmonk.net/dist/0install/mocktest.xml"/>
+			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml"/>
+		</command>
+		<implementation version="{version}" released="{date}">
+			<manifest-digest/>
+			<archive href="{archive}"/>
+		</implementation>
+	</group>
+
+</interface>
+
