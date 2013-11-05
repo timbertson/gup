@@ -3,8 +3,9 @@ import os
 from os import path
 import re
 import itertools
-import logging
-log = logging.getLogger(__name__)
+
+from .log import getLogger
+log = getLogger(__name__)
 
 def _default_gup_files(filename):
 	l = filename.split('.')

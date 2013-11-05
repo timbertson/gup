@@ -4,7 +4,8 @@ import contextlib
 import errno
 
 from .util import *
-log = logging.getLogger(__name__)
+from .log import getLogger
+log = getLogger(__name__)
 
 class TargetState(object):
 	def __init__(self, p):

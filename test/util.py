@@ -14,6 +14,8 @@ from gup.error import *
 
 log = logging.getLogger('TEST')
 
+os.environ['GUP_IN_TESTS'] = '1'
+
 TEMP = os.path.join(os.path.dirname(__file__), 'tmp')
 
 def mkdirp(p):

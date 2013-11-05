@@ -1,8 +1,9 @@
 import sys, os, errno, glob, stat, fcntl
 import logging
 
-logger = logging.getLogger(__name__)
-debug = logger.info
+from .log import getLogger
+log = getLogger(__name__)
+debug = log.debug
 
 # FIXME: I really want to use fcntl F_SETLK, F_SETLKW, etc here.  But python
 # doesn't do the lockdata structure in a portable way, so we have to use

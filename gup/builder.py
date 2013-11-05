@@ -5,13 +5,21 @@ from os import path
 import errno
 import subprocess
 import logging
-log = logging.getLogger(__name__)
 
 from .gupfile import possible_gup_files, GUPFILE, Gupfile
-from . import output
 from .error import *
 from .util import *
 from .state import TargetState
+from .log import getLogger
+from . import var
+log = getLogger(__name__)
+
+devnull = open(os.devnull, 'w')
+
+try:
+	from pipes import quote
+except ImportError:
+	from shlex import quote
 
 def prepare_build(p):
 	'''
@@ -72,17 +80,19 @@ class Target(object):
 			with open(output_file, 'w'): pass
 			try:
 				args = [gupscript, output_file, self.path]
-				output.building_target(self.path)
+				log.info(self.path)
 				mtime = get_mtime(self.path)
+				stdout = None if log.isEnabledFor(logging.DEBUG) else devnull
 				try:
-					proc = subprocess.Popen(args, cwd = basedir, env = env)
+					proc = subprocess.Popen(args, cwd = basedir, env = env, stdout=stdout)
 				except OSError as e:
 					if e.errno != errno.EACCES: raise
 					# not executable - read shebang ourselves
 					args = guess_executable(gupscript) + args
-					proc = subprocess.Popen(args, cwd = basedir, env = env)
+					proc = subprocess.Popen(args, cwd = basedir, env = env, stdout=stdout)
 				finally:
-					output.xtrace(args)
+					if var.TRACE:
+						log.info(' + ' + ' '.join(map(quote, args)))
 				ret = proc.wait()
 				new_mtime = get_mtime(self.path)
 				if mtime != new_mtime:

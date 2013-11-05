@@ -1,8 +1,8 @@
 import os
 import errno
 import logging
-import decimal
-log = logging.getLogger(__name__)
+from .log import getLogger
+log = getLogger(__name__)
 
 __all__ = ['mkdirp', 'get_mtime']
 
