@@ -21,7 +21,7 @@ class TestDirectDependencies(TestCase):
 		self.write("counter", "2")
 		self.build_u_assert("dep", "COUNT: 2")
 	
-	def test_rebuilds_on_recursive_dependency_change(self):
+	def test_rebuilds_on_transitive_dependency_change(self):
 		self.write("counter.gup", BASH + 'gup -u counter2; echo -n "$(expr "$(cat counter2)" + 1)" > $1')
 
 		self.write("counter2", "1")
@@ -38,7 +38,7 @@ class TestDirectDependencies(TestCase):
 
 		self.write("counter2", "2")
 		self.build_u("dep")
-		self.assertEqual(read("dep"), "COUNT: 3")
-		self.assertEqual(read("counter"), "3")
+		self.assertEqual(self.read("dep"), "COUNT: 3")
+		self.assertEqual(self.read("counter"), "3")
 
 

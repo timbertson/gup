@@ -12,6 +12,8 @@ import logging
 from gup import cmd
 from gup.error import *
 
+log = logging.getLogger('TEST')
+
 TEMP = os.path.join(os.path.dirname(__file__), 'tmp')
 
 def mkdirp(p):
@@ -55,16 +57,19 @@ class TestCase(mocktest.TestCase):
 		finally:
 			os.chdir(initial)
 
-	def build(self, *targets):
+	def _build(self, args):
+		log.warn("Running build with args: %r" % (list(args)))
 		with self._root_cwd():
-			cmd._main(list(targets))
+			cmd._main(list(args))
+
+	def build(self, *targets):
+		self._build(targets)
 
 	def mtime(self, p):
 		return os.stat(os.path.join(self.ROOT, p)).st_mtime
 
 	def build_u(self, *targets):
-		with self._root_cwd():
-			cmd._main(['--update'] + list(targets))
+		self._build(['--update'] + list(targets))
 	
 	def build_assert(self, target, contents):
 		self.build(target)

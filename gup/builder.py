@@ -10,6 +10,8 @@ log = logging.getLogger(__name__)
 from .gupfile import possible_gup_files, GUPFILE, Gupfile
 from . import output
 from .error import *
+from .util import *
+from .state import TargetState
 
 def prepare_build(p):
 	'''
@@ -20,7 +22,6 @@ def prepare_build(p):
 	  for building this path
 	- returns None if the file is not buildable, a Target object otherwise
 	'''
-	target = Target(p)
 	for candidate in possible_gup_files(p):
 		guppath = candidate.guppath
 		# log.debug("gupfile candidate: %s" % (guppath,))
@@ -29,77 +30,73 @@ def prepare_build(p):
 			if candidate.indirect:
 				builder = Gupfile(guppath).builder(candidate.target)
 				if builder is not None:
-					target.set_builder(builder)
-					return target
+					return Target(p, builder)
 			else:
 				# direct gupfile - must be buildable
-				target.set_builder(guppath)
-				return target
+				return Target(p, guppath)
 	return None
 
-def _get_mtime(path):
-	try:
-		return os.stat(path).st_mtime
-	except OSError as e:
-		if e.errno == errno.ENOENT:
-			return None
-		raise e
-
 class Target(object):
-	def __init__(self, p):
+	def __init__(self, p, gupscript=None):
 		self.path = p
-		self.gupscript = None
+		self.gupscript = gupscript
+		self.state = TargetState(p)
 	
 	def __repr__(self):
 		return 'Target(%r)' % (self.path,)
 	
-	def set_builder(self, b):
-		assert self.gupscript is None
-		self.gupscript = os.path.abspath(b)
-	
-	def add_dependency(self, d):
-		log.warn("TODO: %s depends on %s" % (self.path, d))
-	
+	def is_dirty(self):
+		deps = self.state.deps()
+		log.debug("Loaded serialized state: %r" % (deps,))
+		if deps is None:
+			return True
+		return deps.is_dirty()
+
 	def build(self, force):
 		# XXX: force
 		assert self.gupscript is not None
+
 		basedir = path.dirname(self.path) or '.'
 
 		# dest may not exist, if a /gup/ directory is in use
-		try:
-			os.makedirs(basedir)
-		except OSError as e:
-			if e.errno != errno.EEXIST: raise
+		mkdirp(basedir)
 
-		with tempfile.NamedTemporaryFile(prefix='.gup-tmp-', dir=basedir, delete=False) as temp:
+		env = os.environ.copy()
+		env['GUP_TARGET'] = os.path.abspath(self.path)
+
+		gupscript = os.path.abspath(self.gupscript)
+
+		with self.state.perform_build():
+			output_file = os.path.abspath(self.state.meta_path('out'))
 			MOVED = False
+			with open(output_file, 'w'): pass
 			try:
-				args = [self.gupscript, temp.name, self.path]
+				args = [gupscript, output_file, self.path]
 				output.building_target(self.path)
-				mtime = _get_mtime(self.path)
+				mtime = get_mtime(self.path)
 				try:
-					proc = subprocess.Popen(args, cwd = basedir)
+					proc = subprocess.Popen(args, cwd = basedir, env = env)
 				except OSError as e:
 					if e.errno != errno.EACCES: raise
 					# not executable - read shebang ourselves
-					args = guess_executable(self.gupscript) + args
-					proc = subprocess.Popen(args, cwd = basedir)
+					args = guess_executable(gupscript) + args
+					proc = subprocess.Popen(args, cwd = basedir, env = env)
 				finally:
 					output.xtrace(args)
 				ret = proc.wait()
-				new_mtime = _get_mtime(self.path)
+				new_mtime = get_mtime(self.path)
 				if mtime != new_mtime:
 					log.debug("old_mtime=%r, new_mtime=%r" % (mtime, new_mtime))
-					log.warn("%s modified %s directly - this is rarely a good idea" % (self.gupscript, self.path))
+					log.warn("%s modified %s directly - this is rarely a good idea" % (gupscript, self.path))
 				if ret == 0:
-					os.rename(temp.name, self.path)
+					os.rename(output_file, self.path)
 					MOVED = True
 				else:
 					log.debug("builder exited with status %s" % (ret,))
 					raise TargetFailed(self, ret)
 			finally:
 				if not MOVED:
-					os.remove(temp.name)
+					os.remove(output_file)
 
 def guess_executable(p):
 	with open(p) as f:
