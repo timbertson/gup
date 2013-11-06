@@ -14,8 +14,6 @@ from .log import getLogger
 from . import var
 log = getLogger(__name__)
 
-devnull = open(os.devnull, 'w')
-
 try:
 	from pipes import quote
 except ImportError:
@@ -77,19 +75,18 @@ class Target(object):
 		with self.state.perform_build():
 			output_file = os.path.abspath(self.state.meta_path('out'))
 			MOVED = False
-			with open(output_file, 'w'): pass
+			# with open(output_file, 'w'): pass
 			try:
 				args = [gupscript, output_file, self.path]
 				log.info(self.path)
 				mtime = get_mtime(self.path)
-				stdout = None if log.isEnabledFor(logging.DEBUG) else devnull
 				try:
-					proc = subprocess.Popen(args, cwd = basedir, env = env, stdout=stdout)
+					proc = subprocess.Popen(args, cwd = basedir, env = env)
 				except OSError as e:
 					if e.errno != errno.EACCES: raise
 					# not executable - read shebang ourselves
 					args = guess_executable(gupscript) + args
-					proc = subprocess.Popen(args, cwd = basedir, env = env, stdout=stdout)
+					proc = subprocess.Popen(args, cwd = basedir, env = env)
 				finally:
 					if var.TRACE:
 						log.info(' + ' + ' '.join(map(quote, args)))
@@ -99,14 +96,15 @@ class Target(object):
 					log.debug("old_mtime=%r, new_mtime=%r" % (mtime, new_mtime))
 					log.warn("%s modified %s directly - this is rarely a good idea" % (gupscript, self.path))
 				if ret == 0:
-					os.rename(output_file, self.path)
+					if os.path.exists(output_file):
+						os.rename(output_file, self.path)
 					MOVED = True
 				else:
 					log.debug("builder exited with status %s" % (ret,))
 					raise TargetFailed(self, ret)
 			finally:
 				if not MOVED:
-					os.remove(output_file)
+					try_remove(output_file)
 
 def guess_executable(p):
 	with open(p) as f:

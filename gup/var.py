@@ -11,3 +11,7 @@ def set_trace():
 	global TRACE
 	TRACE = True
 	os.environ['GUP_XTRACE'] = '1'
+
+DEFAULT_VERBOSITY = int(os.environ.get('GUP_VERBOSE', '0'))
+def set_verbosity(val):
+	os.environ['GUP_VERBOSE'] = str(val)

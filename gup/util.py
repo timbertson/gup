@@ -4,7 +4,7 @@ import logging
 from .log import getLogger
 log = getLogger(__name__)
 
-__all__ = ['mkdirp', 'get_mtime']
+__all__ = ['mkdirp', 'get_mtime', 'try_remove']
 
 def mkdirp(p):
 	try:
@@ -23,3 +23,9 @@ def get_mtime(path):
 			return None
 		raise e
 
+def try_remove(path):
+	'''Remove a file. Ignore if it doesn't exist'''
+	try:
+		os.remove(path)
+	except OSError as e:
+		if e.errno != errno.ENOENT: raise

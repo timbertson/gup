@@ -68,6 +68,9 @@ class Dependencies(object):
 				self.rules.append(Dependency.parse(line.rstrip()))
 	
 	def is_dirty(self):
+		if not os.path.exists(self.path):
+			log.debug("target does not exist - assumed dirty")
+			return True
 		base = os.path.dirname(self.path)
 		return any(r.is_dirty(base) for r in self.rules) or any(r.is_dependency_dirty(base) for r in self.rules)
 	

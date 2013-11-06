@@ -13,20 +13,10 @@ from .log import RED, GREEN, YELLOW, BOLD, PLAIN, getLogger
 from . import var
 log = getLogger(__name__)
 
-def _main(args):
-	p = optparse.OptionParser('Usage: gup [OPTIONS] [target [...]]')
-	p.add_option('-u', '--update', action='store_true', help='Only rebuild stale targets', default=False)
-	p.add_option('--xxx', action='store_const', const=None, dest='action', default=build, help='TODO')
-	p.add_option('-v', '--verbose', action='count', default=0, help='verbose')
-	p.add_option('-q', '--quiet', action='count', default=0, help='quiet')
-	p.add_option('-x', '--trace', action='store_true', help='xtrace')
-	logging.debug("args: %r" % (args,))
-	opts, args = p.parse_args(args)
-
+def _init_logging(verbosity):
 	lvl = logging.INFO
 	fmt = '%(color)sgup  ' + var.INDENT + '%(bold)s%(message)s' + PLAIN
 
-	verbosity = opts.verbose - opts.quiet
 	if verbosity < 0:
 		lvl = logging.ERROR
 	elif verbosity > 0:
@@ -37,6 +27,9 @@ def _main(args):
 		# XXX: forward logs to a specific file descriptor?
 		lvl = logging.WARN
 
+	# persist for child processes
+	var.set_verbosity(verbosity)
+
 	baseLogger = getLogger('gup')
 	handler = logging.StreamHandler()
 	handler.setFormatter(logging.Formatter(fmt))
@@ -44,13 +37,27 @@ def _main(args):
 	baseLogger.setLevel(lvl)
 	baseLogger.addHandler(handler)
 
+
+def _main(args):
+	p = optparse.OptionParser('Usage: gup [OPTIONS] [target [...]]')
+	p.add_option('-u', '--update', action='store_true', help='Only rebuild stale targets', default=False)
+	p.add_option('--xxx', action='store_const', const=None, dest='action', default=build, help='TODO')
+	p.add_option('-v', '--verbose', action='count', default=var.DEFAULT_VERBOSITY, help='verbose')
+	p.add_option('-q', '--quiet', action='count', default=0, help='quiet')
+	p.add_option('-x', '--trace', action='store_true', help='xtrace')
+	logging.debug("args: %r" % (args,))
+	opts, args = p.parse_args(args)
+
+	verbosity = opts.verbose - opts.quiet
+	_init_logging(verbosity)
+
 	if opts.trace:
 		var.set_trace()
-	log.debug('opts: %r' % (opts,))
 	opts.action(opts, args)
 
 def build(opts, targets):
-	if len(targets) == 0: raise SafeError("You must provide at least one target to build")
+	if len(targets) == 0:
+		targets = ['all']
 	assert len(targets) > 0
 
 	def report_nobuild(target):

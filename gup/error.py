@@ -1,7 +1,12 @@
 class SafeError(Exception): pass
 class TargetFailed(SafeError):
-	def __init__(self, msg, status):
-		super(TargetFailed, self).__init__(msg)
+	def __init__(self, target, status):
+		self.target = target
 		self.status = status
-class Unbuildable(SafeError): pass
+		super(TargetFailed, self).__init__("Target `%s` failed with exit status %s" % (self.target.path, self.status))
+
+
+class Unbuildable(SafeError):
+	def __init__(self, path):
+		super(Unbuildable, self).__init__("Unbuildable: %s" % (path,))
 

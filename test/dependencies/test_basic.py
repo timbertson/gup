@@ -42,3 +42,14 @@ class TestDirectDependencies(TestCase):
 		self.assertEqual(self.read("counter"), "3")
 
 
+class TestPsuedoTasks(TestCase):
+	def test_treats_targets_without_output_as_always_dirty(self):
+		self.write('target.gup', BASH + 'echo "BUILDING" >&2; echo "updated" > somefile')
+
+		self.build_u('target')
+		self.assertFalse(os.path.exists('target'))
+		mtime = self.mtime('somefile')
+
+		# no output created - should always rebuild
+		self.build_u('target')
+		self.assertNotEqual(mtime, self.mtime('somefile'))
