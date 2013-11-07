@@ -12,6 +12,7 @@ import logging
 from gup import cmd
 from gup.error import *
 
+logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger('TEST')
 
 os.environ['GUP_IN_TESTS'] = '1'
@@ -29,9 +30,9 @@ def echo_to_target(contents):
 class TestCase(mocktest.TestCase):
 	def setUp(self):
 		super(TestCase, self).setUp()
-		if not os.path.exists(TEMP):
-			os.mkdir(TEMP)
+		mkdirp(TEMP)
 		self.ROOT = tempfile.mkdtemp(dir=TEMP)
+		log.debug('root: %s', self.ROOT)
 	
 	def path(self, p):
 		return os.path.join(self.ROOT, p)
@@ -59,21 +60,23 @@ class TestCase(mocktest.TestCase):
 		finally:
 			os.chdir(initial)
 
-	def _build(self, args):
+	def _build(self, args, cwd=None):
 		log.warn("Running build with args: %r" % (list(args)))
 		with self._root_cwd():
+			if cwd is not None:
+				os.chdir(cwd)
 			cmd._main(list(args))
 
-	def build(self, *targets):
-		self._build(targets)
+	def build(self, *targets, **k):
+		self._build(targets, **k)
 
 	def mtime(self, p):
 		mtime = os.stat(os.path.join(self.ROOT, p)).st_mtime
 		logging.debug("mtime %s for %s" % (mtime,p))
 		return mtime
 
-	def build_u(self, *targets):
-		self._build(['--update'] + list(targets))
+	def build_u(self, *targets, **k):
+		self._build(['--update'] + list(targets), **k)
 	
 	def build_assert(self, target, contents):
 		self.build(target)

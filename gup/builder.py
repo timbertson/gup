@@ -77,7 +77,7 @@ class Target(object):
 			MOVED = False
 			# with open(output_file, 'w'): pass
 			try:
-				args = [gupscript, output_file, self.path]
+				args = [gupscript, output_file, self.path, os.path.dirname(gupscript)]
 				log.info(self.path)
 				mtime = get_mtime(self.path)
 
