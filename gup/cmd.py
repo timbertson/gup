@@ -25,6 +25,7 @@ def _init_logging(verbosity):
 	
 	if os.environ.get('GUP_IN_TESTS', '0') == '1':
 		# XXX: forward logs to a specific file descriptor?
+		logging.basicConfig(level=logging.WARN)
 		return
 
 	# persist for child processes

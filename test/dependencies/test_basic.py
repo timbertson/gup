@@ -52,7 +52,7 @@ class TestNonexistentDeps(TestCase):
 
 class TestPsuedoTasks(TestCase):
 	def test_treats_targets_without_output_as_always_dirty(self):
-		self.write('target.gup', BASH + 'echo "BUILDING" >&2; echo "updated" > somefile')
+		self.write('target.gup', BASH + 'echo "updated" > somefile')
 
 		self.build_u('target')
 		self.assertFalse(os.path.exists(self.path('target')))
