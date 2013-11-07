@@ -68,7 +68,9 @@ class TestCase(mocktest.TestCase):
 		self._build(targets)
 
 	def mtime(self, p):
-		return os.stat(os.path.join(self.ROOT, p)).st_mtime
+		mtime = os.stat(os.path.join(self.ROOT, p)).st_mtime
+		logging.debug("mtime %s for %s" % (mtime,p))
+		return mtime
 
 	def build_u(self, *targets):
 		self._build(['--update'] + list(targets))
@@ -80,4 +82,23 @@ class TestCase(mocktest.TestCase):
 	def build_u_assert(self, target, contents):
 		self.build(target)
 		self.assertEqual(self.read(target), contents)
+	
+	def touch(self, target):
+		with open(self.path(target), 'a'): pass
+
+	def assertRebuilt(self, target, fn):
+		self.build_u(target)
+		mtime = self.mtime(target)
+		fn()
+		self.build_u(target)
+		self.assertNotEqual(self.mtime(target), mtime, "target %s didn't get rebuilt" % (target,))
+	
+	def assertNotRebuilt(self, target, fn):
+		self.build_u(target)
+		mtime = self.mtime(target)
+		fn()
+		self.build_u(target)
+		self.assertEqual(self.mtime(target), mtime, "target %s got rebuilt" % (target,))
+
+
 

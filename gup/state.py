@@ -116,11 +116,11 @@ class FileDependency(Dependency):
 	
 	@classmethod
 	def parse(cls, mtime, path):
-		return cls(int(mtime), path)
+		return cls(int(mtime) or None, path)
 	
 	@property
 	def fields(self):
-		return ['filedep:', str(self.mtime), self.path]
+		return ['filedep:', str(self.mtime or 0), self.path]
 
 	def is_dirty(self, base):
 		current_mtime = get_mtime(os.path.join(base, self.path))

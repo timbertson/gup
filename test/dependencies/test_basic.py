@@ -40,6 +40,14 @@ class TestDirectDependencies(TestCase):
 		self.build_u("dep")
 		self.assertEqual(self.read("dep"), "COUNT: 3")
 		self.assertEqual(self.read("counter"), "3")
+	
+class TestNonexistentDeps(TestCase):
+	def test_rebuilt_on_creation_of_dependency(self):
+		self.write('all.gup', BASH + 'gup --ifcreate foo; echo 1 > $1')
+
+		self.assertNotRebuilt('all', lambda: self.touch('bar'))
+		self.assertRebuilt('all', lambda: self.touch('foo'))
+		self.assertNotRebuilt('all', lambda: None)
 
 
 class TestPsuedoTasks(TestCase):
@@ -47,7 +55,7 @@ class TestPsuedoTasks(TestCase):
 		self.write('target.gup', BASH + 'echo "BUILDING" >&2; echo "updated" > somefile')
 
 		self.build_u('target')
-		self.assertFalse(os.path.exists('target'))
+		self.assertFalse(os.path.exists(self.path('target')))
 		mtime = self.mtime('somefile')
 
 		# no output created - should always rebuild

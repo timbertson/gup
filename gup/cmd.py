@@ -25,7 +25,7 @@ def _init_logging(verbosity):
 	
 	if os.environ.get('GUP_IN_TESTS', '0') == '1':
 		# XXX: forward logs to a specific file descriptor?
-		lvl = logging.WARN
+		return
 
 	# persist for child processes
 	var.set_verbosity(verbosity)
@@ -40,12 +40,12 @@ def _init_logging(verbosity):
 
 def _main(args):
 	p = optparse.OptionParser('Usage: gup [OPTIONS] [target [...]]')
-	p.add_option('-u', '--update', action='store_true', help='Only rebuild stale targets', default=False)
+	p.add_option('-u', '--update', '--ifchange', dest='update', action='store_true', help='Only rebuild stale targets', default=False)
+	p.add_option('--ifcreate', action='store_true', help='Declare a dependency on a nonexistent file', default=False)
 	p.add_option('--xxx', action='store_const', const=None, dest='action', default=build, help='TODO')
 	p.add_option('-v', '--verbose', action='count', default=var.DEFAULT_VERBOSITY, help='verbose')
 	p.add_option('-q', '--quiet', action='count', default=0, help='quiet')
 	p.add_option('-x', '--trace', action='store_true', help='xtrace')
-	logging.debug("args: %r" % (args,))
 	opts, args = p.parse_args(args)
 
 	verbosity = opts.verbose - opts.quiet
@@ -66,10 +66,18 @@ def build(opts, targets):
 		else:
 			log.debug("%s: up to date", target)
 
+	parent_target = os.environ.get('GUP_TARGET', None)
+	if parent_target is not None:
+		assert os.path.isabs(parent_target)
+
 	def build_target(target):
 		task = builder.prepare_build(target)
-		logging.debug('prepare_build(%r) -> %r' % (target, task))
+		log.debug('prepare_build(%r) -> %r' % (target, task))
 		if task is None:
+			if opts.ifcreate:
+				if parent_target is None:
+					log.warn("--ifcreate was used outside of a gup target")
+				return
 			if opts.update and os.path.exists(target):
 				report_nobuild(target)
 				return
@@ -80,10 +88,6 @@ def build(opts, targets):
 			return
 
 		task.build(force = not opts.update)
-
-	parent_target = os.environ.get('GUP_TARGET', None)
-	if parent_target is not None:
-		assert os.path.isabs(parent_target)
 
 	for target in targets:
 		build_target(target)

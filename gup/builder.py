@@ -93,6 +93,7 @@ class Target(object):
 						proc = subprocess.Popen(args, cwd = basedir, env = env)
 				finally:
 					if var.TRACE:
+						log.info(' # %s'% (os.path.abspath(basedir),))
 						log.info(' + ' + ' '.join(map(quote, args)))
 				ret = proc.wait()
 				new_mtime = get_mtime(self.path)
@@ -117,8 +118,12 @@ def guess_executable(p):
 		return None
 	args = line[2:].strip().split()
 	if not args: return None
-	if args[0].startswith('.'):
+
+	bin = args[0]
+	if bin.startswith('.'):
 		# resolve relative paths relative to containing dir
-		args[0] = os.path.join(os.path.dirname(p), args[0])
+		bin = args[0] = os.path.join(os.path.dirname(p), args[0])
+	if not os.path.exists(bin):
+		raise SafeError("No such interpreter: %s" % (os.path.abspath(bin),))
 	return args
 
