@@ -80,13 +80,17 @@ class Target(object):
 				args = [gupscript, output_file, self.path]
 				log.info(self.path)
 				mtime = get_mtime(self.path)
+
+				exe = guess_executable(gupscript)
 				try:
-					proc = subprocess.Popen(args, cwd = basedir, env = env)
-				except OSError as e:
-					if e.errno != errno.EACCES: raise
-					# not executable - read shebang ourselves
-					args = guess_executable(gupscript) + args
-					proc = subprocess.Popen(args, cwd = basedir, env = env)
+					if exe is None:
+						try:
+							proc = subprocess.Popen(args, cwd = basedir, env = env)
+						except OSError as e:
+							raise SafeError("%s is not executable and has no shebang line" % (gupscript,))
+					else:
+						args = exe + args
+						proc = subprocess.Popen(args, cwd = basedir, env = env)
 				finally:
 					if var.TRACE:
 						log.info(' + ' + ' '.join(map(quote, args)))
@@ -110,6 +114,11 @@ def guess_executable(p):
 	with open(p) as f:
 		line = f.readline(255)
 	if not line.startswith('#!'):
-		raise SafeError("%s is not executable and has no shebang line" % (p,))
-	return line[2:].strip().split()
+		return None
+	args = line[2:].strip().split()
+	if not args: return None
+	if args[0].startswith('.'):
+		# resolve relative paths relative to containing dir
+		args[0] = os.path.join(os.path.dirname(p), args[0])
+	return args
 
