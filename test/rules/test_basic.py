@@ -70,3 +70,10 @@ class TestGupdirectory(TestCase):
 		self.build_assert('a/b/c/d', 'ok')
 		self.build_assert('a/b/xyz/d', 'ok')
 		self.assertRaises(Unbuildable, lambda: self.build("x/b/cd"))
+	
+	def test_gupfile_may_specify_a_non_local_script(self):
+		self.write("gup/a/default.c.gup", echo_to_target('$2, called from $(basename "$(pwd)")'))
+		self.write('gup/a/b/Gupfile', '../default.c.gup:\n\t*.c')
+
+		self.assertRaises(Unbuildable, lambda: self.build('a/foo.c'))
+		self.build_assert('a/b/foo.c', 'b/foo.c, called from a')
