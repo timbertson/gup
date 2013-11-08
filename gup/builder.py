@@ -59,6 +59,7 @@ class Target(object):
 		assert os.path.exists(self.gupscript.path)
 
 		basedir = self.gupscript.basedir
+		gupscript_path = self.gupscript.path
 
 		# dest may not exist, if a /gup/ directory is in use
 		mkdirp(basedir)
@@ -72,11 +73,11 @@ class Target(object):
 			output_file = os.path.abspath(self.state.meta_path('out'))
 			MOVED = False
 			try:
-				args = [os.path.abspath(self.gupscript.path), output_file, self.gupscript.target]
+				args = [os.path.abspath(gupscript_path), output_file, self.gupscript.target]
 				log.info(target_relative_to_cwd)
 				mtime = get_mtime(self.path)
 
-				exe = guess_executable(self.gupscript.path)
+				exe = guess_executable(gupscript_path)
 
 				if exe is not None:
 					args = exe + args
@@ -92,12 +93,14 @@ class Target(object):
 					ret = self._run_process(args, cwd = basedir, env = env)
 				except OSError as e:
 					if exe: raise # we only expect errors when we could deduce no executable
-					raise SafeError("%s is not executable and has no shebang line" % (gupscript,))
+					raise SafeError("%s is not executable and has no shebang line" % (gupscript_path,))
 
 				new_mtime = get_mtime(self.path)
 				if mtime != new_mtime:
 					log.debug("old_mtime=%r, new_mtime=%r" % (mtime, new_mtime))
-					log.warn("%s modified %s directly - this is rarely a good idea" % (gupscript, self.path))
+					if not os.path.isdir(self.path):
+						# directories often need to be created directly
+						log.warn("%s modified %s directly - this is rarely a good idea" % (gupscript_path, self.path))
 				if ret == 0:
 					if os.path.exists(output_file):
 						os.rename(output_file, self.path)
@@ -140,7 +143,7 @@ def guess_executable(p):
 	if bin.startswith('.'):
 		# resolve relative paths relative to containing dir
 		bin = args[0] = os.path.join(os.path.dirname(p), args[0])
-	if not os.path.exists(bin):
+	if os.path.isabs(bin) and not os.path.exists(bin):
 		raise SafeError("No such interpreter: %s" % (os.path.abspath(bin),))
 	return args
 

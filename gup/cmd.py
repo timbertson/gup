@@ -10,7 +10,8 @@ from .util import *
 from .state import FileDependency, TargetState
 from .log import RED, GREEN, YELLOW, BOLD, PLAIN, getLogger
 from . import var
-log = getLogger(__name__)
+
+log = getLogger('gup.cmd') # hard-coded in case of __main__
 
 def _init_logging(verbosity):
 	lvl = logging.INFO
