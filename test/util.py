@@ -9,13 +9,14 @@ import contextlib
 import subprocess
 import logging
 
-from gup import cmd
+from gup import cmd, var
 from gup.error import *
+
+# (for log redirection)
+var.RUNNING_TESTS = True
 
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger('TEST')
-
-os.environ['GUP_IN_TESTS'] = '1'
 
 TEMP = os.path.join(os.path.dirname(__file__), 'tmp')
 

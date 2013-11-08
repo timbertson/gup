@@ -7,8 +7,7 @@ import os
 from . import builder
 from .error import *
 from .util import *
-from .state import FileDependency
-from .builder import Target
+from .state import FileDependency, TargetState
 from .log import RED, GREEN, YELLOW, BOLD, PLAIN, getLogger
 from . import var
 log = getLogger(__name__)
@@ -23,10 +22,11 @@ def _init_logging(verbosity):
 		fmt = '%(color)sgup[%(name)s]  ' + var.INDENT + '%(bold)s%(message)s' + PLAIN
 		lvl = logging.DEBUG
 	
-	if os.environ.get('GUP_IN_TESTS', '0') == '1':
-		# XXX: forward logs to a specific file descriptor?
-		logging.basicConfig(level=logging.WARN)
-		return
+	if var.RUNNING_TESTS:
+		lvl = logging.DEBUG
+		if var.IS_ROOT:
+			logging.basicConfig(level=lvl)
+			return
 
 	# persist for child processes
 	var.set_verbosity(verbosity)
@@ -72,6 +72,9 @@ def build(opts, targets):
 		assert os.path.isabs(parent_target)
 
 	def build_target(target):
+		if os.path.abspath(target) == parent_target:
+			raise SafeError("Target `%s` attempted to build itself" % (target,))
+
 		task = builder.prepare_build(target)
 		log.debug('prepare_build(%r) -> %r' % (target, task))
 		if task is None:
@@ -97,7 +100,7 @@ def build(opts, targets):
 			relpath = os.path.relpath(os.path.abspath(target), os.path.dirname(parent_target))
 
 			dep = FileDependency(mtime=mtime, path=relpath)
-			Target(parent_target).state.add_dependency(dep)
+			TargetState(parent_target).add_dependency(dep)
 
 def main():
 	try:

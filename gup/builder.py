@@ -6,7 +6,7 @@ import errno
 import subprocess
 import logging
 
-from .gupfile import possible_gup_files, GUPFILE, Gupfile
+from .gupfile import possible_gup_files, GUPFILE, Gupfile, Gupscript
 from .error import *
 from .util import *
 from .state import TargetState
@@ -22,7 +22,6 @@ except ImportError:
 def prepare_build(p):
 	'''
 	Prepares `path` for building. This includes:
-	- taking a lock of its metadata
 	- traversing all .gup files and Gupfiles
 	- checking all Gupfiles encountered to see if they are candidates
 	  for building this path
@@ -33,20 +32,16 @@ def prepare_build(p):
 		# log.debug("gupfile candidate: %s" % (guppath,))
 		if path.exists(guppath):
 			log.debug("gupfile candidate exists: %s" % (guppath,))
-			if candidate.indirect:
-				builder = Gupfile(guppath).builder(candidate.target)
-				if builder is not None:
-					return Target(p, builder)
-			else:
-				# direct gupfile - must be buildable
-				return Target(p, guppath)
+			gupscript = candidate.get_gupscript()
+			if gupscript is not None:
+				return Target(gupscript)
 	return None
 
 class Target(object):
-	def __init__(self, p, gupscript=None):
-		self.path = p
+	def __init__(self, gupscript):
 		self.gupscript = gupscript
-		self.state = TargetState(p)
+		self.path = self.gupscript.target_path
+		self.state = TargetState(self.path)
 	
 	def __repr__(self):
 		return 'Target(%r)' % (self.path,)
@@ -61,8 +56,9 @@ class Target(object):
 	def build(self, force):
 		# XXX: force
 		assert self.gupscript is not None
+		assert os.path.exists(self.gupscript.path)
 
-		basedir = path.dirname(self.path) or '.'
+		basedir = self.gupscript.basedir
 
 		# dest may not exist, if a /gup/ directory is in use
 		mkdirp(basedir)
@@ -70,32 +66,34 @@ class Target(object):
 		env = os.environ.copy()
 		env['GUP_TARGET'] = os.path.abspath(self.path)
 
-		gupscript = os.path.abspath(self.gupscript)
+		target_relative_to_cwd = os.path.relpath(self.path, var.ROOT_CWD)
 
 		with self.state.perform_build():
 			output_file = os.path.abspath(self.state.meta_path('out'))
 			MOVED = False
-			# with open(output_file, 'w'): pass
 			try:
-				args = [gupscript, output_file, self.path, os.path.dirname(gupscript)]
-				log.info(self.path)
+				args = [os.path.abspath(self.gupscript.path), output_file, self.gupscript.target]
+				log.info(target_relative_to_cwd)
 				mtime = get_mtime(self.path)
 
-				exe = guess_executable(gupscript)
+				exe = guess_executable(self.gupscript.path)
+
+				if exe is not None:
+					args = exe + args
+
+				if var.TRACE:
+					log.info(' # %s'% (os.path.abspath(basedir),))
+					log.info(' + ' + ' '.join(map(quote, args)))
+				else:
+					log.debug(' from cwd: %s'% (os.path.abspath(basedir),))
+					log.debug('executing: ' + ' '.join(map(quote, args)))
+
 				try:
-					if exe is None:
-						try:
-							proc = subprocess.Popen(args, cwd = basedir, env = env)
-						except OSError as e:
-							raise SafeError("%s is not executable and has no shebang line" % (gupscript,))
-					else:
-						args = exe + args
-						proc = subprocess.Popen(args, cwd = basedir, env = env)
-				finally:
-					if var.TRACE:
-						log.info(' # %s'% (os.path.abspath(basedir),))
-						log.info(' + ' + ' '.join(map(quote, args)))
-				ret = proc.wait()
+					ret = self._run_process(args, cwd = basedir, env = env)
+				except OSError as e:
+					if exe: raise # we only expect errors when we could deduce no executable
+					raise SafeError("%s is not executable and has no shebang line" % (gupscript,))
+
 				new_mtime = get_mtime(self.path)
 				if mtime != new_mtime:
 					log.debug("old_mtime=%r, new_mtime=%r" % (mtime, new_mtime))
@@ -106,10 +104,29 @@ class Target(object):
 					MOVED = True
 				else:
 					log.debug("builder exited with status %s" % (ret,))
-					raise TargetFailed(self, ret)
+					raise TargetFailed(target_relative_to_cwd, ret)
 			finally:
 				if not MOVED:
 					try_remove(output_file)
+	
+	def _run_process(self, args, cwd, env):
+		stderr = None
+
+		if var.RUNNING_TESTS:
+			stderr = subprocess.PIPE
+			env['GUP_IN_TESTS'] = '1'
+
+		proc = subprocess.Popen(args, cwd = cwd, env = env, stderr = stderr)
+
+		if var.RUNNING_TESTS:
+			log = getLogger(__name__ + '.child')
+			while True:
+				line = proc.stderr.readline().rstrip()
+				if not line:
+						break
+				log.info(line)
+
+		return proc.wait()
 
 def guess_executable(p):
 	with open(p) as f:
