@@ -1,8 +1,8 @@
 from util import *
 
-class TestDirectDependencies(TestCase):
+class TestDependencies(TestCase):
 	def setUp(self):
-		super(TestDirectDependencies, self).setUp()
+		super(TestDependencies, self).setUp()
 		self.write("dep.gup", BASH + 'gup -u counter; echo -n "COUNT: $(cat counter)" > "$1"')
 
 	def test_rebuilds_on_dependency_change(self):
@@ -82,6 +82,11 @@ class TestDirectDependencies(TestCase):
 		self.assertNotRebuilds('target', lambda: self.touch('Gupfile'))
 		self.assertRebuilds('target', change_gupfile)
 	
+class TestAlwaysRebuild(TestCase):
+	def test_always_rebuild(self):
+		self.write('all.gup', echo_to_target('ok') + '; gup --always')
+		self.assertRebuilds('all', lambda: None)
+
 class TestNonexistentDeps(TestCase):
 	def test_rebuilt_on_creation_of_dependency(self):
 		self.write('all.gup', BASH + 'gup --ifcreate foo; echo 1 > $1')

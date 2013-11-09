@@ -98,28 +98,38 @@ class Dependency(object):
 	@staticmethod
 	def parse(line):
 		log.debug("parsing line: %s" % (line,))
-		for candidate in [FileDependency, GupfileDependency]:
+		for candidate in [FileDependency, GupfileDependency, AlwaysRebuild]:
 			if line.startswith(candidate.tag):
 				cls = candidate
 				break
 		else:
-			raise ValueError("unknown dependency line: %s" % (line,))
+			raise ValueError("unknown dependency line: %r" % (line,))
 		fields = line.split(' ', cls.num_fields)[1:]
-		return cls.parse(*fields)
+		return getattr(cls, 'deserialize', cls)(*fields)
 
 	def append_to(self, file):
-		line = ' '.join(self.fields)
+		line = self.tag + ' ' + ' '.join(self.fields)
 		assert "\n" not in line
 		file.write(line + "\n")
 	
 	def is_dependency_dirty(self, base): return False
+	def __repr__(self):
+		return '%s(%s)' % (type(self).__name__, ', '.join(map(repr, self.fields)))
 
 class NeverBuilt(object):
+	fields = []
 	def is_dirty(self, base, gupscript):
 		log.debug('DIRTY: never built')
 		return True
 	def append_to(self, file): pass
-	def __repr__(self): return 'NeverBuilt()'
+
+class AlwaysRebuild(Dependency):
+	tag = 'always:'
+	num_fields = 0
+	fields = []
+	def is_dirty(self, base, gupscript):
+		log.debug('DIRTY: always rebuild')
+		return True
 
 class FileDependency(Dependency):
 	num_fields = 2
@@ -130,12 +140,12 @@ class FileDependency(Dependency):
 		self.mtime = mtime
 	
 	@classmethod
-	def parse(cls, mtime, path):
+	def deserialize(cls, mtime, path):
 		return cls(int(mtime) or None, path)
 	
 	@property
 	def fields(self):
-		return [self.tag, str(self.mtime or 0), self.path]
+		return [str(self.mtime or 0), self.path]
 
 	def is_dirty(self, base, gupscript):
 		current_mtime = get_mtime(os.path.join(base, self.path))
@@ -157,9 +167,6 @@ class FileDependency(Dependency):
 			return True
 		return deps.is_dirty(gupscript.path)
 	
-	def __repr__(self):
-		return '%s(%r, %r)' % (type(self).__name__, self.mtime, self.path)
-
 class GupfileDependency(FileDependency):
 	tag = 'gupfile:'
 	def is_dirty(self, base, gupfile):

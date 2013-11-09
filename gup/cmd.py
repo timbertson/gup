@@ -7,7 +7,7 @@ import os
 from . import builder
 from .error import *
 from .util import *
-from .state import FileDependency, TargetState
+from .state import FileDependency, TargetState, AlwaysRebuild
 from .log import RED, GREEN, YELLOW, BOLD, PLAIN, getLogger
 from . import var
 
@@ -43,8 +43,8 @@ def _init_logging(verbosity):
 def _main(args):
 	p = optparse.OptionParser('Usage: gup [OPTIONS] [target [...]]')
 	p.add_option('-u', '--update', '--ifchange', dest='update', action='store_true', help='Only rebuild stale targets', default=False)
-	p.add_option('--ifcreate', action='store_true', help='Declare a dependency on a nonexistent file', default=False)
-	p.add_option('--xxx', action='store_const', const=None, dest='action', default=build, help='TODO')
+	p.add_option('--ifcreate', action='store_true', help='Redo this target if file is created', default=False)
+	p.add_option('--always', action='store_const', dest='action', const=mark_always)
 	p.add_option('-v', '--verbose', action='count', default=var.DEFAULT_VERBOSITY, help='verbose')
 	p.add_option('-q', '--quiet', action='count', default=0, help='quiet')
 	p.add_option('-x', '--trace', action='store_true', help='xtrace')
@@ -55,7 +55,21 @@ def _main(args):
 
 	if opts.trace:
 		var.set_trace()
-	opts.action(opts, args)
+	(opts.action or build)(opts, args)
+
+def _get_parent_target():
+	t = os.environ.get('GUP_TARGET', None)
+	if t is not None:
+		assert os.path.isabs(t)
+	return t
+
+def mark_always(opts, targets):
+	assert len(targets) == 0, "no arguments expected"
+	parent_target = _get_parent_target()
+	if parent_target is None:
+		log.warn("--always was used outside of a gup target")
+		return
+	TargetState(parent_target).add_dependency(AlwaysRebuild())
 
 def build(opts, targets):
 	if len(targets) == 0:
@@ -68,9 +82,7 @@ def build(opts, targets):
 		else:
 			log.debug("%s: up to date", target)
 
-	parent_target = os.environ.get('GUP_TARGET', None)
-	if parent_target is not None:
-		assert os.path.isabs(parent_target)
+	parent_target = _get_parent_target()
 
 	def build_target(target_path):
 		if os.path.abspath(target_path) == parent_target:
