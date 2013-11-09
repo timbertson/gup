@@ -5,6 +5,7 @@ from os import path
 import errno
 import subprocess
 import logging
+import shutil
 
 from .gupfile import possible_gup_files, GUPFILE, Gupfile, Gupscript
 from .error import *
@@ -20,21 +21,9 @@ except ImportError:
 	from shlex import quote
 
 def prepare_build(p):
-	'''
-	Prepares `path` for building. This includes:
-	- traversing all .gup files and Gupfiles
-	- checking all Gupfiles encountered to see if they are candidates
-	  for building this path
-	- returns None if the file is not buildable, a Target object otherwise
-	'''
-	for candidate in possible_gup_files(p):
-		guppath = candidate.guppath
-		# log.debug("gupfile candidate: %s" % (guppath,))
-		if path.exists(guppath):
-			log.debug("gupfile candidate exists: %s" % (guppath,))
-			gupscript = candidate.get_gupscript()
-			if gupscript is not None:
-				return Target(gupscript)
+	gupscript = Gupscript.for_target(p)
+	if gupscript is not None:
+		return Target(gupscript)
 	return None
 
 class Target(object):
@@ -51,7 +40,7 @@ class Target(object):
 		log.debug("Loaded serialized state: %r" % (deps,))
 		if deps is None:
 			return True
-		return deps.is_dirty()
+		return deps.is_dirty(self.gupscript.path)
 
 	def build(self, force):
 		# XXX: force
@@ -69,7 +58,7 @@ class Target(object):
 
 		target_relative_to_cwd = os.path.relpath(self.path, var.ROOT_CWD)
 
-		with self.state.perform_build():
+		with self.state.perform_build(gupscript_path):
 			output_file = os.path.abspath(self.state.meta_path('out'))
 			MOVED = False
 			try:
@@ -103,6 +92,9 @@ class Target(object):
 						log.warn("%s modified %s directly - this is rarely a good idea" % (gupscript_path, self.path))
 				if ret == 0:
 					if os.path.exists(output_file):
+						if os.path.isdir(self.path):
+							log.debug("calling rmtree() on previous %s", self.path)
+							shutil.rmtree(self.path)
 						os.rename(output_file, self.path)
 					MOVED = True
 				else:

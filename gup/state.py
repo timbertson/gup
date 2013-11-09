@@ -5,6 +5,7 @@ import errno
 
 from .util import *
 from .log import getLogger
+from .gupfile import Gupscript
 log = getLogger(__name__)
 
 class TargetState(object):
@@ -37,10 +38,16 @@ class TargetState(object):
 			dep.append_to(f)
 	
 	@contextlib.contextmanager
-	def perform_build(self):
+	def perform_build(self, gupscript):
+		assert os.path.exists(gupscript)
+		gupfile_dep = GupfileDependency(
+			path=os.path.relpath(gupscript, os.path.dirname(self.path)),
+			mtime=get_mtime(gupscript))
+		log.debug("created dep %s from gupfile %r" % (gupfile_dep, gupscript))
 		temp = self._ensure_meta_path('deps_next')
 		with open(temp, 'w') as f:
 			Dependencies.init_file(f)
+			gupfile_dep.append_to(f)
 		try:
 			yield
 		except:
@@ -64,15 +71,21 @@ class Dependencies(object):
 			if int(file_version) != self.FORMAT_VERSION:
 				raise ValueError("version mismatch: can't read format version %s" % (file_version,))
 
-			for line in file:
+			while True:
+				line = file.readline()
+				if not line: break
 				self.rules.append(Dependency.parse(line.rstrip()))
 	
-	def is_dirty(self):
+	def is_dirty(self, gupscript):
 		if not os.path.exists(self.path):
 			log.debug("target does not exist - assumed dirty")
 			return True
 		base = os.path.dirname(self.path)
-		return any(r.is_dirty(base) for r in self.rules) or any(r.is_dependency_dirty(base) for r in self.rules)
+		gupscript = os.path.relpath(gupscript, base)
+
+		return (
+			any(r.is_dirty(base, gupscript) for r in self.rules) or
+			any(r.is_dependency_dirty(base) for r in self.rules))
 	
 	@classmethod
 	def init_file(cls, f):
@@ -84,7 +97,8 @@ class Dependencies(object):
 class Dependency(object):
 	@staticmethod
 	def parse(line):
-		for candidate in [FileDependency]:
+		log.debug("parsing line: %s" % (line,))
+		for candidate in [FileDependency, GupfileDependency]:
 			if line.startswith(candidate.tag):
 				cls = candidate
 				break
@@ -101,8 +115,9 @@ class Dependency(object):
 	def is_dependency_dirty(self, base): return False
 
 class NeverBuilt(object):
-	def is_dirty(self, base): return True
-
+	def is_dirty(self, base, gupscript):
+		log.debug('DIRTY: never built')
+		return True
 	def append_to(self, file): pass
 	def __repr__(self): return 'NeverBuilt()'
 
@@ -120,22 +135,41 @@ class FileDependency(Dependency):
 	
 	@property
 	def fields(self):
-		return ['filedep:', str(self.mtime or 0), self.path]
+		return [self.tag, str(self.mtime or 0), self.path]
 
-	def is_dirty(self, base):
+	def is_dirty(self, base, gupscript):
 		current_mtime = get_mtime(os.path.join(base, self.path))
+		# log.debug("Compare mtime %s to %s" % (current_mtime, self.mtime))
 		if current_mtime != self.mtime:
-			log.debug("Dirty: %s (stored mtime is %r, current is %r)" % (self.path,self.mtime, current_mtime))
+			log.debug("DIRTY: %s (stored mtime is %r, current is %r)" % (self.path,self.mtime, current_mtime))
 			return True
 		return False
 	
 	def is_dependency_dirty(self, base):
-		state = TargetState(os.path.join(base, self.path))
-		deps = state.deps()
-		if deps is None:
+		target_path = os.path.join(base, self.path)
+		state = TargetState(target_path)
+		gupscript = Gupscript.for_target(target_path)
+		if gupscript is None:
 			return False # not a buildable target
-		return deps.is_dirty()
+		deps = state.deps()
+		if not deps:
+			log.debug("DIRTY: dependency %s is buildable but has no dep information", target_path)
+			return True
+		return deps.is_dirty(gupscript.path)
 	
 	def __repr__(self):
-		return 'FileDependency(%r, %r)' % (self.mtime, self.path)
+		return '%s(%r, %r)' % (type(self).__name__, self.mtime, self.path)
+
+class GupfileDependency(FileDependency):
+	tag = 'gupfile:'
+	def is_dirty(self, base, gupfile):
+		assert not os.path.isabs(gupfile)
+		assert not os.path.isabs(self.path)
+		if gupfile != self.path:
+			log.debug("DIRTY: gup file changed from %s -> %s" % (self.path, gupfile))
+			return True
+		return super(GupfileDependency, self).is_dirty(base, gupfile)
+
+	def is_dependency_dirty(self, base):
+		return False
 

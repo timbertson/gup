@@ -41,3 +41,26 @@ class TestScripts(TestCase):
 		self.write('foo.gup', BASH + 'echo ok > "$1"; gup -u foo')
 		self.assertRaises(TargetFailed, lambda: self.build('foo'))
 
+	def test_directory_script_is_re_run_if_dependencies_change(self):
+		self.write('dir.gup', BASH + 'gup -u file; mkdir -p "$2"; cp file "$2/"')
+		self.write('file', 'filecontents')
+
+		self.build('dir')
+		self.assertTrue(os.path.isdir(self.path('dir')))
+		self.assertEquals(self.read('dir/file'), 'filecontents')
+
+		self.write('file', 'filecontents2')
+		self.build_u('dir')
+		self.assertEquals(self.read('dir/file'), 'filecontents2')
+
+	def test_running_a_directory_build_script_can_replace_output_with_a_file(self):
+		self.write('dir.gup', BASH + 'mkdir "$2"; echo 1 > $2/file')
+
+		self.build('dir')
+		self.assertTrue(os.path.isdir(self.path('dir')))
+
+		self.write('dir.gup', echo_to_target('file_now'))
+		self.build_u('dir')
+
+		self.assertFalse(os.path.isdir(self.path('dir')))
+		self.assertEquals(self.read('dir'), 'file_now')

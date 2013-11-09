@@ -72,33 +72,33 @@ def build(opts, targets):
 	if parent_target is not None:
 		assert os.path.isabs(parent_target)
 
-	def build_target(target):
-		if os.path.abspath(target) == parent_target:
-			raise SafeError("Target `%s` attempted to build itself" % (target,))
+	def build_target(target_path):
+		if os.path.abspath(target_path) == parent_target:
+			raise SafeError("Target `%s` attempted to build itself" % (target_path,))
 
-		task = builder.prepare_build(target)
-		log.debug('prepare_build(%r) -> %r' % (target, task))
-		if task is None:
+		target = builder.prepare_build(target_path)
+		log.debug('prepare_build(%r) -> %r' % (target_path, target))
+		if target is None:
 			if opts.ifcreate:
 				if parent_target is None:
 					log.warn("--ifcreate was used outside of a gup target")
 				return
-			if opts.update and os.path.exists(target):
-				report_nobuild(target)
+			if opts.update and os.path.exists(target_path):
+				report_nobuild(target_path)
 				return
-			raise Unbuildable("Don't know how to build %s" % (target))
+			raise Unbuildable("Don't know how to build %s" % (target_path))
 
-		if opts.update and not task.is_dirty():
-			report_nobuild(target)
+		if opts.update and not target.is_dirty():
+			report_nobuild(target_path)
 			return
 
-		task.build(force = not opts.update)
+		target.build(force = not opts.update)
 
-	for target in targets:
-		build_target(target)
+	for target_path in targets:
+		build_target(target_path)
 		if parent_target is not None:
-			mtime = get_mtime(target)
-			relpath = os.path.relpath(os.path.abspath(target), os.path.dirname(parent_target))
+			mtime = get_mtime(target_path)
+			relpath = os.path.relpath(os.path.abspath(target_path), os.path.dirname(parent_target))
 
 			dep = FileDependency(mtime=mtime, path=relpath)
 			TargetState(parent_target).add_dependency(dep)

@@ -72,10 +72,23 @@ class Gupscript(object):
 		self.target = target
 		self.basedir = basedir
 		self.target_path = os.path.join(self.basedir, self.target)
-		log.debug("Created %r" % (self,))
+		# log.debug("Created %r" % (self,))
 	
 	def __repr__(self):
 		return "Gupscript(path=%r, target=%r, basedir=%r)" % (self.path, self.target, self.basedir)
+
+	@staticmethod
+	def for_target(path):
+		for candidate in possible_gup_files(path):
+			guppath = candidate.guppath
+			# log.debug("gupfile candidate: %s" % (guppath,))
+			if os.path.exists(guppath):
+				log.debug("gupfile candidate exists: %s" % (guppath,))
+				gupscript = candidate.get_gupscript()
+				if gupscript is not None:
+					return gupscript
+		return None
+
 
 def possible_gup_files(p):
 	r'''

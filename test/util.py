@@ -88,21 +88,28 @@ class TestCase(mocktest.TestCase):
 		self.assertEqual(self.read(target), contents)
 	
 	def touch(self, target):
-		with open(self.path(target), 'a'): pass
+		path = self.path(target)
+		with open(path, 'a'):
+			os.utime(path, None)
 
-	def assertRebuilt(self, target, fn):
+	def assertRebuilds(self, target, fn):
 		self.build_u(target)
 		mtime = self.mtime(target)
 		fn()
 		self.build_u(target)
 		self.assertNotEqual(self.mtime(target), mtime, "target %s didn't get rebuilt" % (target,))
 	
-	def assertNotRebuilt(self, target, fn):
+	def assertNotRebuilds(self, target, fn):
 		self.build_u(target)
 		mtime = self.mtime(target)
 		fn()
 		self.build_u(target)
 		self.assertEqual(self.mtime(target), mtime, "target %s got rebuilt" % (target,))
+	
+	def rename(self, src, dest):
+		os.rename(self.path(src), self.path(dest))
 
+	def mkdirp(self, p):
+		mkdirp(self.path(p))
 
 
