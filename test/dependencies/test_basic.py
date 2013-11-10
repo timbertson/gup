@@ -82,6 +82,18 @@ class TestDependencies(TestCase):
 		self.assertNotRebuilds('target', lambda: self.touch('Gupfile'))
 		self.assertRebuilds('target', change_gupfile)
 	
+	def test_target_dependencies_are_ignored_if_target_becomes_source(self):
+		self.write('build_a.gup', echo_to_target('target') + '; gup -u b')
+		self.write('b', 'dependency')
+		self.write('Gupfile', 'build_a.gup:\n\ta')
+		self.build('a')
+
+		self.assertRebuilds('a', lambda: self.touch('b'))
+
+		self.write('Gupfile', 'build_a.gup:\n\tnothing')
+
+		self.assertNotRebuilds('a', lambda: self.touch('b'))
+	
 class TestAlwaysRebuild(TestCase):
 	def test_always_rebuild(self):
 		self.write('all.gup', echo_to_target('ok') + '; gup --always')
