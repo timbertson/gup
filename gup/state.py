@@ -23,14 +23,16 @@ class TargetState(object):
 		return p
 	
 	def deps(self):
+		rv = None
 		try:
 			f = open(self.meta_path('deps'))
 		except IOError as e:
 			if e.errno != errno.ENOENT: raise
-			return None
 		else:
 			with f:
-				return Dependencies(self.path, f)
+				rv = Dependencies(self.path, f)
+		log.debug("Loaded serialized state: %r" % (rv,))
+		return rv
 
 	def add_dependency(self, dep):
 		log.debug('add dep: %s -> %s' % (self.path, dep))
@@ -42,7 +44,9 @@ class TargetState(object):
 		assert os.path.exists(gupscript)
 		gupfile_dep = GupfileDependency(
 			path=os.path.relpath(gupscript, os.path.dirname(self.path)),
+			checksum=None,
 			mtime=get_mtime(gupscript))
+
 		log.debug("created dep %s from gupfile %r" % (gupfile_dep, gupscript))
 		temp = self._ensure_meta_path('deps_next')
 		with open(temp, 'w') as f:
@@ -58,9 +62,11 @@ class TargetState(object):
 
 class Dependencies(object):
 	FORMAT_VERSION = 1
+	recursive = False
 	def __init__(self, path, file):
 		self.path = path
 		self.rules = []
+		self.checksum = None
 		if file is None:
 			self.rules.append(NeverBuilt())
 		else:
@@ -74,18 +80,38 @@ class Dependencies(object):
 			while True:
 				line = file.readline()
 				if not line: break
-				self.rules.append(Dependency.parse(line.rstrip()))
+				dep = Dependency.parse(line.rstrip())
+				if isinstance(dep, Checksum):
+					assert self.checksum is None
+					self.checksum = dep.value
+				else:
+					self.rules.append(dep)
 	
-	def is_dirty(self, gupscript):
+	def is_dirty(self, gupscript, built):
 		if not os.path.exists(self.path):
-			log.debug("target does not exist - assumed dirty")
+			log.debug("DIRTY: %s (target does not exist)", self.path)
 			return True
 		base = os.path.dirname(self.path)
 		gupscript = os.path.relpath(gupscript, base)
 
-		return (
-			any(r.is_dirty(base, gupscript) for r in self.rules) or
-			any(r.is_dependency_dirty(base) for r in self.rules))
+		unknown_states = []
+		for rule in self.rules:
+			d = rule.is_dirty(base, gupscript, built=built)
+			if d is True:
+				log.debug('DIRTY: %s (from rule %r)', self.path, rule)
+				return True
+			elif d is False:
+				continue
+			else:
+				unknown_states.append(d)
+		log.debug('is_dirty: %s returning %r', self.path, unknown_states or False)
+		return unknown_states or False
+
+	def children(self):
+		base = os.path.dirname(self.path)
+		for rule in self.rules:
+			if rule.recursive:
+				yield rule.full_path(base)
 	
 	@classmethod
 	def init_file(cls, f):
@@ -98,7 +124,7 @@ class Dependency(object):
 	@staticmethod
 	def parse(line):
 		log.debug("parsing line: %s" % (line,))
-		for candidate in [FileDependency, GupfileDependency, AlwaysRebuild]:
+		for candidate in [FileDependency, GupfileDependency, AlwaysRebuild, Checksum]:
 			if line.startswith(candidate.tag):
 				cls = candidate
 				break
@@ -111,14 +137,13 @@ class Dependency(object):
 		line = self.tag + ' ' + ' '.join(self.fields)
 		assert "\n" not in line
 		file.write(line + "\n")
-	
-	def is_dependency_dirty(self, base): return False
+
 	def __repr__(self):
 		return '%s(%s)' % (type(self).__name__, ', '.join(map(repr, self.fields)))
 
 class NeverBuilt(object):
 	fields = []
-	def is_dirty(self, base, gupscript):
+	def is_dirty(self, base, gupscript, built):
 		log.debug('DIRTY: never built')
 		return True
 	def append_to(self, file): pass
@@ -127,56 +152,97 @@ class AlwaysRebuild(Dependency):
 	tag = 'always:'
 	num_fields = 0
 	fields = []
-	def is_dirty(self, base, gupscript):
+	def is_dirty(self, base, gupscript, built):
 		log.debug('DIRTY: always rebuild')
 		return True
 
-class FileDependency(Dependency):
-	num_fields = 2
-	tag = 'filedep:'
+class UnknownState(object):
+	def __init__(self, target, children):
+		self.target = target
+		self.children = children
 
-	def __init__(self, mtime, path):
+class FileDependency(Dependency):
+	num_fields = 3
+	tag = 'filedep:'
+	recursive = True
+
+	def __init__(self, mtime, checksum, path):
 		self.path = path
+		self.checksum = checksum
 		self.mtime = mtime
 	
 	@classmethod
-	def deserialize(cls, mtime, path):
-		return cls(int(mtime) or None, path)
+	def deserialize(cls, mtime, checksum, path):
+		return cls(
+			int(mtime) or None,
+			None if checksum == '-' else checksum,
+			path)
 	
 	@property
 	def fields(self):
-		return [str(self.mtime or 0), self.path]
+		return [
+			str(self.mtime or 0),
+			self.checksum or '-',
+			self.path]
 
-	def is_dirty(self, base, gupscript):
-		current_mtime = get_mtime(os.path.join(base, self.path))
-		# log.debug("Compare mtime %s to %s" % (current_mtime, self.mtime))
-		if current_mtime != self.mtime:
-			log.debug("DIRTY: %s (stored mtime is %r, current is %r)" % (self.path,self.mtime, current_mtime))
-			return True
-		return False
-	
-	def is_dependency_dirty(self, base):
-		target_path = os.path.join(base, self.path)
-		state = TargetState(target_path)
-		gupscript = Gupscript.for_target(target_path)
-		if gupscript is None:
-			return False # not a buildable target
-		deps = state.deps()
-		if not deps:
-			log.debug("DIRTY: dependency %s is buildable but has no dep information", target_path)
-			return True
-		return deps.is_dirty(gupscript.path)
-	
+	def full_path(self, base):
+		return os.path.join(base, self.path)
+
+	def is_dirty(self, base, gupscript, built):
+		path = self.full_path(base)
+		self._target = path
+
+		if self.checksum is not None:
+			log.debug("%s: comparing using checksum", self.path)
+			# use checksum only
+			state = TargetState(path)
+			deps = state.deps()
+			checksum = deps and deps.checksum
+			if deps.checksum != self.checksum:
+				log.debug("DIRTY: %s (stored checksum is %s, current is %s)", self.path, self.checksum, deps.checksum)
+				return True
+			if built:
+				return False
+			# if not built, we don't actually know whether this dep is dirty
+			log.debug("%s: might be dirty - returning %r", self.path, state)
+			return state
+
+		else:
+			# use mtime only
+			current_mtime = get_mtime(path)
+			# log.debug("Compare mtime %s to %s" % (current_mtime, self.mtime))
+			if current_mtime != self.mtime:
+				log.debug("DIRTY: %s (stored mtime is %r, current is %r)" % (self.path, self.mtime, current_mtime))
+				return True
+			return False
+
 class GupfileDependency(FileDependency):
 	tag = 'gupfile:'
-	def is_dirty(self, base, gupfile):
+	recursive = False
+
+	def is_dirty(self, base, gupfile, built):
 		assert not os.path.isabs(gupfile)
 		assert not os.path.isabs(self.path)
 		if gupfile != self.path:
 			log.debug("DIRTY: gup file changed from %s -> %s" % (self.path, gupfile))
 			return True
-		return super(GupfileDependency, self).is_dirty(base, gupfile)
+		return super(GupfileDependency, self).is_dirty(base, gupfile, built=built)
 
-	def is_dependency_dirty(self, base):
-		return False
+class Checksum(Dependency):
+	tag = 'checksum:'
+	num_fields = 2
+
+	def __init__(self, cs):
+		self.value = cs
+		self.fields = [cs]
+	
+	@classmethod
+	def from_stream(cls, f):
+		import hashlib
+		sh = hashlib.sha1()
+		while 1:
+			b = os.read(0, 4096)
+			sh.update(b)
+			if not b: break
+		return cls(sh.hexdigest())
 

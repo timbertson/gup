@@ -8,6 +8,7 @@ import shutil
 import contextlib
 import subprocess
 import logging
+import unittest
 
 from gup import cmd, var
 from gup.error import *
@@ -24,9 +25,12 @@ def mkdirp(p):
 	if not os.path.exists(p):
 		os.makedirs(p)
 
-BASH = '#!/bin/bash\nset -eu\n'
+BASH = '#!/bin/bash\nset -eux\n'
 def echo_to_target(contents):
 	return BASH + 'echo -n "%s" > "$1"' % (contents,)
+
+def echo_file_contents(dep):
+	return BASH + 'gup -u "%s"; cat "%s" > "$1"' % (dep, dep)
 
 class TestCase(mocktest.TestCase):
 	def setUp(self):
@@ -46,7 +50,7 @@ class TestCase(mocktest.TestCase):
 
 	def read(self, p):
 		with open(self.path(p)) as f:
-			return f.read()
+			return f.read().strip()
 	
 	def tearDown(self):
 		shutil.rmtree(self.ROOT)
@@ -62,7 +66,7 @@ class TestCase(mocktest.TestCase):
 			os.chdir(initial)
 
 	def _build(self, args, cwd=None):
-		log.warn("Running build with args: %r" % (list(args)))
+		log.warn("\n\nRunning build with args: %r" % (list(args)))
 		with self._root_cwd():
 			if cwd is not None:
 				os.chdir(cwd)
@@ -92,15 +96,15 @@ class TestCase(mocktest.TestCase):
 		with open(path, 'a'):
 			os.utime(path, None)
 
-	def assertRebuilds(self, target, fn):
-		self.build_u(target)
+	def assertRebuilds(self, target, fn, built=False):
+		if not built: self.build_u(target)
 		mtime = self.mtime(target)
 		fn()
 		self.build_u(target)
 		self.assertNotEqual(self.mtime(target), mtime, "target %s didn't get rebuilt" % (target,))
 	
-	def assertNotRebuilds(self, target, fn):
-		self.build_u(target)
+	def assertNotRebuilds(self, target, fn, built=False):
+		if not built: self.build_u(target)
 		mtime = self.mtime(target)
 		fn()
 		self.build_u(target)

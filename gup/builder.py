@@ -22,9 +22,60 @@ except ImportError:
 
 def prepare_build(p):
 	gupscript = Gupscript.for_target(p)
+	log.debug('prepare_build(%r) -> %r' % (p, gupscript))
 	if gupscript is not None:
 		return Target(gupscript)
 	return None
+
+def build_all(targets, update):
+	# XXX make parallel
+	return any([target.build(update = update) for target in targets])
+
+def _is_dirty(state):
+	'''
+	Returns whether the dependency is dirty.
+	Builds any targets required to check dirtiness
+	'''
+	deps = state.deps()
+	gupscript = Gupscript.for_target(state.path)
+
+	if deps is None:
+		if gupscript is None:
+			# not a target
+			return False
+		else:
+			log.debug("DIRTY: %s (is buildable but has no stored deps)", state.path)
+			return True
+
+	dirty = deps.is_dirty(gupscript.path, False)
+
+	if dirty is True:
+		log.debug("deps.is_dirty(%r) -> True", state.path)
+		return True
+
+	if dirty is False:
+		# not directly dirty - recurse children
+		for path in deps.children():
+			log.debug("Recursing over dependency: %s", path)
+			child = TargetState(path)
+			if _is_dirty(child):
+				log.debug("_is_dirty(%r) -> True", child.path)
+				return True
+		return False
+
+	assert isinstance(dirty, list)
+	for target in dirty:
+		log.debug("MAYBE_DIRTY: %s (unknown state - building it to find out)", target)
+		target = prepare_build(target.path)
+		if target is None:
+			log.debug("%s turned out not to be a target - skipping", target)
+			continue
+		target.build(update=True)
+
+	dirty = deps.is_dirty(gupscript.path, built = True)
+	assert dirty in (True, False)
+	log.debug("after rebuilding unknown targets, deps.is_dirty(%r) -> %r", state.path, dirty)
+	return dirty
 
 class Target(object):
 	def __init__(self, gupscript):
@@ -35,17 +86,17 @@ class Target(object):
 	def __repr__(self):
 		return 'Target(%r)' % (self.path,)
 	
-	def is_dirty(self):
-		deps = self.state.deps()
-		log.debug("Loaded serialized state: %r" % (deps,))
-		if deps is None:
-			return True
-		return deps.is_dirty(self.gupscript.path)
-
-	def build(self, force):
-		# XXX: force
+	def build(self, update):
 		assert self.gupscript is not None
 		assert os.path.exists(self.gupscript.path)
+
+		if update:
+			# return False if no build required:
+			deps = self.state.deps()
+			is_dirty = _is_dirty(self.state)
+			log.debug("_is_dirty on %s returned %s" % (self.path, is_dirty))
+			if not is_dirty:
+				return False
 
 		basedir = self.gupscript.basedir
 		gupscript_path = self.gupscript.path
@@ -97,12 +148,15 @@ class Target(object):
 							shutil.rmtree(self.path)
 						os.rename(output_file, self.path)
 					MOVED = True
+					# XXX: return False if contents is unchanged for a checksum build
 				else:
 					log.debug("builder exited with status %s" % (ret,))
 					raise TargetFailed(target_relative_to_cwd, ret)
 			finally:
 				if not MOVED:
 					try_remove(output_file)
+
+		return True
 	
 	def _run_process(self, args, cwd, env):
 		stderr = None

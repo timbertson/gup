@@ -7,7 +7,7 @@ class TestScripts(TestCase):
 
 		self.build('all')
 
-		self.assertEquals(self.read('all'), 'target: all\narg: abc\n')
+		self.assertEquals(self.read('all'), 'target: all\narg: abc')
 
 	def test_target_name_is_relative_to_gupfile_without_gup_dir(self):
 		mkdirp(self.path('a/b'))
