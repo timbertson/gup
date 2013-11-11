@@ -64,3 +64,9 @@ class TestScripts(TestCase):
 
 		self.assertFalse(os.path.isdir(self.path('dir')))
 		self.assertEquals(self.read('dir'), 'file_now')
+	
+	def test_permissions_of_tempfile_are_maintained(self):
+		self.write('hello.gup', BASH + 'echo -e "#!/bin/bash\necho ok" > "$1"; chmod a+x "$1"')
+		self.build('hello')
+		out = subprocess.check_output(self.path('hello'))
+		self.assertEquals(out.strip(), 'ok')
