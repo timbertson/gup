@@ -1,4 +1,4 @@
-from util import *
+from .util import *
 
 class TestDependencies(TestCase):
 	def setUp(self):

@@ -1,4 +1,4 @@
-from util import *
+from .util import *
 class TestScripts(TestCase):
 	def test_interpreter(self):
 		self.write('gup/all.gup', '#!./build abc\n# ...')

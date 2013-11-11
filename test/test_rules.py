@@ -1,4 +1,4 @@
-from util import *
+from .util import *
 
 class TestBasicRules(TestCase):
 	def setUp(self):
