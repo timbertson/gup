@@ -19,7 +19,17 @@ def _up_path(n):
 
 GUPFILE = 'Gupfile'
 
-class Gupfile(object):
+class BuildCandidate(object):
+	'''
+	A potential builder for a given target.
+
+	This could be a target.gup file or a Gupfile.
+	It may not exist, and if it does exist
+	it may not contain a definition for the given target.
+
+	get_builder() returns the actual Builder, if there is one
+	'''
+
 	def __init__(self, root, suffix, indirect, target):
 		self.root = os.path.normpath(root)
 		self.suffix = suffix
@@ -45,13 +55,17 @@ class Gupfile(object):
 				parts.append(self.suffix)
 		return parts
 
-	def get_gupscript(self):
+	def get_builder(self):
 		path = self.guppath
+		if not os.path.exists(path):
+			return None
+		log.debug("candidate exists: %s" % (path,))
+		
 		target_base = os.path.join(*self._base_parts(False))
 		log.debug("target_base: %s" % (target_base,))
 
 		if not self.indirect:
-			return Gupscript(path, self.target, target_base)
+			return Builder(path, self.target, target_base)
 
 		with open(path) as f:
 			rules = parse_gupfile(f)
@@ -60,35 +74,34 @@ class Gupfile(object):
 		for script, ruleset in rules:
 			if ruleset.match(self.target):
 				base = os.path.join(target_base, os.path.dirname(script))
-				return Gupscript(
+				return Builder(
 					os.path.join(os.path.dirname(path), script),
 					os.path.relpath(os.path.join(target_base, self.target), base),
 					base)
 		return None
 
-class Gupscript(object):
-	def __init__(self, path, target, basedir):
-		self.path = path
+class Builder(object):
+	'''
+	The canonical builder for a target.
+	`path` is the path to the .gup file, even if this
+	builder was obtained indirectly (via a Gupfile match)
+	'''
+	def __init__(self, script_path, target, basedir):
+		self.path = script_path
 		self.target = target
 		self.basedir = basedir
 		self.target_path = os.path.join(self.basedir, self.target)
-		# log.debug("Created %r" % (self,))
 	
 	def __repr__(self):
-		return "Gupscript(path=%r, target=%r, basedir=%r)" % (self.path, self.target, self.basedir)
+		return "Builder(path=%r, target=%r, basedir=%r)" % (self.path, self.target, self.basedir)
 
 	@staticmethod
 	def for_target(path):
 		for candidate in possible_gup_files(path):
-			guppath = candidate.guppath
-			# log.debug("gupfile candidate: %s" % (guppath,))
-			if os.path.exists(guppath):
-				log.debug("gupfile candidate exists: %s" % (guppath,))
-				gupscript = candidate.get_gupscript()
-				if gupscript is not None:
-					return gupscript
+			builder = candidate.get_builder()
+			if builder is not None:
+				return builder
 		return None
-
 
 def possible_gup_files(p):
 	r'''
@@ -142,11 +155,11 @@ def possible_gup_files(p):
 	dirdepth = len(dirparts)
 
 	# find direct match for `{target}.gup` in all possible `/gup` dirs
-	yield Gupfile(dirname, None, False, filename)
+	yield BuildCandidate(dirname, None, False, filename)
 	for i in xrange(0, dirdepth):
 		suff = '/'.join(dirparts[dirdepth - i:])
 		base = path.join(dirname, _up_path(i))
-		yield Gupfile(base, suff, False, filename)
+		yield BuildCandidate(base, suff, False, filename)
 
 	for up in xrange(0, dirdepth):
 		# `up` controls how "fuzzy" the match is, in terms
@@ -156,12 +169,12 @@ def possible_gup_files(p):
 		base_suff = '/'.join(dirparts[dirdepth - up:])
 		parent_base = path.join(dirname, _up_path(up))
 		target_id = os.path.join(base_suff, filename)
-		yield Gupfile(parent_base, None, True, target_id)
+		yield BuildCandidate(parent_base, None, True, target_id)
 		for i in xrange(0, dirdepth - up):
 			# `i` is how far up the directory tree we're looking for the gup/ directory
 			suff = '/'.join(dirparts[dirdepth - i - up:dirdepth - up])
 			base = path.join(parent_base, _up_path(i))
-			yield Gupfile(base, suff, True, target_id)
+			yield BuildCandidate(base, suff, True, target_id)
 
 class Guprules(object):
 	def __init__(self, rules):

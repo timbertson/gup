@@ -5,7 +5,7 @@ import errno
 
 from .util import *
 from .log import getLogger
-from .gupfile import Gupscript
+from .gupfile import Builder
 log = getLogger(__name__)
 
 class TargetState(object):
@@ -40,18 +40,18 @@ class TargetState(object):
 			dep.append_to(f)
 	
 	@contextlib.contextmanager
-	def perform_build(self, gupscript):
-		assert os.path.exists(gupscript)
-		gupfile_dep = GupfileDependency(
-			path=os.path.relpath(gupscript, os.path.dirname(self.path)),
+	def perform_build(self, exe):
+		assert os.path.exists(exe)
+		builder_dep = BuilderDependency(
+			path=os.path.relpath(exe, os.path.dirname(self.path)),
 			checksum=None,
-			mtime=get_mtime(gupscript))
+			mtime=get_mtime(exe))
 
-		log.debug("created dep %s from gupfile %r" % (gupfile_dep, gupscript))
+		log.debug("created dep %s from builder %r" % (builder_dep, exe))
 		temp = self._ensure_meta_path('deps_next')
 		with open(temp, 'w') as f:
 			Dependencies.init_file(f)
-			gupfile_dep.append_to(f)
+			builder_dep.append_to(f)
 		try:
 			yield
 		except:
@@ -87,16 +87,17 @@ class Dependencies(object):
 				else:
 					self.rules.append(dep)
 	
-	def is_dirty(self, gupscript, built):
+	def is_dirty(self, builder, built):
+		assert isinstance(builder, Builder)
 		if not os.path.exists(self.path):
 			log.debug("DIRTY: %s (target does not exist)", self.path)
 			return True
 		base = os.path.dirname(self.path)
-		gupscript = os.path.relpath(gupscript, base)
+		builder_path = os.path.relpath(builder.path, base)
 
 		unknown_states = []
 		for rule in self.rules:
-			d = rule.is_dirty(base, gupscript, built=built)
+			d = rule.is_dirty(base, builder_path, built=built)
 			if d is True:
 				log.debug('DIRTY: %s (from rule %r)', self.path, rule)
 				return True
@@ -124,7 +125,7 @@ class Dependency(object):
 	@staticmethod
 	def parse(line):
 		log.debug("parsing line: %s" % (line,))
-		for candidate in [FileDependency, GupfileDependency, AlwaysRebuild, Checksum]:
+		for candidate in [FileDependency, BuilderDependency, AlwaysRebuild, Checksum]:
 			if line.startswith(candidate.tag):
 				cls = candidate
 				break
@@ -143,7 +144,7 @@ class Dependency(object):
 
 class NeverBuilt(object):
 	fields = []
-	def is_dirty(self, base, gupscript, built):
+	def is_dirty(self, base, builder_path, built):
 		log.debug('DIRTY: never built')
 		return True
 	def append_to(self, file): pass
@@ -152,7 +153,7 @@ class AlwaysRebuild(Dependency):
 	tag = 'always:'
 	num_fields = 0
 	fields = []
-	def is_dirty(self, base, gupscript, built):
+	def is_dirty(self, base, builder_path, built):
 		log.debug('DIRTY: always rebuild')
 		return True
 
@@ -188,7 +189,7 @@ class FileDependency(Dependency):
 	def full_path(self, base):
 		return os.path.join(base, self.path)
 
-	def is_dirty(self, base, gupscript, built):
+	def is_dirty(self, base, builder_path, built):
 		path = self.full_path(base)
 		self._target = path
 
@@ -216,17 +217,17 @@ class FileDependency(Dependency):
 				return True
 			return False
 
-class GupfileDependency(FileDependency):
-	tag = 'gupfile:'
+class BuilderDependency(FileDependency):
+	tag = 'builder:'
 	recursive = False
 
-	def is_dirty(self, base, gupfile, built):
-		assert not os.path.isabs(gupfile)
+	def is_dirty(self, base, builder_path, built):
+		assert not os.path.isabs(builder_path)
 		assert not os.path.isabs(self.path)
-		if gupfile != self.path:
-			log.debug("DIRTY: gup file changed from %s -> %s" % (self.path, gupfile))
+		if builder_path != self.path:
+			log.debug("DIRTY: builder changed from %s -> %s" % (self.path, builder_path))
 			return True
-		return super(GupfileDependency, self).is_dirty(base, gupfile, built=built)
+		return super(BuilderDependency, self).is_dirty(base, builder_path, built=built)
 
 class Checksum(Dependency):
 	tag = 'checksum:'

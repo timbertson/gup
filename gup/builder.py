@@ -7,7 +7,7 @@ import subprocess
 import logging
 import shutil
 
-from .gupfile import possible_gup_files, GUPFILE, Gupfile, Gupscript
+from .gupfile import Builder
 from .error import *
 from .util import *
 from .state import TargetState
@@ -21,10 +21,10 @@ except ImportError:
 	from shlex import quote
 
 def prepare_build(p):
-	gupscript = Gupscript.for_target(p)
-	log.debug('prepare_build(%r) -> %r' % (p, gupscript))
-	if gupscript is not None:
-		return Target(gupscript)
+	builder = Builder.for_target(p)
+	log.debug('prepare_build(%r) -> %r' % (p, builder))
+	if builder is not None:
+		return Target(builder)
 	return None
 
 def build_all(targets, update):
@@ -37,17 +37,17 @@ def _is_dirty(state):
 	Builds any targets required to check dirtiness
 	'''
 	deps = state.deps()
-	gupscript = Gupscript.for_target(state.path)
+	builder = Builder.for_target(state.path)
 
 	if deps is None:
-		if gupscript is None:
+		if builder is None:
 			# not a target
 			return False
 		else:
 			log.debug("DIRTY: %s (is buildable but has no stored deps)", state.path)
 			return True
 
-	dirty = deps.is_dirty(gupscript.path, False)
+	dirty = deps.is_dirty(builder, built = False)
 
 	if dirty is True:
 		log.debug("deps.is_dirty(%r) -> True", state.path)
@@ -72,34 +72,33 @@ def _is_dirty(state):
 			continue
 		target.build(update=True)
 
-	dirty = deps.is_dirty(gupscript.path, built = True)
+	dirty = deps.is_dirty(builder, built = True)
 	assert dirty in (True, False)
 	log.debug("after rebuilding unknown targets, deps.is_dirty(%r) -> %r", state.path, dirty)
 	return dirty
 
 class Target(object):
-	def __init__(self, gupscript):
-		self.gupscript = gupscript
-		self.path = self.gupscript.target_path
+	def __init__(self, builder):
+		self.builder = builder
+		self.path = self.builder.target_path
 		self.state = TargetState(self.path)
 	
 	def __repr__(self):
 		return 'Target(%r)' % (self.path,)
 	
 	def build(self, update):
-		assert self.gupscript is not None
-		assert os.path.exists(self.gupscript.path)
+		assert self.builder is not None
+		assert os.path.exists(self.builder.path)
 
 		if update:
 			# return False if no build required:
-			deps = self.state.deps()
 			is_dirty = _is_dirty(self.state)
 			log.debug("_is_dirty on %s returned %s" % (self.path, is_dirty))
 			if not is_dirty:
 				return False
 
-		basedir = self.gupscript.basedir
-		gupscript_path = self.gupscript.path
+		basedir = self.builder.basedir
+		exe_path = self.builder.path
 
 		# dest may not exist, if a /gup/ directory is in use
 		mkdirp(basedir)
@@ -109,15 +108,15 @@ class Target(object):
 
 		target_relative_to_cwd = os.path.relpath(self.path, var.ROOT_CWD)
 
-		with self.state.perform_build(gupscript_path):
+		with self.state.perform_build(exe_path):
 			output_file = os.path.abspath(self.state.meta_path('out'))
 			MOVED = False
 			try:
-				args = [os.path.abspath(gupscript_path), output_file, self.gupscript.target]
+				args = [os.path.abspath(exe_path), output_file, self.builder.target]
 				log.info(target_relative_to_cwd)
 				mtime = get_mtime(self.path)
 
-				exe = guess_executable(gupscript_path)
+				exe = guess_executable(exe_path)
 
 				if exe is not None:
 					args = exe + args
@@ -133,14 +132,14 @@ class Target(object):
 					ret = self._run_process(args, cwd = basedir, env = env)
 				except OSError as e:
 					if exe: raise # we only expect errors when we could deduce no executable
-					raise SafeError("%s is not executable and has no shebang line" % (gupscript_path,))
+					raise SafeError("%s is not executable and has no shebang line" % (exe_path,))
 
 				new_mtime = get_mtime(self.path)
 				if mtime != new_mtime:
 					log.debug("old_mtime=%r, new_mtime=%r" % (mtime, new_mtime))
 					if not os.path.isdir(self.path):
 						# directories often need to be created directly
-						log.warn("%s modified %s directly - this is rarely a good idea" % (gupscript_path, self.path))
+						log.warn("%s modified %s directly - this is rarely a good idea" % (exe_path, self.path))
 				if ret == 0:
 					if os.path.exists(output_file):
 						if os.path.isdir(self.path):
