@@ -13,6 +13,7 @@ from .util import *
 from .state import TargetState
 from .log import getLogger
 from . import var
+from . import jwack
 log = getLogger(__name__)
 
 try:
@@ -87,75 +88,77 @@ class Target(object):
 		return 'Target(%r)' % (self.path,)
 	
 	def build(self, update):
+		return self.state.perform_build(self.builder.path, lambda: self._perform_build(update))
+
+	def _perform_build(self, update):
+		'''
+		Assumes locks are held (by state.perform_build)
+		'''
 		assert self.builder is not None
 		assert os.path.exists(self.builder.path)
-
 		if update:
-			# return False if no build required:
-			is_dirty = _is_dirty(self.state)
-			log.debug("_is_dirty on %s returned %s" % (self.path, is_dirty))
-			if not is_dirty:
+			if not _is_dirty(self.state):
+				log.debug("no build needed")
 				return False
-
-		basedir = self.builder.basedir
 		exe_path = self.builder.path
 
 		# dest may not exist, if a /gup/ directory is in use
+		basedir = self.builder.basedir
 		mkdirp(basedir)
 
 		env = os.environ.copy()
 		env['GUP_TARGET'] = os.path.abspath(self.path)
+		jwack.extend_env(env)
 
 		target_relative_to_cwd = os.path.relpath(self.path, var.ROOT_CWD)
 
-		with self.state.perform_build(exe_path):
-			output_file = os.path.abspath(self.state.meta_path('out'))
-			MOVED = False
+
+		output_file = os.path.abspath(self.state.meta_path('out'))
+		MOVED = False
+		try:
+			args = [os.path.abspath(exe_path), output_file, self.builder.target]
+			log.info(target_relative_to_cwd)
+			mtime = get_mtime(self.path)
+
+			exe = guess_executable(exe_path)
+
+			if exe is not None:
+				args = exe + args
+
+			if var.TRACE:
+				log.info(' # %s'% (os.path.abspath(basedir),))
+				log.info(' + ' + ' '.join(map(quote, args)))
+			else:
+				log.debug(' from cwd: %s'% (os.path.abspath(basedir),))
+				log.debug('executing: ' + ' '.join(map(quote, args)))
+
 			try:
-				args = [os.path.abspath(exe_path), output_file, self.builder.target]
-				log.info(target_relative_to_cwd)
-				mtime = get_mtime(self.path)
+				ret = self._run_process(args, cwd = basedir, env = env)
+			except OSError as e:
+				if exe: raise # we only expect errors when we could deduce no executable
+				raise SafeError("%s is not executable and has no shebang line" % (exe_path,))
 
-				exe = guess_executable(exe_path)
-
-				if exe is not None:
-					args = exe + args
-
-				if var.TRACE:
-					log.info(' # %s'% (os.path.abspath(basedir),))
-					log.info(' + ' + ' '.join(map(quote, args)))
-				else:
-					log.debug(' from cwd: %s'% (os.path.abspath(basedir),))
-					log.debug('executing: ' + ' '.join(map(quote, args)))
-
-				try:
-					ret = self._run_process(args, cwd = basedir, env = env)
-				except OSError as e:
-					if exe: raise # we only expect errors when we could deduce no executable
-					raise SafeError("%s is not executable and has no shebang line" % (exe_path,))
-
-				new_mtime = get_mtime(self.path)
-				if mtime != new_mtime:
-					log.debug("old_mtime=%r, new_mtime=%r" % (mtime, new_mtime))
-					if not os.path.isdir(self.path):
-						# directories often need to be created directly
-						log.warn("%s modified %s directly - this is rarely a good idea" % (exe_path, self.path))
-				if ret == 0:
-					if os.path.exists(output_file):
-						if os.path.isdir(self.path):
-							log.debug("calling rmtree() on previous %s", self.path)
-							shutil.rmtree(self.path)
-						os.rename(output_file, self.path)
-					MOVED = True
-					# XXX: return False if contents is unchanged for a checksum build
-				else:
-					log.debug("builder exited with status %s" % (ret,))
-					raise TargetFailed(target_relative_to_cwd, ret)
-			finally:
-				if not MOVED:
-					try_remove(output_file)
-
+			new_mtime = get_mtime(self.path)
+			if mtime != new_mtime:
+				log.debug("old_mtime=%r, new_mtime=%r" % (mtime, new_mtime))
+				if not os.path.isdir(self.path):
+					# directories often need to be created directly
+					log.warn("%s modified %s directly - this is rarely a good idea" % (exe_path, self.path))
+			if ret == 0:
+				if os.path.exists(output_file):
+					if os.path.isdir(self.path):
+						log.debug("calling rmtree() on previous %s", self.path)
+						shutil.rmtree(self.path)
+					os.rename(output_file, self.path)
+				MOVED = True
+			else:
+				log.debug("builder exited with status %s" % (ret,))
+				raise TargetFailed(target_relative_to_cwd, ret)
+		finally:
+			if not MOVED:
+				try_remove(output_file)
 		return True
+
 	
 	def _run_process(self, args, cwd, env):
 		stderr = None

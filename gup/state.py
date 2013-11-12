@@ -9,14 +9,24 @@ from .gupfile import Builder
 from .lock import Lock
 log = getLogger(__name__)
 
+META_DIR = '.gup'
+
 class TargetState(object):
 	_dep_lock = None
+
 	def __init__(self, p):
 		self.path = p
 	
+	@classmethod
+	def built_targets(cls, dir):
+		'''
+		Returns the target names which have metadata stored in `dir`
+		'''
+		return [f[:-5] for f in os.listdir(dir) if f.endswith('.deps')]
+
 	def meta_path(self, ext):
 		base, target = os.path.split(self.path)
-		meta_dir = os.path.join(base, '.gup')
+		meta_dir = os.path.join(base, META_DIR)
 		return os.path.join(meta_dir, "%s.%s" % (target, ext))
 
 	def _ensure_meta_path(self, ext):
@@ -51,14 +61,13 @@ class TargetState(object):
 			self.lockfile = Lock(self.meta_path('lock'))
 
 	def add_dependency(self, dep):
-		lock = Lock(self.meta_path('deps_next.lock'))
+		lock = Lock(self.meta_path('deps2.lock'))
 		log.debug('add dep: %s -> %s' % (self.path, dep))
 		with lock.write():
-			with open(self.meta_path('deps_next'), 'a') as f:
+			with open(self.meta_path('deps2'), 'a') as f:
 				dep.append_to(f)
 	
-	@contextlib.contextmanager
-	def perform_build(self, exe):
+	def perform_build(self, exe, do_build):
 		assert os.path.exists(exe)
 		with self._ensure_dep_lock().write():
 			builder_dep = BuilderDependency(
@@ -67,17 +76,19 @@ class TargetState(object):
 				mtime=get_mtime(exe))
 
 			log.debug("created dep %s from builder %r" % (builder_dep, exe))
-			temp = self._ensure_meta_path('deps_next')
+			temp = self._ensure_meta_path('deps2')
 			with open(temp, 'w') as f:
 				Dependencies.init_file(f)
 				builder_dep.append_to(f)
 			try:
-				yield
+				built = do_build()
 			except:
 				os.remove(temp)
 				raise
 			else:
-				os.rename(temp, self.meta_path('deps'))
+				if built:
+					os.rename(temp, self.meta_path('deps'))
+				return built
 
 class Dependencies(object):
 	FORMAT_VERSION = 1

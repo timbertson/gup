@@ -58,17 +58,17 @@ class Lock:
 			fcntl.lockf(self.lockfile, kind|fcntl.LOCK_NB, 0, 0)
 		except IOError, e:
 			if e.errno in (errno.EAGAIN, errno.EACCES):
-				debug("%s lock failed\n", self.name)
+				debug("%s lock failed", self.name)
 				pass  # someone else has it locked
 			else:
 				raise
 		else:
-			debug("%s lock (try)\n", self.name)
+			debug("%s lock (try)", self.name)
 			self.owned = kind
 
 	def waitlock(self, kind=fcntl.LOCK_EX):
 		assert(self.owned != kind)
-		debug("%s lock (wait)\n", self.name)
+		debug("%s lock (wait)", self.name)
 		fcntl.lockf(self.lockfile, kind, 0, 0)
 		self.owned = kind
 
@@ -76,5 +76,5 @@ class Lock:
 		if not self.owned:
 			raise Exception("can't unlock %r - we don't own it" % self.name)
 		fcntl.lockf(self.lockfile, fcntl.LOCK_UN, 0, 0)
-		debug("%s unlock\n", self.name)
+		debug("%s unlock", self.name)
 		self.owned = False
