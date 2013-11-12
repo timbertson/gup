@@ -2,6 +2,7 @@ import sys, os, errno, glob, stat, fcntl
 import logging
 
 from .log import getLogger
+from .util import close_on_exec
 log = getLogger(__name__)
 debug = log.debug
 

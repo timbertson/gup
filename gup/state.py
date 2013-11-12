@@ -6,9 +6,11 @@ import errno
 from .util import *
 from .log import getLogger
 from .gupfile import Builder
+from .lock import Lock
 log = getLogger(__name__)
 
 class TargetState(object):
+	_dep_lock = None
 	def __init__(self, p):
 		self.path = p
 	
@@ -22,43 +24,60 @@ class TargetState(object):
 		mkdirp(os.path.dirname(p))
 		return p
 	
+	def _ensure_dep_lock(self):
+		if not self._dep_lock:
+			self._dep_lock = Lock(self._ensure_meta_path('deps.lock'))
+		return self._dep_lock
+
 	def deps(self):
 		rv = None
-		try:
-			f = open(self.meta_path('deps'))
-		except IOError as e:
-			if e.errno != errno.ENOENT: raise
-		else:
-			with f:
-				rv = Dependencies(self.path, f)
+		if not os.path.exists(self.meta_path('deps')):
+			# don't even bother trying to lock deps file
+			return rv
+
+		with self._ensure_dep_lock().read():
+			try:
+				f = open(self.meta_path('deps'))
+			except IOError as e:
+				if e.errno != errno.ENOENT: raise
+			else:
+				with f:
+					rv = Dependencies(self.path, f)
 		log.debug("Loaded serialized state: %r" % (rv,))
 		return rv
 
+	def create_lock(self):
+		if self.lockfile is None:
+			self.lockfile = Lock(self.meta_path('lock'))
+
 	def add_dependency(self, dep):
+		lock = Lock(self.meta_path('deps_next.lock'))
 		log.debug('add dep: %s -> %s' % (self.path, dep))
-		with open(self.meta_path('deps_next'), 'a') as f:
-			dep.append_to(f)
+		with lock.write():
+			with open(self.meta_path('deps_next'), 'a') as f:
+				dep.append_to(f)
 	
 	@contextlib.contextmanager
 	def perform_build(self, exe):
 		assert os.path.exists(exe)
-		builder_dep = BuilderDependency(
-			path=os.path.relpath(exe, os.path.dirname(self.path)),
-			checksum=None,
-			mtime=get_mtime(exe))
+		with self._ensure_dep_lock().write():
+			builder_dep = BuilderDependency(
+				path=os.path.relpath(exe, os.path.dirname(self.path)),
+				checksum=None,
+				mtime=get_mtime(exe))
 
-		log.debug("created dep %s from builder %r" % (builder_dep, exe))
-		temp = self._ensure_meta_path('deps_next')
-		with open(temp, 'w') as f:
-			Dependencies.init_file(f)
-			builder_dep.append_to(f)
-		try:
-			yield
-		except:
-			os.remove(temp)
-			raise
-		else:
-			os.rename(temp, self.meta_path('deps'))
+			log.debug("created dep %s from builder %r" % (builder_dep, exe))
+			temp = self._ensure_meta_path('deps_next')
+			with open(temp, 'w') as f:
+				Dependencies.init_file(f)
+				builder_dep.append_to(f)
+			try:
+				yield
+			except:
+				os.remove(temp)
+				raise
+			else:
+				os.rename(temp, self.meta_path('deps'))
 
 class Dependencies(object):
 	FORMAT_VERSION = 1

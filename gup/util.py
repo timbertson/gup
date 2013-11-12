@@ -29,3 +29,13 @@ def try_remove(path):
 		os.remove(path)
 	except OSError as e:
 		if e.errno != errno.ENOENT: raise
+
+def close_on_exec(fd, yes):
+	import fcntl
+	fl = fcntl.fcntl(fd, fcntl.F_GETFD)
+	fl &= ~fcntl.FD_CLOEXEC
+	if yes:
+		fl |= fcntl.FD_CLOEXEC
+	fcntl.fcntl(fd, fcntl.F_SETFD, fl)
+
+
