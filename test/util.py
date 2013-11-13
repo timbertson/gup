@@ -10,11 +10,7 @@ import subprocess
 import logging
 import unittest
 
-from gup import cmd, var
 from gup.error import *
-
-# (for log redirection)
-var.RUNNING_TESTS = True
 
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger('TEST')
@@ -66,12 +62,26 @@ class TestCase(mocktest.TestCase):
 			os.chdir(initial)
 
 	def _build(self, args, cwd=None):
-		var.init_root(True)
 		log.warn("\n\nRunning build with args: %r" % (list(args)))
 		with self._root_cwd():
-			if cwd is not None:
-				os.chdir(cwd)
-			cmd._main(list(args))
+			env = os.environ.copy()
+			for key in list(env.keys()):
+				# clechild_ar out any gup state
+				if key.startswith('GUP_'):
+					del env[key]
+
+			env['GUP_IN_TESTS'] = '1'
+			env['GUP_COLOR'] = '1'
+			proc = subprocess.Popen(['gup'] + list(args), cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
+
+			child_log = logging.getLogger('out')
+			while True:
+				line = proc.stdout.readline().rstrip()
+				if not line:
+						break
+				child_log.info(line)
+			if not proc.wait() == 0:
+				raise SafeError('gup failed')
 
 	def build(self, *targets, **k):
 		self._build(targets, **k)

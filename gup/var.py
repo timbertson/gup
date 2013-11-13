@@ -27,5 +27,3 @@ def set_trace():
 DEFAULT_VERBOSITY = int(os.environ.get('GUP_VERBOSE', '0'))
 def set_verbosity(val):
 	os.environ['GUP_VERBOSE'] = str(val)
-
-RUNNING_TESTS = os.environ.get('GUP_IN_TESTS', '0') == '1'

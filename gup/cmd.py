@@ -27,11 +27,9 @@ def _init_logging(verbosity):
 		fmt = '%(color)sgup[%(process)s %(asctime)s %(name)-11s %(levelname)-5s]  ' + var.INDENT + '%(bold)s%(message)s' + PLAIN
 		lvl = logging.DEBUG
 	
-	if var.RUNNING_TESTS:
+	if 'GUP_IN_TESTS' in os.environ:
 		lvl = logging.DEBUG
-		if var.IS_ROOT:
-			logging.basicConfig(level=lvl)
-			return
+		fmt = fmt = '%(color)s' + var.INDENT + '%(bold)s%(message)s' + PLAIN
 
 	# persist for child processes
 	var.set_verbosity(verbosity)

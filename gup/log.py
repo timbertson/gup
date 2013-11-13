@@ -8,7 +8,12 @@ YELLOW = ""
 BOLD   = ""
 PLAIN  = ""
 
-if sys.stderr.isatty() and (os.environ.get('TERM') or 'dumb') != 'dumb':
+_want_color = os.environ.get('GUP_COLOR', 'auto')
+if _want_color == '1' or (
+			_want_color == 'auto' and
+			sys.stderr.isatty() and
+			(os.environ.get('TERM') or 'dumb') != 'dumb'
+		):
 	# ...use ANSI formatting codes.
 	RED    = "\x1b[31m"
 	GREEN  = "\x1b[32m"

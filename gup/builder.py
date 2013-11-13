@@ -166,23 +166,7 @@ class Target(object):
 
 	
 	def _run_process(self, args, cwd, env):
-		stderr = None
-
-		if var.RUNNING_TESTS:
-			stderr = subprocess.PIPE
-			env['GUP_IN_TESTS'] = '1'
-
-		proc = subprocess.Popen(args, cwd = cwd, env = env, stderr = stderr)
-
-		if var.RUNNING_TESTS:
-			log = getLogger(__name__ + '.child')
-			while True:
-				line = proc.stderr.readline().rstrip()
-				if not line:
-						break
-				log.info(line)
-
-		return proc.wait()
+		return subprocess.Popen(args, cwd = cwd, env = env).wait()
 
 def guess_executable(p):
 	with open(p) as f:
