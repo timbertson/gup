@@ -19,6 +19,6 @@ class TestParallelBuilds(TestCase):
 		self.assertEquals(self.read('counter'), '2')
 		elapsed_time = (datetime.now() - initial_time).total_seconds()
 		log.warn("elapsed time: %r" % (elapsed_time,))
-		# since build sleeps for 0.5 seconds, rebuilsing it for each
-		# dep would take 3+ seconds
+		# since build sleeps for 1 second, rebuilsing it for each
+		# dep would take 6+ seconds
 		self.assertTrue(elapsed_time < 2)
