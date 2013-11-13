@@ -57,6 +57,7 @@ def _main(argv):
 			p.add_option('-i', '--interactive', action='store_true', help='Ask for confirmation before removing files', default=False)
 			p.add_option('-n', '--dry-run', action='store_false', dest='force', help='Just print files that would be removed')
 			p.add_option('-f', '--force', action='store_true', help='Actually remove files')
+			p.add_option('-m', '--metadata', action='store_true', help='Remove .gup metadata directories, but leave targets')
 			action = clean_targets
 		elif cmd == '--contents':
 			p = optparse.OptionParser('Usage: gup --contents')
@@ -162,11 +163,12 @@ def clean_targets(opts, dests):
 		for dirpath, dirnames, filenames in os.walk(dest, followlinks=False):
 			if META_DIR in dirnames:
 				gupdir = os.path.join(dirpath, META_DIR)
-				deps = TargetState.built_targets(gupdir)
-				for dep in deps:
-					if dep in filenames:
-						target = os.path.join(dirpath, dep)
-						rm(target)
+				if not opts.metadata:
+					deps = TargetState.built_targets(gupdir)
+					for dep in deps:
+						if dep in filenames:
+							target = os.path.join(dirpath, dep)
+							rm(target)
 				rm(gupdir, isdir=True)
 			# filter out hidden directories
 			dirnames = [d for d in dirnames if not d.startswith('.')]
