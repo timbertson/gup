@@ -3,6 +3,9 @@
 #
 import sys, os, errno, select, fcntl, signal
 from .util import close_on_exec
+from .log import getLogger
+from . import error
+log = getLogger(__name__)
 
 _toplevel = 0
 _mytokens = 1
@@ -262,9 +265,13 @@ def start_job(reason, jobfunc, donefunc):
             try:
                 rv = jobfunc() or 0
                 _debug('jobfunc completed (%r, %r)' % (jobfunc,rv))
+            except error.SafeError as e:
+                log.error("%s" % (str(e),))
+                rv = error.SafeError.exitcode
             except Exception:
                 import traceback
                 traceback.print_exc()
+                rv = error.UNKNOWN_ERROR_CODE
         finally:
             _debug('exit: %d' % rv)
             os._exit(rv)

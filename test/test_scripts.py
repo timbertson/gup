@@ -39,7 +39,7 @@ class TestScripts(TestCase):
 	
 	def test_self_dependency_is_detected(self):
 		self.write('foo.gup', BASH + 'echo ok > "$1"; gup -u foo')
-		self.assertRaises(TargetFailed, lambda: self.build('foo'))
+		self.assertRaises(SafeError, lambda: self.build('foo'))
 
 	def test_directory_script_is_re_run_if_dependencies_change(self):
 		self.write('dir.gup', BASH + 'gup -u file; mkdir -p "$2"; cp file "$2/"')

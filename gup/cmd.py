@@ -131,11 +131,14 @@ def build(opts, targets):
 
 	runner = TaskRunner()
 	for target_path in targets:
+		if os.path.abspath(target_path) == parent_target:
+			raise SafeError("Target `%s` attempted to build itself" % (target_path,))
+
 		task = Task(opts, parent_target, target_path)
 		target = task.prepare()
 		if target is not None:
 			# only add a task if it's a buildable target
-			runner.add(task.build)
+			runner.add(task)
 		else:
 			# otherwise, perform post-build actions (like updating parent dependencies)
 			task.complete()
@@ -147,7 +150,8 @@ def main():
 	try:
 		_main(sys.argv[1:])
 	except SafeError as e:
-		log.error("%s" % (str(e),))
+		if e.message is not None:
+			log.error("%s" % (str(e),))
 		sys.exit(1)
 
 if __name__ == '__main__':

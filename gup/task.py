@@ -1,9 +1,11 @@
+from __future__ import print_function
 import os
+import sys
 from . import builder
 from .log import getLogger
 from .util import get_mtime
 from .state import FileDependency, TargetState
-from .error import Unbuildable
+from .error import Unbuildable, TargetFailed, SafeError
 from . import var
 
 log = getLogger('gup.cmd') # hard-coded in case of __main__
@@ -22,9 +24,6 @@ class Task(object):
 		target_path = self.target_path
 		opts = self.opts
 
-		if os.path.abspath(target_path) == self.parent_target:
-			raise SafeError("Target `%s` attempted to build itself" % (target_path,))
-
 		target = self.target = builder.prepare_build(target_path)
 		if target is None:
 			if opts.ifcreate:
@@ -38,6 +37,9 @@ class Task(object):
 		return target
 
 	def build(self):
+		'''
+		run in a child process
+		'''
 		self.built = self.target.build(update=self.opts.update)
 		self.complete()
 
@@ -55,6 +57,16 @@ class Task(object):
 
 			dep = FileDependency(mtime=mtime, path=relpath, checksum=checksum)
 			TargetState(self.parent_target).add_dependency(dep)
+	
+	def handle_result(self, _, rv):
+		log.debug("build process exited with status: %r" % (rv,))
+		if rv == 0:
+			return
+		if rv == SafeError.exitcode:
+			# already logged - just raise an empty exception to propagate exit code
+			raise SafeError(None)
+		else:
+			raise RuntimeError("unknown error in child process - exit status %s" % rv)
 
 	def report_nobuild(self):
 		if var.IS_ROOT:
@@ -75,7 +87,7 @@ class TaskRunner(object):
 		while self.tasks:
 			task = self.tasks.pop(0)
 			log.debug("START job")
-			jwack.start_job('TODO', task, lambda *a: None)
+			jwack.start_job('TODO', task.build, task.handle_result)
 			log.debug("job running in bg...")
 		jwack.wait_all()
 	

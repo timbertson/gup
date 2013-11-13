@@ -20,7 +20,7 @@ class TestDependencies(TestCase):
 		self.assertEqual(self.mtime('dep'), mtime)
 	
 	def test_trying_to_build_source_fails(self):
-		self.assertRaises(TargetFailed, lambda: self.build("dep"))
+		self.assertRaises(SafeError, lambda: self.build("dep"))
 	
 	def test_rebuilds_on_transitive_dependency_change(self):
 		self.write("counter.gup", BASH + 'gup -u counter2; echo -n "$(expr "$(cat counter2)" + 1)" > $1')
