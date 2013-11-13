@@ -12,6 +12,13 @@ log = getLogger(__name__)
 
 META_DIR = '.gup'
 
+class _dirty_args(object):
+	def __init__(self, deps, base, builder_path, built):
+		self.deps = deps
+		self.base = base
+		self.builder_path = builder_path
+		self.built = built
+
 class TargetState(object):
 	_dep_lock = None
 
@@ -88,17 +95,22 @@ class TargetState(object):
 				raise
 			else:
 				if built:
+					# always track the build time
+					built_time = get_mtime(self.path)
+					if built_time is not None:
+						with open(temp, 'a') as f:
+							BuildTime(built_time).append_to(f)
 					os.rename(temp, self.meta_path('deps'))
 				return built
 
 class Dependencies(object):
 	FORMAT_VERSION = 1
-	recursive = False
 	def __init__(self, path, file):
 		self.path = path
 		self.rules = []
 		self.checksum = None
 		self.runid = None
+
 		if file is None:
 			self.rules.append(NeverBuilt())
 		else:
@@ -127,12 +139,14 @@ class Dependencies(object):
 		if not os.path.exists(self.path):
 			log.debug("DIRTY: %s (target does not exist)", self.path)
 			return True
+
 		base = os.path.dirname(self.path)
 		builder_path = os.path.relpath(builder.path, base)
 
 		unknown_states = []
+		dirty_args = _dirty_args(deps=self, base=base, builder_path=builder_path, built=built)
 		for rule in self.rules:
-			d = rule.is_dirty(base, builder_path, built=built)
+			d = rule.is_dirty(dirty_args)
 			if d is True:
 				log.debug('DIRTY: %s (from rule %r)', self.path, rule)
 				return True
@@ -161,10 +175,17 @@ class Dependencies(object):
 		return 'Dependencies<runid=%r, checksum=%s, %r>' % (self.runid, self.checksum, self.rules)
 
 class Dependency(object):
+	recursive = False
 	@staticmethod
 	def parse(line):
 		log.debug("parsing line: %s" % (line,))
-		for candidate in [FileDependency, BuilderDependency, AlwaysRebuild, Checksum, RunId]:
+		for candidate in [
+				FileDependency,
+				BuilderDependency,
+				AlwaysRebuild,
+				Checksum,
+				RunId,
+				BuildTime]:
 			if line.startswith(candidate.tag):
 				cls = candidate
 				break
@@ -183,7 +204,7 @@ class Dependency(object):
 
 class NeverBuilt(object):
 	fields = []
-	def is_dirty(self, base, builder_path, built):
+	def is_dirty(self, args):
 		log.debug('DIRTY: never built')
 		return True
 	def append_to(self, file): pass
@@ -192,7 +213,7 @@ class AlwaysRebuild(Dependency):
 	tag = 'always:'
 	num_fields = 0
 	fields = []
-	def is_dirty(self, base, builder_path, built):
+	def is_dirty(self, args):
 		log.debug('DIRTY: always rebuild')
 		return True
 
@@ -234,7 +255,10 @@ class FileDependency(Dependency):
 	def full_path(self, base):
 		return os.path.join(base, self.path)
 
-	def is_dirty(self, base, builder_path, built):
+	def is_dirty(self, args):
+		base = args.base
+		built = args.built
+
 		path = self.full_path(base)
 		self._target = path
 
@@ -266,13 +290,15 @@ class BuilderDependency(FileDependency):
 	tag = 'builder:'
 	recursive = False
 
-	def is_dirty(self, base, builder_path, built):
+	def is_dirty(self, args):
+		builder_path = args.builder_path
+
 		assert not os.path.isabs(builder_path)
 		assert not os.path.isabs(self.path)
 		if builder_path != self.path:
 			log.debug("DIRTY: builder changed from %s -> %s" % (self.path, builder_path))
 			return True
-		return super(BuilderDependency, self).is_dirty(base, builder_path, built=built)
+		return super(BuilderDependency, self).is_dirty(args)
 
 class Checksum(Dependency):
 	tag = 'checksum:'
@@ -291,6 +317,29 @@ class Checksum(Dependency):
 			sh.update(b)
 			if not b: break
 		return cls(sh.hexdigest())
+
+class BuildTime(Dependency):
+	tag = 'built:'
+	num_fields = 1
+
+	def __init__(self, mtime):
+		assert mtime is not None
+		self.value = mtime
+		self.fields = [str(mtime)]
+
+	@classmethod
+	def deserialize(cls, mtime):
+		return cls(int(mtime))
+	
+	def is_dirty(self, args):
+		path = args.deps.path
+
+		mtime = get_mtime(path)
+		assert mtime is not None
+		if mtime != self.value:
+			log.warn("%s was externally modified - rebuilding" % (path,))
+			return True
+		return False
 
 class RunId(Dependency):
 	tag = 'run:'
