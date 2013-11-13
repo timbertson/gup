@@ -261,6 +261,7 @@ def start_job(reason, jobfunc, donefunc):
         # child
         os.close(r)
         rv = 201
+        #TODO: remove logging handlers when run in tests
         try:
             try:
                 rv = jobfunc() or 0

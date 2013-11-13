@@ -26,10 +26,6 @@ class Task(object):
 
 		target = self.target = builder.prepare_build(target_path)
 		if target is None:
-			if opts.ifcreate:
-				if self.parent_target is None:
-					log.warn("--ifcreate was used outside of a gup target")
-				return None
 			if opts.update and os.path.exists(target_path):
 				self.report_nobuild()
 				return None
@@ -47,7 +43,6 @@ class Task(object):
 		if self.parent_target is not None:
 			target_path = self.target_path
 			mtime = get_mtime(target_path)
-			relpath = os.path.relpath(os.path.abspath(target_path), os.path.dirname(self.parent_target))
 
 			checksum = None
 			if self.target:
@@ -55,7 +50,7 @@ class Task(object):
 				if deps:
 					checksum = deps.checksum
 
-			dep = FileDependency(mtime=mtime, path=relpath, checksum=checksum)
+			dep = FileDependency.relative_to_target(self.parent_target, mtime=mtime, path=target_path, checksum=checksum)
 			TargetState(self.parent_target).add_dependency(dep)
 	
 	def handle_result(self, _, rv):

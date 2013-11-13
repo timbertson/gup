@@ -212,6 +212,12 @@ class FileDependency(Dependency):
 		self.mtime = mtime
 	
 	@classmethod
+	def relative_to_target(cls, target, mtime, checksum, path):
+		base = os.path.dirname(target)
+		relpath = os.path.relpath(path, base)
+		return cls(mtime=mtime, checksum=checksum, path=relpath)
+	
+	@classmethod
 	def deserialize(cls, mtime, checksum, path):
 		return cls(
 			int(mtime) or None,

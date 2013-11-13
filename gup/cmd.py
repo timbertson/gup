@@ -8,7 +8,7 @@ import os
 from . import builder
 from .error import *
 from .util import *
-from .state import TargetState, AlwaysRebuild, Checksum, META_DIR
+from .state import TargetState, AlwaysRebuild, Checksum, FileDependency, META_DIR
 from .log import PLAIN, getLogger
 from . import var
 from . import jwack
@@ -44,29 +44,55 @@ def _init_logging(verbosity):
 
 
 def _main(argv):
-	p = optparse.OptionParser('Usage: gup [OPTIONS] [target [...]]')
-	p.add_option('-u', '--update', '--ifchange', dest='update', action='store_true', help='Only rebuild stale targets', default=False)
+	p = None
+	action = None
 
-	# TODO: give --contents and --clean their own parsers
-	p.add_option('--contents', action='store_const', help='Treat target as unchanged if the contents (of stdin) match the stored value', const=mark_contents, dest='action')
-	p.add_option('--clean', action='store_const', help='Clean any gup-built targets', const=clean_targets, dest='action')
+	try:
+		cmd = argv[0]
+	except IndexError:
+		pass
+	else:
+		if cmd == '--clean':
+			p = optparse.OptionParser('Usage: gup --clean [OPTIONS] [dir [...]]')
+			action = clean_targets
+			argv.pop(0)
+		elif cmd == '--contents':
+			p = optparse.OptionParser('Usage: gup --contents')
+			action = mark_contents
+			argv.pop(0)
+		elif cmd == '--always':
+			p = optparse.OptionParser('Usage: gup --always')
+			action = mark_always
+			argv.pop(0)
+		elif cmd == '--ifcreate':
+			p = optparse.OptionParser('Usage: gup --ifcreate [file [...]]')
+			action = mark_ifcreate
+			argv.pop(0)
+	
+	if action is None:
+		# default parser
+		p = optparse.OptionParser('Usage: gup [action] [OPTIONS] [target [...]]\n\n' +
+			'Actions: (if present, the action must be the first argument)\n'
+			'  --always     Mark this target as always-dirty\n' +
+			'  --ifcreate   Rebuild the current target if the given file(s) are created\n' +
+			'  --contents   Checksum the contents of stdin\n' +
+			'  --clean      Clean any gup-built targets\n' +
+			'  (use gup <action> --help) for further details')
 
-	p.add_option('--ifcreate', action='store_true', help='Redo this target if file is created', default=False)
-	p.add_option('--always', action='store_const', dest='action', const=mark_always)
-	p.add_option('-j', '--jobs', type='int', default=1, help="number of concurrent jobs to run")
-	p.add_option('-v', '--verbose', action='count', default=var.DEFAULT_VERBOSITY, help='verbose')
-	p.add_option('-q', '--quiet', action='count', default=0, help='quiet')
-	p.add_option('-x', '--trace', action='store_true', help='xtrace')
+		p.add_option('-u', '--update', '--ifchange', dest='update', action='store_true', help='Only rebuild stale targets', default=False)
+		p.add_option('-j', '--jobs', type='int', default=1, help="Number of concurrent jobs to run")
+		p.add_option('-x', '--trace', action='store_true', help='Trace build script invocations (also sets $GUP_XTRACE=1)')
+		action = build
+
+	p.add_option('-q', '--quiet', action='count', default=0, help='Decrease verbosity')
+	p.add_option('-v', '--verbose', action='count', default=var.DEFAULT_VERBOSITY, help='Increase verbosity')
 	opts, args = p.parse_args(argv)
 
 	verbosity = opts.verbose - opts.quiet
 	_init_logging(verbosity)
 
-	if opts.trace:
-		var.set_trace()
-	
-	log.debug('argv: %r, action=%r', argv, opts.action)
-	(opts.action or build)(opts, args)
+	log.debug('argv: %r, action=%r', argv, action)
+	action(opts, args)
 
 def _get_parent_target():
 	t = os.environ.get('GUP_TARGET', None)
@@ -74,27 +100,31 @@ def _get_parent_target():
 		assert os.path.isabs(t)
 	return t
 
-def _assert_no_builder_opts(reason, opts):
-	assert not opts.update, "You can't pass both --update and %s" % (reason,)
-	assert not opts.ifcreate, "You can't pass both --ifcreate and %s" % (reason,)
+def _assert_parent_target(action):
+	p = _get_parent_target()
+	if p is None:
+		raise SafeError("%s was used outside of a gup target" % (action,))
+	return p
 
 def mark_always(opts, targets):
-	_assert_no_builder_opts('--always', opts)
 	assert len(targets) == 0, "no arguments expected"
-	parent_target = _get_parent_target()
-	if parent_target is None:
-		log.warn("--always was used outside of a gup target")
-		return
+	parent_target = _assert_parent_target('--always')
 	TargetState(parent_target).add_dependency(AlwaysRebuild())
 
+def mark_ifcreate(opts, files):
+	assert len(files) > 0, "at least one file expected"
+	parent_target = _assert_parent_target('--ifcreate')
+	parent_base = os.path.dirname(parent_target)
+	parent_state = TargetState(parent_target)
+	for file in files:
+		if os.path.exists(file):
+			raise SafeError("File already exists: %s" % (file,))
+		parent_state.add_dependency(FileDependency.relative_to_target(parent_target, mtime=None, checksum=None, path = file))
+
 def mark_contents(opts, targets):
-	_assert_no_builder_opts('--contents', opts)
 	assert len(targets) == 0, "no arguments expected"
 	assert not sys.stdin.isatty()
-	parent_target = _get_parent_target()
-	if parent_target is None:
-		log.warn("--contents was used outside of a gup target")
-		return
+	parent_target = _assert_parent_target('--content')
 	TargetState(parent_target).add_dependency(Checksum.from_stream(sys.stdin))
 
 def clean_targets(opts, dests):
@@ -119,6 +149,9 @@ def clean_targets(opts, dests):
 			dirnames = [d for d in dirnames if not d.startswith('.')]
 
 def build(opts, targets):
+	if opts.trace:
+		var.set_trace()
+	
 	if len(targets) == 0:
 		targets = ['all']
 	assert len(targets) > 0

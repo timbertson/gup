@@ -113,7 +113,7 @@ class TestAlwaysRebuild(TestCase):
 
 class TestNonexistentDeps(TestCase):
 	def test_rebuilt_on_creation_of_dependency(self):
-		self.write('all.gup', BASH + 'gup --ifcreate foo; echo 1 > $1')
+		self.write('all.gup', BASH + 'if [ ! -f foo ]; then gup --ifcreate foo; fi; echo 1 > $1')
 
 		self.assertNotRebuilds('all', lambda: self.touch('bar'))
 		self.assertRebuilds('all', lambda: self.touch('foo'))
