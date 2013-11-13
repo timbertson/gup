@@ -9,6 +9,7 @@ from . import builder
 from .error import *
 from .util import *
 from .state import TargetState, AlwaysRebuild, Checksum, FileDependency, META_DIR
+from .gupfile import Builder
 from .log import PLAIN, getLogger
 from . import var
 from . import jwack
@@ -168,7 +169,8 @@ def clean_targets(opts, dests):
 					for dep in deps:
 						if dep in filenames:
 							target = os.path.join(dirpath, dep)
-							rm(target)
+							if Builder.for_target(target) is not None:
+								rm(target)
 				rm(gupdir, isdir=True)
 			# filter out hidden directories
 			dirnames = [d for d in dirnames if not d.startswith('.')]
