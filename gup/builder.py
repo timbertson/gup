@@ -1,3 +1,4 @@
+from __future__ import print_function
 import tempfile
 import os
 import stat
@@ -47,6 +48,10 @@ def _is_dirty(state):
 		else:
 			log.debug("DIRTY: %s (is buildable but has no stored deps)", state.path)
 			return True
+
+	if deps.already_built():
+		log.warn("CLEAN: %s has already been built in this invocation", state.path)
+		return False
 
 	dirty = deps.is_dirty(builder, built = False)
 

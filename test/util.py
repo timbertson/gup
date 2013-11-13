@@ -66,6 +66,7 @@ class TestCase(mocktest.TestCase):
 			os.chdir(initial)
 
 	def _build(self, args, cwd=None):
+		var.init_root(True)
 		log.warn("\n\nRunning build with args: %r" % (list(args)))
 		with self._root_cwd():
 			if cwd is not None:

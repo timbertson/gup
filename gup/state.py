@@ -7,6 +7,7 @@ from .util import *
 from .log import getLogger
 from .gupfile import Builder
 from .lock import Lock
+from . import var
 log = getLogger(__name__)
 
 META_DIR = '.gup'
@@ -97,6 +98,7 @@ class Dependencies(object):
 		self.path = path
 		self.rules = []
 		self.checksum = None
+		self.runid = None
 		if file is None:
 			self.rules.append(NeverBuilt())
 		else:
@@ -114,6 +116,9 @@ class Dependencies(object):
 				if isinstance(dep, Checksum):
 					assert self.checksum is None
 					self.checksum = dep.value
+				elif isinstance(dep, RunId):
+					assert self.runid is None
+					self.runid = dep
 				else:
 					self.rules.append(dep)
 	
@@ -137,6 +142,9 @@ class Dependencies(object):
 				unknown_states.append(d)
 		log.debug('is_dirty: %s returning %r', self.path, unknown_states or False)
 		return unknown_states or False
+	
+	def already_built(self):
+		return self.runid.is_current()
 
 	def children(self):
 		base = os.path.dirname(self.path)
@@ -147,15 +155,16 @@ class Dependencies(object):
 	@classmethod
 	def init_file(cls, f):
 		f.write('version: %s\n' % (cls.FORMAT_VERSION,))
+		RunId.current().append_to(f)
 	
 	def __repr__(self):
-		return 'Dependencies<%r>' % (self.rules,)
+		return 'Dependencies<runid=%r, checksum=%s, %r>' % (self.runid, self.checksum, self.rules)
 
 class Dependency(object):
 	@staticmethod
 	def parse(line):
 		log.debug("parsing line: %s" % (line,))
-		for candidate in [FileDependency, BuilderDependency, AlwaysRebuild, Checksum]:
+		for candidate in [FileDependency, BuilderDependency, AlwaysRebuild, Checksum, RunId]:
 			if line.startswith(candidate.tag):
 				cls = candidate
 				break
@@ -261,7 +270,7 @@ class BuilderDependency(FileDependency):
 
 class Checksum(Dependency):
 	tag = 'checksum:'
-	num_fields = 2
+	num_fields = 1
 
 	def __init__(self, cs):
 		self.value = cs
@@ -277,3 +286,17 @@ class Checksum(Dependency):
 			if not b: break
 		return cls(sh.hexdigest())
 
+class RunId(Dependency):
+	tag = 'run:'
+	num_fields = 1
+
+	def __init__(self, runid):
+		self.value = runid
+		self.fields = [runid]
+
+	@classmethod
+	def current(cls):
+		return cls(var.RUN_ID)
+
+	def is_current(self):
+		return self.value == var.RUN_ID

@@ -100,7 +100,6 @@ class TestAlwaysRebuild(TestCase):
 		self.write('all.gup', echo_to_target('ok') + '; gup --always')
 		self.assertRebuilds('all', lambda: None)
 
-	@unittest.skip("TODO")
 	def test_always_target_is_built_at_most_once_in_a_given_run(self):
 		self.write('count', '0')
 		self.write('always.gup', echo_to_target('ok') + '; count="$(expr $(cat count) + 1)"; echo $count > count; gup --always')
