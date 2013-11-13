@@ -5,6 +5,8 @@ import re
 import itertools
 
 from .log import getLogger
+from .error import SafeError
+from . import var
 log = getLogger(__name__)
 
 def _default_gup_files(filename):
@@ -74,8 +76,12 @@ class BuildCandidate(object):
 		for script, ruleset in rules:
 			if ruleset.match(self.target):
 				base = os.path.join(target_base, os.path.dirname(script))
+				script_path = os.path.join(os.path.dirname(path), script)
+				if not os.path.exists(script_path):
+					raise SafeError("Build script not found: %s\n     %s(specified in %s)" % (script_path, var.INDENT, path))
+
 				return Builder(
-					os.path.join(os.path.dirname(path), script),
+					script_path,
 					os.path.relpath(os.path.join(target_base, self.target), base),
 					base)
 		return None
