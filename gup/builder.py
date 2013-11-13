@@ -50,7 +50,7 @@ def _is_dirty(state):
 			return True
 
 	if deps.already_built():
-		log.warn("CLEAN: %s has already been built in this invocation", state.path)
+		log.debug("CLEAN: %s has already been built in this invocation", state.path)
 		return False
 
 	dirty = deps.is_dirty(builder, built = False)

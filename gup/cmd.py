@@ -54,20 +54,19 @@ def _main(argv):
 	else:
 		if cmd == '--clean':
 			p = optparse.OptionParser('Usage: gup --clean [OPTIONS] [dir [...]]')
+			p.add_option('-i', '--interactive', action='store_true', help='Ask for confirmation before removing files', default=False)
+			p.add_option('-n', '--dry-run', action='store_false', dest='force', help='Just print files that would be removed')
+			p.add_option('-f', '--force', action='store_true', help='Actually remove files')
 			action = clean_targets
-			argv.pop(0)
 		elif cmd == '--contents':
 			p = optparse.OptionParser('Usage: gup --contents')
 			action = mark_contents
-			argv.pop(0)
 		elif cmd == '--always':
 			p = optparse.OptionParser('Usage: gup --always')
 			action = mark_always
-			argv.pop(0)
 		elif cmd == '--ifcreate':
 			p = optparse.OptionParser('Usage: gup --ifcreate [file [...]]')
 			action = mark_ifcreate
-			argv.pop(0)
 	
 	if action is None:
 		# default parser
@@ -82,13 +81,19 @@ def _main(argv):
 		p.add_option('-u', '--update', '--ifchange', dest='update', action='store_true', help='Only rebuild stale targets', default=False)
 		p.add_option('-j', '--jobs', type='int', default=1, help="Number of concurrent jobs to run")
 		p.add_option('-x', '--trace', action='store_true', help='Trace build script invocations (also sets $GUP_XTRACE=1)')
+		p.add_option('-q', '--quiet', action='count', default=0, help='Decrease verbosity')
+		p.add_option('-v', '--verbose', action='count', default=var.DEFAULT_VERBOSITY, help='Increase verbosity')
 		action = build
+		verbosity = None
+	else:
+		argv.pop(0)
+		verbosity = 0
 
-	p.add_option('-q', '--quiet', action='count', default=0, help='Decrease verbosity')
-	p.add_option('-v', '--verbose', action='count', default=var.DEFAULT_VERBOSITY, help='Increase verbosity')
 	opts, args = p.parse_args(argv)
 
-	verbosity = opts.verbose - opts.quiet
+	if verbosity is None:
+		verbosity = opts.verbose - opts.quiet
+
 	_init_logging(verbosity)
 
 	log.debug('argv: %r, action=%r', argv, action)
@@ -129,6 +134,29 @@ def mark_contents(opts, targets):
 
 def clean_targets(opts, dests):
 	import shutil
+	if opts.force is None:
+		raise SafeError("Either --force (-f) or --dry-run (-n) must be given")
+
+	def rm(path, isdir=False):
+		if not opts.force:
+			print("Would remove: %s" % (path))
+			return
+
+		print("Removing: %s" % (path,), file=sys.stderr)
+		if opts.interactive:
+			print("   [Y/n]: ", file=sys.stderr, end='')
+			if raw_input().strip() not in ('','y','Y'):
+				print("Skipped.", file=sys.stderr)
+				return
+
+		if not isdir:
+			try:
+				os.remove(path)
+				return
+			except OSError:
+				pass
+		shutil.rmtree(path)
+
 	if len(dests) == 0: dests = ['.']
 	for dest in dests:
 		for dirpath, dirnames, filenames in os.walk(dest, followlinks=False):
@@ -138,13 +166,8 @@ def clean_targets(opts, dests):
 				for dep in deps:
 					if dep in filenames:
 						target = os.path.join(dirpath, dep)
-						log.warn("remove: %s" % (target,))
-						try:
-							os.remove(target)
-						except OSError:
-							shutil.rmtree(target)
-				log.warn("remove: %s" % (gupdir,))
-				shutil.rmtree(gupdir)
+						rm(target)
+				rm(gupdir, isdir=True)
 			# filter out hidden directories
 			dirnames = [d for d in dirnames if not d.startswith('.')]
 
