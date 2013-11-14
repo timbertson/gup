@@ -1,7 +1,5 @@
 from __future__ import print_function
-import tempfile
 import os
-import stat
 from os import path
 import errno
 import subprocess
@@ -13,8 +11,8 @@ from .error import *
 from .util import *
 from .state import TargetState
 from .log import getLogger
-from . import var
-from . import jwack
+from .var import ROOT_CWD, TRACE
+from .jwack import extend_build_env
 log = getLogger(__name__)
 
 try:
@@ -28,10 +26,6 @@ def prepare_build(p):
 	if builder is not None:
 		return Target(builder)
 	return None
-
-def build_all(targets, update):
-	# XXX make parallel
-	return any([target.build(update = update) for target in targets])
 
 def _is_dirty(state):
 	'''
@@ -113,9 +107,9 @@ class Target(object):
 
 		env = os.environ.copy()
 		env['GUP_TARGET'] = os.path.abspath(self.path)
-		jwack.extend_env(env)
+		extend_build_env(env)
 
-		target_relative_to_cwd = os.path.relpath(self.path, var.ROOT_CWD)
+		target_relative_to_cwd = os.path.relpath(self.path, ROOT_CWD)
 
 
 		output_file = os.path.abspath(self.state.meta_path('out'))
@@ -125,12 +119,12 @@ class Target(object):
 			log.info(target_relative_to_cwd)
 			mtime = get_mtime(self.path)
 
-			exe = guess_executable(exe_path)
+			exe = _guess_executable(exe_path)
 
 			if exe is not None:
 				args = exe + args
 
-			if var.TRACE:
+			if TRACE:
 				log.info(' # %s'% (os.path.abspath(basedir),))
 				log.info(' + ' + ' '.join(map(quote, args)))
 			else:
@@ -139,7 +133,7 @@ class Target(object):
 
 			try:
 				ret = self._run_process(args, cwd = basedir, env = env)
-			except OSError as e:
+			except OSError:
 				if exe: raise # we only expect errors when we could deduce no executable
 				raise SafeError("%s is not executable and has no shebang line" % (exe_path,))
 
@@ -168,7 +162,7 @@ class Target(object):
 	def _run_process(self, args, cwd, env):
 		return subprocess.Popen(args, cwd = cwd, env = env).wait()
 
-def guess_executable(p):
+def _guess_executable(p):
 	with open(p) as f:
 		line = f.readline(255)
 	if not line.startswith('#!'):

@@ -1,14 +1,13 @@
 from __future__ import print_function
 import os
-import sys
-from . import builder
+from .builder import prepare_build
 from .log import getLogger
 from .util import get_mtime
 from .state import FileDependency, TargetState
 from .error import Unbuildable, TargetFailed, SafeError
-from . import var
+from .var import IS_ROOT
 
-log = getLogger('gup.cmd') # hard-coded in case of __main__
+log = getLogger(__name__)
 
 class Task(object):
 	'''
@@ -24,7 +23,7 @@ class Task(object):
 		target_path = self.target_path
 		opts = self.opts
 
-		target = self.target = builder.prepare_build(target_path)
+		target = self.target = prepare_build(target_path)
 		if target is None:
 			if opts.update and os.path.exists(target_path):
 				self.report_nobuild()
@@ -64,7 +63,7 @@ class Task(object):
 			raise RuntimeError("unknown error in child process - exit status %s" % rv)
 
 	def report_nobuild(self):
-		if var.IS_ROOT:
+		if IS_ROOT:
 			log.info("%s: up to date", self.target_path)
 		else:
 			log.debug("%s: up to date", self.target_path)
@@ -78,11 +77,11 @@ class TaskRunner(object):
 		self.tasks.append(fn)
 
 	def run(self):
-		from . import jwack
+		from .jwack import start_job, wait_all
 		while self.tasks:
 			task = self.tasks.pop(0)
 			log.debug("START job")
-			jwack.start_job('TODO', task.build, task.handle_result)
+			start_job('TODO', task.build, task.handle_result)
 			log.debug("job running in bg...")
-		jwack.wait_all()
+		wait_all()
 	

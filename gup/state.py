@@ -1,13 +1,12 @@
 import os
 import logging
-import contextlib
 import errno
 
 from .util import *
 from .log import getLogger
 from .gupfile import Builder
 from .lock import Lock
-from . import var
+from .var import RUN_ID
 log = getLogger(__name__)
 
 META_DIR = '.gup'
@@ -25,8 +24,8 @@ class TargetState(object):
 	def __init__(self, p):
 		self.path = p
 	
-	@classmethod
-	def built_targets(cls, dir):
+	@staticmethod
+	def built_targets(dir):
 		'''
 		Returns the target names which have metadata stored in `dir`
 		'''
@@ -213,7 +212,7 @@ class AlwaysRebuild(Dependency):
 	tag = 'always:'
 	num_fields = 0
 	fields = []
-	def is_dirty(self, args):
+	def is_dirty(self, _):
 		log.debug('DIRTY: always rebuild')
 		return True
 
@@ -351,7 +350,7 @@ class RunId(Dependency):
 
 	@classmethod
 	def current(cls):
-		return cls(var.RUN_ID)
+		return cls(RUN_ID)
 
 	def is_current(self):
-		return self.value == var.RUN_ID
+		return self.value == RUN_ID

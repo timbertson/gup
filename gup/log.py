@@ -40,6 +40,6 @@ class _ColorFilter(logging.Filter):
 _color_filter = _ColorFilter()
 
 def getLogger(*a):
-	log = logging.getLogger(*a)
-	log.addFilter(_color_filter)
-	return log
+	logger = logging.getLogger(*a)
+	logger.addFilter(_color_filter)
+	return logger

@@ -6,7 +6,7 @@ import itertools
 
 from .log import getLogger
 from .error import SafeError
-from . import var
+from .var import INDENT
 log = getLogger(__name__)
 
 def _default_gup_files(filename):
@@ -88,7 +88,7 @@ class BuildCandidate(object):
 				base = os.path.join(target_base, os.path.dirname(script))
 				script_path = os.path.join(os.path.dirname(path), script)
 				if not os.path.exists(script_path):
-					raise SafeError("Build script not found: %s\n     %s(specified in %s)" % (script_path, var.INDENT, path))
+					raise SafeError("Build script not found: %s\n     %s(specified in %s)" % (script_path, INDENT, path))
 
 				return Builder(
 					script_path,

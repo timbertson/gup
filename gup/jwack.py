@@ -1,10 +1,10 @@
 #
 # beware the jobberwack
 #
-import sys, os, errno, select, fcntl, signal
+import os, errno, select, fcntl, signal
 from .util import close_on_exec
 from .log import getLogger
-from . import error
+from .error import SafeError, UNKNOWN_ERROR_CODE
 log = getLogger(__name__)
 
 _toplevel = 0
@@ -22,6 +22,7 @@ def atoi(v):
 
 def _debug(s):
     if 0:
+        import sys
         sys.stderr.write('jwack#%d: %s\n' % (os.getpid(),s))
     
 
@@ -34,7 +35,7 @@ def _release(n):
         _mytokens = 1
 
 
-def release_mine():
+def _release_mine():
     global _mytokens
     assert(_mytokens >= 1)
     os.write(_fds[1], 't')
@@ -81,20 +82,20 @@ def _try_read(fd, n):
     return b and b or None  # None means EOF
 
 
-def extend_env(env):
+def extend_build_env(env):
     if _makeflags:
         _debug("setting MAKEFLAGS=%s" % (_makeflags,))
         env['MAKEFLAGS'] = _makeflags
     else:
         _debug('extend_env: no MAKEFLAGS!')
 
-def setup(maxjobs):
+def setup_jobserver(maxjobs):
     "Start the job server"
     global _fds, _toplevel, _makeflags
     if _fds:
         _debug("already set up")
         return  # already set up
-    _debug('setup(%d)' % maxjobs)
+    _debug('setup_jobserver(%d)' % maxjobs)
     flags = ' ' + os.getenv('MAKEFLAGS', '') + ' '
     FIND = ' --jobserver-fds='
     ofs = flags.find(FIND)
@@ -154,17 +155,17 @@ def wait(want_token):
             pd.donefunc(pd.name, pd.rv)
 
 
-def has_token():
+def _has_token():
     "Return True if we have one or more tokens available"
     if _mytokens >= 1:
         return True
 
 
-def get_token(reason):
+def _get_token(reason):
     "Ensure we have one token available."
     global _mytokens
     assert(_mytokens <= 1)
-    setup(1)
+    setup_jobserver(1)
     while 1:
         if _mytokens >= 1:
             _debug("_mytokens is %d" % _mytokens)
@@ -188,7 +189,7 @@ def get_token(reason):
     assert(_mytokens <= 1)
 
 
-def running():
+def _running():
     "Tell if jobs are running"
     return len(_waitfds)
 
@@ -196,13 +197,13 @@ def running():
 def wait_all():
     "Wait for all jobs to be finished"
     _debug("wait_all")
-    while running():
+    while _running():
         while _mytokens >= 1:
-            release_mine()
+            _release_mine()
         _debug("wait_all: wait()")
         wait(want_token=0)
     _debug("wait_all: empty list")
-    get_token('self')  # get my token back
+    _get_token('self')  # get my token back
     if _toplevel:
         bb = ''
         while 1:
@@ -215,7 +216,7 @@ def wait_all():
         os.write(_fds[1], bb)
 
 
-def force_return_tokens():
+def _force_return_tokens():
     n = len(_waitfds)
     if n:
         _debug('%d tokens left in force_return_tokens' % n)
@@ -251,7 +252,7 @@ def start_job(reason, jobfunc, donefunc):
     """
     global _mytokens
     assert(_mytokens <= 1)
-    get_token(reason)
+    _get_token(reason)
     assert(_mytokens >= 1)
     assert(_mytokens == 1)
     _mytokens -= 1
@@ -266,15 +267,15 @@ def start_job(reason, jobfunc, donefunc):
             try:
                 rv = jobfunc() or 0
                 _debug('jobfunc completed (%r, %r)' % (jobfunc,rv))
-            except error.SafeError as e:
+            except SafeError as e:
                 log.error("%s" % (str(e),))
-                rv = error.SafeError.exitcode
+                rv = SafeError.exitcode
             except KeyboardInterrupt:
-                rv = error.SafeError.exitcode
+                rv = SafeError.exitcode
             except Exception:
                 import traceback
                 traceback.print_exc()
-                rv = error.UNKNOWN_ERROR_CODE
+                rv = UNKNOWN_ERROR_CODE
         finally:
             _debug('exit: %d' % rv)
             os._exit(rv)

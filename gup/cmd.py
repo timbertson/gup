@@ -1,38 +1,36 @@
 from __future__ import print_function
-from . import builder
 import sys
 import logging
 import optparse
 import os
 
-from . import builder
 from .error import *
 from .util import *
 from .state import TargetState, AlwaysRebuild, Checksum, FileDependency, META_DIR
 from .gupfile import Builder
 from .log import PLAIN, getLogger
-from . import var
-from . import jwack
+from .var import INDENT, set_verbosity, DEFAULT_VERBOSITY, set_trace
+from .jwack import setup_jobserver
 from .task import Task, TaskRunner
 
 log = getLogger('gup.cmd') # hard-coded in case of __main__
 
 def _init_logging(verbosity):
 	lvl = logging.INFO
-	fmt = '%(color)sgup  ' + var.INDENT + '%(bold)s%(message)s' + PLAIN
+	fmt = '%(color)sgup  ' + INDENT + '%(bold)s%(message)s' + PLAIN
 
 	if verbosity < 0:
 		lvl = logging.ERROR
 	elif verbosity > 0:
-		fmt = '%(color)sgup[%(process)s %(asctime)s %(name)-11s %(levelname)-5s]  ' + var.INDENT + '%(bold)s%(message)s' + PLAIN
+		fmt = '%(color)sgup[%(process)s %(asctime)s %(name)-11s %(levelname)-5s]  ' + INDENT + '%(bold)s%(message)s' + PLAIN
 		lvl = logging.DEBUG
 	
 	if 'GUP_IN_TESTS' in os.environ:
 		lvl = logging.DEBUG
-		fmt = fmt = '%(color)s' + var.INDENT + '%(bold)s%(message)s' + PLAIN
+		fmt = fmt = '%(color)s' + INDENT + '%(bold)s%(message)s' + PLAIN
 
 	# persist for child processes
-	var.set_verbosity(verbosity)
+	set_verbosity(verbosity)
 
 	baseLogger = getLogger('gup')
 	handler = logging.StreamHandler()
@@ -57,16 +55,16 @@ def _main(argv):
 			p.add_option('-n', '--dry-run', action='store_false', dest='force', help='Just print files that would be removed')
 			p.add_option('-f', '--force', action='store_true', help='Actually remove files')
 			p.add_option('-m', '--metadata', action='store_true', help='Remove .gup metadata directories, but leave targets')
-			action = clean_targets
+			action = _clean_targets
 		elif cmd == '--contents':
 			p = optparse.OptionParser('Usage: gup --contents')
-			action = mark_contents
+			action = _mark_contents
 		elif cmd == '--always':
 			p = optparse.OptionParser('Usage: gup --always')
-			action = mark_always
+			action = _mark_always
 		elif cmd == '--ifcreate':
 			p = optparse.OptionParser('Usage: gup --ifcreate [file [...]]')
-			action = mark_ifcreate
+			action = _mark_ifcreate
 	
 	if action is None:
 		# default parser
@@ -82,8 +80,8 @@ def _main(argv):
 		p.add_option('-j', '--jobs', type='int', default=1, help="Number of concurrent jobs to run")
 		p.add_option('-x', '--trace', action='store_true', help='Trace build script invocations (also sets $GUP_XTRACE=1)')
 		p.add_option('-q', '--quiet', action='count', default=0, help='Decrease verbosity')
-		p.add_option('-v', '--verbose', action='count', default=var.DEFAULT_VERBOSITY, help='Increase verbosity')
-		action = build
+		p.add_option('-v', '--verbose', action='count', default=DEFAULT_VERBOSITY, help='Increase verbosity')
+		action = _build
 		verbosity = None
 	else:
 		argv.pop(0)
@@ -111,28 +109,27 @@ def _assert_parent_target(action):
 		raise SafeError("%s was used outside of a gup target" % (action,))
 	return p
 
-def mark_always(opts, targets):
+def _mark_always(opts, targets):
 	assert len(targets) == 0, "no arguments expected"
 	parent_target = _assert_parent_target('--always')
 	TargetState(parent_target).add_dependency(AlwaysRebuild())
 
-def mark_ifcreate(opts, files):
+def _mark_ifcreate(opts, files):
 	assert len(files) > 0, "at least one file expected"
 	parent_target = _assert_parent_target('--ifcreate')
-	parent_base = os.path.dirname(parent_target)
 	parent_state = TargetState(parent_target)
-	for file in files:
-		if os.path.exists(file):
-			raise SafeError("File already exists: %s" % (file,))
-		parent_state.add_dependency(FileDependency.relative_to_target(parent_target, mtime=None, checksum=None, path = file))
+	for filename in files:
+		if os.path.exists(filename):
+			raise SafeError("File already exists: %s" % (filename,))
+		parent_state.add_dependency(FileDependency.relative_to_target(parent_target, mtime=None, checksum=None, path = filename))
 
-def mark_contents(opts, targets):
+def _mark_contents(opts, targets):
 	assert len(targets) == 0, "no arguments expected"
 	assert not sys.stdin.isatty()
 	parent_target = _assert_parent_target('--content')
 	TargetState(parent_target).add_dependency(Checksum.from_stream(sys.stdin))
 
-def clean_targets(opts, dests):
+def _clean_targets(opts, dests):
 	import shutil
 	if opts.force is None:
 		raise SafeError("Either --force (-f) or --dry-run (-n) must be given")
@@ -173,9 +170,9 @@ def clean_targets(opts, dests):
 			# filter out hidden directories
 			dirnames = [d for d in dirnames if not d.startswith('.')]
 
-def build(opts, targets):
+def _build(opts, targets):
 	if opts.trace:
-		var.set_trace()
+		set_trace()
 	
 	if len(targets) == 0:
 		targets = ['all']
@@ -185,7 +182,7 @@ def build(opts, targets):
 
 	jobs = opts.jobs
 	assert jobs > 0 and jobs < 1000
-	jwack.setup(jobs)
+	setup_jobserver(jobs)
 
 	runner = TaskRunner()
 	for target_path in targets:

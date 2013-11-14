@@ -1,5 +1,5 @@
 from __future__ import print_function
-import sys, os
+import os
 import time
 
 INDENT = os.environ.get('GUP_INDENT', '')

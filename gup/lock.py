@@ -1,4 +1,4 @@
-import sys, os, errno, glob, stat, fcntl
+import os, errno, fcntl
 import logging
 
 from .log import getLogger
