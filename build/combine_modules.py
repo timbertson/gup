@@ -8,6 +8,9 @@ def main():
 	root, output_path = sys.argv[1:]
 	assert output_path.endswith('.py')
 	root = root.rstrip('/')
+
+	here = os.path.dirname(os.path.abspath(__file__))
+
 	def is_interesting(filename):
 		return filename.endswith('.py') and not filename == '__init__.py'
 
@@ -20,6 +23,9 @@ def main():
 
 	with open(output_path, 'w') as output:
 		output.write("#!/usr/bin/env python\nfrom __future__ import print_function\n")
+		with open(os.path.join(here, 'header.py')) as header:
+			output.write(header.read())
+
 		main_section = None
 		log_defined = False
 		for filename in files:
@@ -102,8 +108,6 @@ def main():
 
 	print('\n\n# PYCHECKER')
 	print('#----- ORIGINAL ------#')
-	here = os.path.dirname(os.path.abspath(__file__))
-
 	check(['gup.' + mod for mod in mods], os.path.dirname(here))
 
 	print('#----- BUILT ------#')
