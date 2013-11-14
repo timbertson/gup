@@ -126,5 +126,8 @@ class TestCase(mocktest.TestCase):
 
 	def mkdirp(self, p):
 		mkdirp(self.path(p))
+	
+	def exists(self, p):
+		return os.path.exists(self.path(p))
 
 
