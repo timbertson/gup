@@ -207,6 +207,8 @@ def build(opts, targets):
 def main():
 	try:
 		_main(sys.argv[1:])
+	except KeyboardInterrupt:
+		sys.exit(1)
 	except SafeError as e:
 		if e.message is not None:
 			log.error("%s" % (str(e),))

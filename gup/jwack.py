@@ -269,6 +269,8 @@ def start_job(reason, jobfunc, donefunc):
             except error.SafeError as e:
                 log.error("%s" % (str(e),))
                 rv = error.SafeError.exitcode
+            except KeyboardInterrupt:
+                rv = error.SafeError.exitcode
             except Exception:
                 import traceback
                 traceback.print_exc()

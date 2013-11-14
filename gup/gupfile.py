@@ -76,7 +76,11 @@ class BuildCandidate(object):
 				return None
 
 		with open(path) as f:
-			rules = parse_gupfile(f)
+			try:
+				rules = parse_gupfile(f)
+			except AssertionError as e:
+				reason = " (%s)" % (e.message,) if e.message else ""
+				raise SafeError("Invalid %s: %s%s" % (GUPFILE, path, reason))
 			log.debug("Parsed gupfile: %r" % rules)
 	
 		for script, ruleset in rules:
@@ -223,8 +227,10 @@ def parse_gupfile(f):
 	rules = []
 	current_gupfile = None
 	current_matches = None
+	lineno = 1
 	for line in f:
-		line = re.sub('#.*', '', line)
+		lineno += 1
+		if line.startswith('#'): continue
 		new_rule = not re.match('^\s', line)
 		line = line.strip()
 		if not line: continue
@@ -232,10 +238,11 @@ def parse_gupfile(f):
 			if current_matches:
 				rules.append([current_gupfile, current_matches])
 			current_matches = []
-			assert line.endswith(':')
+			assert line.endswith(':'), "line %s" % lineno
 			line = line[:-1]
 			current_gupfile = line.strip()
 		else:
+			assert current_matches is not None, "line %s" % lineno
 			current_matches.append(MatchRule(line))
 
 	if current_matches:
