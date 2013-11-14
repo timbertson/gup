@@ -28,6 +28,23 @@ class TestDependencies(TestCase):
 	def test_trying_to_build_source_fails(self):
 		self.assertRaises(SafeError, lambda: self.build("dep"))
 	
+	def test_Gupfile_and_gup_scripts_are_not_buildable_by_indirect_gupfiles(self):
+		gupfile_contents = 'build-anything:\n\t*'
+		gupscript_contents = echo_to_target('ok')
+		self.write('Gupfile', gupfile_contents)
+		self.write('target.gup', gupscript_contents)
+		self.write('build-anything', echo_to_target('built-by-anything'))
+
+		self.build_u('Gupfile')
+		self.assertEqual(self.read('Gupfile'), gupfile_contents)
+		
+		self.build_u('target.gup')
+		self.assertEqual(self.read('target.gup'), gupscript_contents)
+		
+		self.build_u('target', 'target.goop')
+		self.assertEqual(self.read('target.goop'), 'built-by-anything')
+		self.assertEqual(self.read('target'), 'ok')
+	
 	def test_rebuilds_on_transitive_dependency_change(self):
 		self.write("counter.gup", BASH + 'gup -u counter2; echo -n "$(expr "$(cat counter2)" + 1)" > $1')
 

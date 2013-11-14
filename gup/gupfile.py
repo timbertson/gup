@@ -68,6 +68,12 @@ class BuildCandidate(object):
 
 		if not self.indirect:
 			return Builder(path, self.target, target_base)
+		else:
+			target_name = os.path.basename(self.target)
+			if target_name == GUPFILE or os.path.splitext(target_name)[1].lower() == '.gup':
+				# gupfiles cannot be built by implicit targets
+				log.debug("indirect build not supported for target %s", target_name)
+				return None
 
 		with open(path) as f:
 			rules = parse_gupfile(f)
