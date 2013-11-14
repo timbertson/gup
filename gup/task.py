@@ -28,7 +28,7 @@ class Task(object):
 			if opts.update and os.path.exists(target_path):
 				self.report_nobuild()
 				return None
-			raise Unbuildable("Don't know how to build %s" % (target_path))
+			raise Unbuildable(target_path)
 		return target
 
 	def build(self):

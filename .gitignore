@@ -3,5 +3,5 @@ ideas
 scratch/
 test/tmp
 .noseids
-build/bin/
-tmp/
+/bin/
+/tmp/

@@ -1,0 +1,4 @@
+#!/bin/bash
+set -eu
+make integration-test-pre
+exec 0install run --command=integration-test gup-local.xml "$@"

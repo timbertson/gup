@@ -16,6 +16,7 @@ logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger('TEST')
 
 TEMP = os.path.join(os.path.dirname(__file__), 'tmp')
+GUP_EXE = os.environ.get('GUP_EXE', 'gup')
 
 def mkdirp(p):
 	if not os.path.exists(p):
@@ -72,16 +73,19 @@ class TestCase(mocktest.TestCase):
 
 			env['GUP_IN_TESTS'] = '1'
 			env['GUP_COLOR'] = '1'
-			proc = subprocess.Popen(['gup'] + list(args), cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
+			proc = subprocess.Popen([GUP_EXE] + list(args), cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
 
 			child_log = logging.getLogger('out')
+			err_type = SafeError
 			while True:
 				line = proc.stdout.readline().rstrip()
 				if not line:
 						break
+				if "Don't know how to build" in line:
+					err_type = Unbuildable
 				child_log.info(line)
 			if not proc.wait() == 0:
-				raise SafeError('gup failed')
+				raise err_type('gup failed')
 
 	def build(self, *targets, **k):
 		self._build(targets, **k)

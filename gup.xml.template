@@ -12,14 +12,21 @@
 	<feed-for interface="http://gfxmonk.net/dist/0install/DONT_PUBLISH.xml"/>
 
 	<group>
-		<environment insert="bin" name="PATH" mode="prepend"/>
-		<environment insert="" name="PYTHONPATH"/>
-		<command name="run">
+		<command name="run" path="bin/gup">
+			<environment insert="bin" name="PATH" mode="prepend"/>
 			<runner interface="http://repo.roscidus.com/python/python"/>
-			<arg>-m</arg>
-			<arg>gup.cmd</arg>
 		</command>
 		<command name="test">
+			<!-- unit tests run from raw source code -->
+			<environment insert="test/bin" name="PATH" mode="prepend"/>
+			<environment insert="" name="PYTHONPATH" mode="prepend"/>
+			<requires interface="http://gfxmonk.net/dist/0install/mocktest.xml"/>
+			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml"/>
+			<arg>--with-doctest</arg>
+		</command>
+		<command name="integration-test">
+			<!-- integration tests run the same tests as `unit`, but using the built gup script -->
+			<environment mode="replace" name="GUP_EXE" insert="bin/gup"/>
 			<requires interface="http://gfxmonk.net/dist/0install/mocktest.xml"/>
 			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml"/>
 			<arg>--with-doctest</arg>

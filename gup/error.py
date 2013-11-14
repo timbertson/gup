@@ -13,5 +13,5 @@ class TargetFailed(SafeError):
 
 class Unbuildable(SafeError):
 	def __init__(self, path):
-		super(Unbuildable, self).__init__("Unbuildable: %s" % (path,))
+		super(Unbuildable, self).__init__("Don't know how to build %s" % (path,))
 

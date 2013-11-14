@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# (this file appears first in build/bin/gup)
 from __future__ import print_function
 import sys, os
 def _check_PATH():

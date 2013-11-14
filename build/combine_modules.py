@@ -4,6 +4,25 @@ import os, sys, re
 import stat
 import subprocess
 
+# A somewhat-hacky script to process gup/*.py modules
+# and merge them into a single file.
+#
+# Restrictions:
+#
+# 1) All gup-module imports must take the form:
+#        from .MOD import sym1, sym2, ...
+#    At join time, these lines are stripped out and
+#    `sym1` `sym2` will simply be globals in the generated
+#    script.
+#
+# 2) No two modules may have the same globals
+#    (as a side effect of #1).
+#    Private module-globals (anything beginning with _)
+#    are OK, they will be mangled from _var -> _MOD_var
+#
+# 3) If anything else goes wrong, hopefully pychecker
+#    or the automated tests will pick it up.
+
 def main():
 	root, output_path = sys.argv[1:]
 	assert output_path.endswith('.py')

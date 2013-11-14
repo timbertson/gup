@@ -8,7 +8,7 @@ class TestBasicRules(TestCase):
 		self.write("source.txt", self.source_contents)
 
 	def test_doesnt_overwrite_existing_file(self):
-		self.assertRaises(Unbuildable, lambda: self.build("source.txt"))
+		self.assertRaises(SafeError, lambda: self.build("source.txt"))
 
 		self.build_u("source.txt")
 		self.assertEqual(self.read("source.txt"), self.source_contents)
