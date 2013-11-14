@@ -178,6 +178,10 @@ class TestChecksums(TestCase):
 	def test_parent_of_checksum_is_rebult_if_checksum_contents_changes(self):
 		self.assertRebuilds('parent', lambda: self.write('input', 'ok2'))
 
+	def test_parent_of_checksum_is_rebult_if_child_stops_being_checksummed(self):
+		self.build_u('parent')
+		self.assertRebuilds('parent', lambda: self.write('cs.gup', echo_file_contents('input')))
+
 	def test_nested_checksum_tasks_are_handled(self):
 		self.write('parent.gup', BASH + 'gup -u cs; cat cs > $1; cat parent_stamp | gup --contents')
 		self.write('parent_stamp', 'CONST')

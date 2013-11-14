@@ -267,7 +267,7 @@ class FileDependency(Dependency):
 			state = TargetState(path)
 			deps = state.deps()
 			checksum = deps and deps.checksum
-			if deps.checksum != self.checksum:
+			if checksum != self.checksum:
 				log.debug("DIRTY: %s (stored checksum is %s, current is %s)", self.path, self.checksum, deps.checksum)
 				return True
 			if built:
@@ -312,7 +312,7 @@ class Checksum(Dependency):
 		import hashlib
 		sh = hashlib.sha1()
 		while 1:
-			b = os.read(0, 4096)
+			b = f.read(4096)
 			sh.update(b)
 			if not b: break
 		return cls(sh.hexdigest())
