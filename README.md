@@ -1,4 +1,53 @@
+# What is gup?
 
+
+# Origins
+
+`gup` is based loosely on the [redo][] build system.
+I used `redo` heavily for a number of months, and came
+to the conclusion that some of its features were either
+too fragile or too limited to support the way I wanted
+to build software.
+
+If you're familiar with `redo`, here are the main
+(intentional) differences:
+
+ - `gup` will rebuild targets if the stored metadata
+   goes missing or is incorrect, rather than silently(*)
+   assuming they never need to be built again.
+
+   (*) `redo` does print a warning, but that's not easily
+   missed in automated build processes, and requires manual
+   intervention to fix the problem.
+
+ - `gup` uses Gupfiles to specify exactly what should
+   be built by each generic build script, rather than
+   segregating targets only by their file extension
+   or resorting to a `default.do` that tries to
+   build every missing file, ever.
+
+ - `gup` allows you to keep your source tree clean,
+   by using a "shadow" gup/ directory - no need to
+   scatter build and output files amongst your source
+   code.
+
+As a side effect of the above differences, gup never thinks
+that a target is a source when it's actually a target, or
+vice versa. `redo` has this problem, and it's suprisingly
+hard to fix (I tried).
+
+# Licence
+
+Gup is distributed under th LGPL - see the LICENCE file.
+
+### Copyrights
+
+jwack.py and  lock.py are adapted from the [redo][]
+project, which is LGP and is Copyright Avery Pennarun
+
+All other source code is Copyright Tim Cuthbertson, 2013.
+
+[redo]: https://github.com/apenwarr/redo
 
 # What gets executed?
 

@@ -20,6 +20,9 @@ import subprocess
 #    Private module-globals (anything beginning with _)
 #    are OK, they will be mangled from _var -> _MOD_var
 #
+# 3) Modules must be listed in dependency-order
+#    (if they anything from other modules at the top-level)
+#
 # 3) If anything else goes wrong, hopefully pychecker
 #    or the automated tests will pick it up.
 
