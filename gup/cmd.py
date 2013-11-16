@@ -124,10 +124,13 @@ def _mark_ifcreate(opts, files):
 		parent_state.add_dependency(FileDependency.relative_to_target(parent_target, mtime=None, checksum=None, path = filename))
 
 def _mark_contents(opts, targets):
-	assert len(targets) == 0, "no arguments expected"
-	assert not sys.stdin.isatty()
 	parent_target = _assert_parent_target('--content')
-	TargetState(parent_target).add_dependency(Checksum.from_stream(sys.stdin))
+	if len(targets) == 0:
+		assert not sys.stdin.isatty()
+		checksum = Checksum.from_stream(sys.stdin)
+	else:
+		checksum = Checksum.from_files(targets)
+	TargetState(parent_target).add_dependency(checksum)
 
 def _clean_targets(opts, dests):
 	import shutil

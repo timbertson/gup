@@ -307,14 +307,28 @@ class Checksum(Dependency):
 		self.value = cs
 		self.fields = [cs]
 	
+	@staticmethod
+	def _add_file(sh, f):
+		if sh is None:
+			import hashlib
+			sh = hashlib.sha1()
+		while True:
+			b = f.read(4096)
+			if not b: break
+			sh.update(b)
+		return sh
+
 	@classmethod
 	def from_stream(cls, f):
-		import hashlib
-		sh = hashlib.sha1()
-		while 1:
-			b = f.read(4096)
-			sh.update(b)
-			if not b: break
+		sh = cls._add_file(None, f)
+		return cls(sh.hexdigest())
+	
+	@classmethod
+	def from_files(cls, filenames):
+		sh = None
+		for filename in filenames:
+			with open(filename) as f:
+				sh = cls._add_file(sh, f)
 		return cls(sh.hexdigest())
 
 class BuildTime(Dependency):

@@ -178,6 +178,47 @@ class TestChecksums(TestCase):
 	def test_parent_of_checksum_is_rebult_if_checksum_contents_changes(self):
 		self.assertRebuilds('parent', lambda: self.write('input', 'ok2'))
 
+	def test_checksum_accepts_a_number_of_files_instead_of_stdin(self):
+		self.write('firstline', 'line1')
+		self.write('secondline', 'line2')
+		self.write('cs_onefile.gup', BASH + 'gup --always; gup --contents input')
+		self.write('cs_twofile.gup', BASH + 'gup --always; gup --contents firstline secondline')
+
+		# self.build_u('cs', 'cs_onefile', 'cs_twofile')
+
+		def assertChecksumChanges(target, f):
+			self.build_u(target)
+			cs1 = get_checksum(target)
+			f()
+			self.build_u(target)
+			cs2 = get_checksum(target)
+			self.assertNotEquals(cs1, cs2)
+
+		def assertNotChecksumChanges(target, f):
+			self.build_u(target)
+			cs1 = get_checksum(target)
+			f()
+			self.build_u(target)
+			cs2 = get_checksum(target)
+			self.assertEquals(cs1, cs2)
+
+		def get_checksum(target):
+			lines = self.read('.gup/%s.deps' % target).splitlines()
+			for line in lines:
+				if line.startswith('checksum: '):
+					return line.split(' ', 1)[1]
+			raise ValueError("no checksum in %r" % lines,)
+
+		assertChecksumChanges('cs', lambda: self.write('input', 'ok2'))
+		assertNotChecksumChanges('cs', lambda: None)
+
+		assertChecksumChanges('cs_onefile', lambda: self.write('input', 'ok3'))
+		assertNotChecksumChanges('cs_onefile', lambda: None)
+
+		assertChecksumChanges('cs_twofile', lambda: self.write('firstline', 'new line1'))
+		assertChecksumChanges('cs_twofile', lambda: self.write('secondline', 'new line2'))
+		assertNotChecksumChanges('cs_twofile', lambda: None)
+
 	def test_parent_of_checksum_is_rebult_if_child_stops_being_checksummed(self):
 		self.build_u('parent')
 		self.assertRebuilds('parent', lambda: self.write('cs.gup', echo_file_contents('input')))
