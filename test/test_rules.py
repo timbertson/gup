@@ -77,3 +77,10 @@ class TestGupdirectory(TestCase):
 
 		self.assertRaises(Unbuildable, lambda: self.build('a/foo.c'))
 		self.build_assert('a/b/foo.c', 'b/foo.c, called from a')
+
+class TestDirectoryTargets(TestCase):
+	def test_trailing_slashes_are_ignored_in_target_name(self):
+		self.write('dir.gup', BASH + 'mkdir -p $1; echo ok > $1/hello')
+		self.build_u('dir/')
+		self.assertEqual(self.read('dir/hello'), 'ok')
+	

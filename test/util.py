@@ -76,16 +76,16 @@ class TestCase(mocktest.TestCase):
 			proc = subprocess.Popen([GUP_EXE] + list(args), cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
 
 			child_log = logging.getLogger('out')
-			err_type = SafeError
+			err = SafeError('gup failed')
 			while True:
 				line = proc.stdout.readline().rstrip()
 				if not line:
 						break
 				if "Don't know how to build" in line:
-					err_type = Unbuildable
+					err = Unbuildable(line[len("Don't know how to build"):])
 				child_log.info(line)
 			if not proc.wait() == 0:
-				raise err_type('gup failed')
+				raise err
 
 	def build(self, *targets, **k):
 		self._build(targets, **k)

@@ -123,6 +123,7 @@ def _main(argv):
 	_bin_init()
 
 	log.debug('argv: %r, action=%r', argv, action)
+	args = [arg.rstrip(os.path.sep) for arg in args]
 	action(opts, args)
 
 def _get_parent_target():
