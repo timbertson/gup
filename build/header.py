@@ -1,25 +1,21 @@
 #!/usr/bin/env python
 # (this file appears first in build/bin/gup)
-from __future__ import print_function
-import sys, os
-def _check_PATH():
-	progname = sys.argv[0]
-	if os.path.sep in progname and os.environ.get('GUP_IN_PATH', '0') != '1':
-		# gup may have been run as a relative / absolute script - check
-		# whether our directory is in $PATH
-		path_entries = os.environ.get('PATH', '').split(os.pathsep)
-		here = os.path.dirname(__file__)
-		for entry in path_entries:
-			if not entry: continue
-			try:
-				if os.path.samefile(entry, here):
-					# ok, we're in path
-					break
-			except OSError: pass
-		else:
-			# not found
-			os.environ['PATH'] = os.pathsep.join([here] + path_entries)
 
-		# don't bother checking next time
-		os.environ['GUP_IN_PATH'] = '1'
-_check_PATH()
+# <one line to give the library's name and a brief idea of what it does.>
+# Copyright (C) 2013  Tim Cuthbertson, Avery Pennarun
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+
+from __future__ import print_function
