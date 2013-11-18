@@ -1,7 +1,5 @@
 #!/usr/bin/env python
-# (this file appears first in build/bin/gup)
-
-# <one line to give the library's name and a brief idea of what it does.>
+# Gup build tool
 # Copyright (C) 2013  Tim Cuthbertson, Avery Pennarun
 #
 # This library is free software; you can redistribute it and/or
