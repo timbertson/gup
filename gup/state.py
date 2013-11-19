@@ -60,7 +60,7 @@ class TargetState(object):
 			else:
 				with f:
 					rv = Dependencies(self.path, f)
-		log.debug("Loaded serialized state: %r" % (rv,))
+		log.trace("Loaded serialized state: %r" % (rv,))
 		return rv
 
 	def create_lock(self):
@@ -82,7 +82,7 @@ class TargetState(object):
 				checksum=None,
 				mtime=get_mtime(exe))
 
-			log.debug("created dep %s from builder %r" % (builder_dep, exe))
+			log.trace("created dep %s from builder %r" % (builder_dep, exe))
 			temp = self._ensure_meta_path('deps2')
 			with open(temp, 'w') as f:
 				Dependencies.init_file(f)
@@ -114,7 +114,7 @@ class Dependencies(object):
 			self.rules.append(NeverBuilt())
 		else:
 			version_line = file.readline().strip()
-			log.debug("version_line: %s" % (version_line,))
+			log.trace("version_line: %s" % (version_line,))
 			if not version_line.startswith('version:'): raise ValueError("Invalid file")
 			_, file_version = version_line.split(' ')
 			if int(file_version) != self.FORMAT_VERSION:
@@ -147,13 +147,13 @@ class Dependencies(object):
 		for rule in self.rules:
 			d = rule.is_dirty(dirty_args)
 			if d is True:
-				log.debug('DIRTY: %s (from rule %r)', self.path, rule)
+				log.trace('DIRTY: %s (from rule %r)', self.path, rule)
 				return True
 			elif d is False:
 				continue
 			else:
 				unknown_states.append(d)
-		log.debug('is_dirty: %s returning %r', self.path, unknown_states or False)
+		log.trace('is_dirty: %s returning %r', self.path, unknown_states or False)
 		return unknown_states or False
 	
 	def already_built(self):
@@ -177,7 +177,7 @@ class Dependency(object):
 	recursive = False
 	@staticmethod
 	def parse(line):
-		log.debug("parsing line: %s" % (line,))
+		log.trace("parsing line: %s" % (line,))
 		for candidate in [
 				FileDependency,
 				BuilderDependency,
@@ -262,7 +262,7 @@ class FileDependency(Dependency):
 		self._target = path
 
 		if self.checksum is not None:
-			log.debug("%s: comparing using checksum", self.path)
+			log.trace("%s: comparing using checksum", self.path)
 			# use checksum only
 			state = TargetState(path)
 			deps = state.deps()
@@ -273,13 +273,12 @@ class FileDependency(Dependency):
 			if built:
 				return False
 			# if not built, we don't actually know whether this dep is dirty
-			log.debug("%s: might be dirty - returning %r", self.path, state)
+			log.trace("%s: might be dirty - returning %r", self.path, state)
 			return state
 
 		else:
 			# use mtime only
 			current_mtime = get_mtime(path)
-			# log.debug("Compare mtime %s to %s" % (current_mtime, self.mtime))
 			if current_mtime != self.mtime:
 				log.debug("DIRTY: %s (stored mtime is %r, current is %r)" % (self.path, self.mtime, current_mtime))
 				return True
@@ -350,7 +349,11 @@ class BuildTime(Dependency):
 		mtime = get_mtime(path)
 		assert mtime is not None
 		if mtime != self.value:
-			log.warn("%s was externally modified - rebuilding" % (path,))
+			log_method = log.warn
+			if os.path.isdir(path):
+				# dirs are modified externally for various reasons, not worth warning
+				log_method = log.debug
+			log_method("%s was externally modified - rebuilding" % (path,))
 			return True
 		return False
 

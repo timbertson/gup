@@ -39,7 +39,16 @@ class _ColorFilter(logging.Filter):
 
 _color_filter = _ColorFilter()
 
+# add a trace level
+TRACE = 5
+def _trace(_self, message, *args, **kws):
+	_self.log(TRACE, message, *args, **kws)
+logging.addLevelName(TRACE, "TRACE")
+logging.Logger.trace = _trace
+
 def getLogger(*a):
 	logger = logging.getLogger(*a)
 	logger.addFilter(_color_filter)
 	return logger
+
+

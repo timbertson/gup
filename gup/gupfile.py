@@ -61,10 +61,14 @@ class BuildCandidate(object):
 		path = self.guppath
 		if not os.path.exists(path):
 			return None
-		log.debug("candidate exists: %s" % (path,))
+		if os.path.isdir(path):
+			log.trace("skipping directory: %s", path)
+			return None
+
+		log.trace("candidate exists: %s" % (path,))
 		
 		target_base = os.path.join(*self._base_parts(False))
-		log.debug("target_base: %s" % (target_base,))
+		log.trace("target_base: %s" % (target_base,))
 
 		if not self.indirect:
 			return Builder(path, self.target, target_base)
@@ -81,7 +85,7 @@ class BuildCandidate(object):
 			except AssertionError as e:
 				reason = " (%s)" % (e.message,) if e.message else ""
 				raise SafeError("Invalid %s: %s%s" % (GUPFILE, path, reason))
-			log.debug("Parsed gupfile: %r" % rules)
+			log.trace("Parsed gupfile: %r" % rules)
 	
 		for script, ruleset in rules:
 			if ruleset.match(self.target):
@@ -277,9 +281,9 @@ class MatchRule(object):
 					raise ValueError("Invalid pattern: %s" % (self.text))
 		regexp += '$'
 		regexp = re.compile(regexp)
-		log.debug("Compiled %r -> %r" % (self.text, regexp.pattern))
+		log.trace("Compiled %r -> %r" % (self.text, regexp.pattern))
 		def match(f):
-			log.debug("Matching %r against %r" % (f, regexp.pattern))
+			log.trace("Matching %r against %r" % (f, regexp.pattern))
 			return bool(regexp.match(f))
 		self.match = match
 		return self.match(f)

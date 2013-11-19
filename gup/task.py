@@ -53,7 +53,7 @@ class Task(object):
 			TargetState(self.parent_target).add_dependency(dep)
 	
 	def handle_result(self, _, rv):
-		log.debug("build process exited with status: %r" % (rv,))
+		log.trace("build process exited with status: %r" % (rv,))
 		if rv == 0:
 			return
 		if rv == SafeError.exitcode:
@@ -66,7 +66,7 @@ class Task(object):
 		if IS_ROOT:
 			log.info("%s: up to date", self.target_path)
 		else:
-			log.debug("%s: up to date", self.target_path)
+			log.trace("%s: up to date", self.target_path)
 
 
 class TaskRunner(object):
@@ -80,8 +80,6 @@ class TaskRunner(object):
 		from .jwack import start_job, wait_all
 		while self.tasks:
 			task = self.tasks.pop(0)
-			log.debug("START job")
-			start_job('TODO', task.build, task.handle_result)
-			log.debug("job running in bg...")
+			start_job('build', task.build, task.handle_result)
 		wait_all()
 	

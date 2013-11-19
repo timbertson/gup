@@ -4,7 +4,7 @@ import logging
 from .log import getLogger
 from .util import close_on_exec
 log = getLogger(__name__)
-debug = log.debug
+debug = log.trace
 
 # FIXME: I really want to use fcntl F_SETLK, F_SETLKW, etc here.  But python
 # doesn't do the lockdata structure in a portable way, so we have to use

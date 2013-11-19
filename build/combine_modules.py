@@ -44,9 +44,11 @@ def main():
 	mods = []
 
 	with open(output_path, 'w') as output:
-		output.write("#!/usr/bin/env python\nfrom __future__ import print_function\n")
 		with open(os.path.join(here, 'header.py')) as header:
-			output.write(header.read())
+			lines = header.read().splitlines()
+			with open(os.path.join(here, '../VERSION')) as ver:
+				lines.insert(2, '# VERSION: %s' % ver.read().strip())
+			output.write('\n'.join(lines))
 
 		main_section = None
 		log_defined = False
@@ -89,6 +91,8 @@ def main():
 					line = line.rstrip()
 					if line.startswith('#'): continue
 					if line == 'from __future__ import print_function': continue
+					if line.startswith('__all__'): continue
+
 					if re.match('^\s*from \.', line):
 						# print("  Skipping import: %s" % (line,))
 						assert 'from . ' not in line, "Bad import line: %s" % (line,)

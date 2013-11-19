@@ -1,4 +1,4 @@
-SOURCES:=Makefile $(shell find gup build -type f -name "*.py")
+SOURCES:=VERSION Makefile $(shell find gup build -type f -name "*.py")
 
 bin: phony bin/gup
 all: bin local

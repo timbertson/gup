@@ -22,7 +22,7 @@ except ImportError:
 
 def prepare_build(p):
 	builder = Builder.for_target(p)
-	log.debug('prepare_build(%r) -> %r' % (p, builder))
+	log.trace('prepare_build(%r) -> %r' % (p, builder))
 	if builder is not None:
 		return Target(builder)
 	return None
@@ -44,37 +44,37 @@ def _is_dirty(state):
 			return True
 
 	if deps.already_built():
-		log.debug("CLEAN: %s has already been built in this invocation", state.path)
+		log.trace("CLEAN: %s has already been built in this invocation", state.path)
 		return False
 
 	dirty = deps.is_dirty(builder, built = False)
 
 	if dirty is True:
-		log.debug("deps.is_dirty(%r) -> True", state.path)
+		log.trace("deps.is_dirty(%r) -> True", state.path)
 		return True
 
 	if dirty is False:
 		# not directly dirty - recurse children
 		for path in deps.children():
-			log.debug("Recursing over dependency: %s", path)
+			log.trace("Recursing over dependency: %s", path)
 			child = TargetState(path)
 			if _is_dirty(child):
-				log.debug("_is_dirty(%r) -> True", child.path)
+				log.trace("_is_dirty(%r) -> True", child.path)
 				return True
 		return False
 
 	assert isinstance(dirty, list)
 	for target in dirty:
-		log.debug("MAYBE_DIRTY: %s (unknown state - building it to find out)", target)
+		log.trace("MAYBE_DIRTY: %s (unknown state - building it to find out)", target.path)
 		target = prepare_build(target.path)
 		if target is None:
-			log.debug("%s turned out not to be a target - skipping", target)
+			log.trace("%s turned out not to be a target - skipping", target)
 			continue
 		target.build(update=True)
 
 	dirty = deps.is_dirty(builder, built = True)
 	assert dirty in (True, False)
-	log.debug("after rebuilding unknown targets, deps.is_dirty(%r) -> %r", state.path, dirty)
+	log.trace("after rebuilding unknown targets, deps.is_dirty(%r) -> %r", state.path, dirty)
 	return dirty
 
 class Target(object):
@@ -97,7 +97,7 @@ class Target(object):
 		assert os.path.exists(self.builder.path)
 		if update:
 			if not _is_dirty(self.state):
-				log.debug("no build needed")
+				log.trace("no build needed")
 				return False
 		exe_path = self.builder.path
 
@@ -128,8 +128,8 @@ class Target(object):
 				log.info(' # %s'% (os.path.abspath(basedir),))
 				log.info(' + ' + ' '.join(map(quote, args)))
 			else:
-				log.debug(' from cwd: %s'% (os.path.abspath(basedir),))
-				log.debug('executing: ' + ' '.join(map(quote, args)))
+				log.trace(' from cwd: %s'% (os.path.abspath(basedir),))
+				log.trace('executing: ' + ' '.join(map(quote, args)))
 
 			try:
 				ret = self._run_process(args, cwd = basedir, env = env)
@@ -139,19 +139,19 @@ class Target(object):
 
 			new_mtime = get_mtime(self.path)
 			if mtime != new_mtime:
-				log.debug("old_mtime=%r, new_mtime=%r" % (mtime, new_mtime))
+				log.trace("old_mtime=%r, new_mtime=%r" % (mtime, new_mtime))
 				if not os.path.isdir(self.path):
 					# directories often need to be created directly
-					log.warn("%s modified %s directly - this is rarely a good idea" % (exe_path, self.path))
+					log.warn("%s modified %s directly" % (exe_path, self.path))
 			if ret == 0:
 				if os.path.exists(output_file):
 					if os.path.isdir(self.path):
-						log.debug("calling rmtree() on previous %s", self.path)
+						log.trace("calling rmtree() on previous %s", self.path)
 						shutil.rmtree(self.path)
 					os.rename(output_file, self.path)
 				MOVED = True
 			else:
-				log.debug("builder exited with status %s" % (ret,))
+				log.trace("builder exited with status %s" % (ret,))
 				raise TargetFailed(target_relative_to_cwd, ret)
 		finally:
 			if not MOVED:

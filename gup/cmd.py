@@ -8,7 +8,7 @@ from .error import *
 from .util import *
 from .state import TargetState, AlwaysRebuild, Checksum, FileDependency, META_DIR
 from .gupfile import Builder
-from .log import PLAIN, getLogger
+from .log import PLAIN, getLogger, TRACE
 from .var import INDENT, set_verbosity, DEFAULT_VERBOSITY, set_trace
 from .jwack import setup_jobserver
 from .task import Task, TaskRunner
@@ -21,9 +21,11 @@ def _init_logging(verbosity):
 
 	if verbosity < 0:
 		lvl = logging.ERROR
-	elif verbosity > 0:
-		fmt = '%(color)sgup[%(process)s %(asctime)s %(name)-11s %(levelname)-5s]  ' + INDENT + '%(bold)s%(message)s' + PLAIN
+	elif verbosity == 1:
 		lvl = logging.DEBUG
+	elif verbosity > 1:
+		fmt = '%(color)sgup[%(process)s %(name)-11s %(levelname)-5s]  ' + INDENT + '%(bold)s%(message)s' + PLAIN
+		lvl = TRACE
 	
 	if 'GUP_IN_TESTS' in os.environ:
 		lvl = logging.DEBUG
@@ -44,7 +46,7 @@ def _bin_init():
 	Ensude `gup` is present on $PATH
 	'''
 	progname = sys.argv[0]
-	log.debug('run as: %s' % (progname,))
+	log.trace('run as: %s' % (progname,))
 	if os.path.sep in progname and os.environ.get('GUP_IN_PATH', '0') != '1':
 		# gup may have been run as a relative / absolute script - check
 		# whether our directory is in $PATH
@@ -54,14 +56,14 @@ def _bin_init():
 			if not entry: continue
 			try:
 				if os.path.samefile(entry, here):
-					log.debug('found `gup` in $PATH')
+					log.trace('found `gup` in $PATH')
 					# ok, we're in path
 					break
 			except OSError: pass
 		else:
 			# not found
 			here = os.path.abspath(here)
-			log.debug('`gup` not in $PATH - adding %s' % (here,))
+			log.trace('`gup` not in $PATH - adding %s' % (here,))
 			os.environ['PATH'] = os.pathsep.join([here] + path_entries)
 
 		# don't bother checking next time
@@ -122,7 +124,7 @@ def _main(argv):
 	_init_logging(verbosity)
 	_bin_init()
 
-	log.debug('argv: %r, action=%r', argv, action)
+	log.trace('argv: %r, action=%r', argv, action)
 	args = [arg.rstrip(os.path.sep) for arg in args]
 	action(opts, args)
 
