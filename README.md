@@ -33,7 +33,7 @@ Coming soon...
 
 A trivial example would be:
 
-    target.gup:
+`target.gup:`
 
     #!/bin/bash
     gup -u source
@@ -114,10 +114,10 @@ using pattern "build/foo":
 
 using pattern "proj/build/foo":
 
-  - ../Gupfile
-  - ../gup/Gupfile
-  - ../../gup/tim/proj/foo.gup
-  - ../../../gup/home/tim/proj/foo.gup
+    - ../Gupfile
+    - ../gup/Gupfile
+    - ../../gup/tim/proj/foo.gup
+    - ../../../gup/home/tim/proj/foo.gup
 
 etc.
 

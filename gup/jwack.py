@@ -112,7 +112,7 @@ def setup_jobserver(maxjobs):
             fcntl.fcntl(b, fcntl.F_GETFL)
         except IOError, e:
             if e.errno == errno.EBADF:
-                log.debug("--jobserver-fds error", exc_info=True)
+                log.debug("--jobserver-fds error (flags=%r, a=%r, b=%r)", flags, a, b, exc_info=True)
                 raise ValueError('broken --jobserver-fds from make; prefix your Makefile rule with a "+"')
             else:
                 raise
