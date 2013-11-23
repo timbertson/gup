@@ -14,7 +14,7 @@ bin/gup: $(SOURCES)
 
 local: gup-local.xml phony
 gup-local.xml: gup.xml.template
-	0local gup.xml.template
+	0install run --not-before=0.2.4 http://gfxmonk.net/dist/0install/0local.xml gup.xml.template
 
 clean: phony
 	rm gup/*.pyc

@@ -28,7 +28,7 @@ def _init_logging(verbosity):
 		lvl = TRACE
 	
 	if 'GUP_IN_TESTS' in os.environ:
-		lvl = logging.DEBUG
+		lvl = TRACE
 		fmt = fmt = '%(color)s' + INDENT + '%(bold)s%(message)s' + PLAIN
 
 	# persist for child processes

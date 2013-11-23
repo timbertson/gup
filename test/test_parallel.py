@@ -14,7 +14,7 @@ class TestParallelBuilds(TestCase):
 		steps = ['step1', 'step2', 'step3', 'step4', 'step5', 'step6']
 		from datetime import datetime, timedelta
 		initial_time = datetime.now()
-		self.build_u('-j10', *steps)
+		self.build_u('-j10', *steps, last=True)
 
 		self.assertEquals(self.read('counter'), '2')
 		elapsed_time = (datetime.now() - initial_time).total_seconds()

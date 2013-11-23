@@ -357,9 +357,9 @@ Not yet, sorry. `gup` is still very new.
 
 # What platforms does it work on?
 
-I don't know, yet. It's very early days, and I haven't yet tested it on
-anything but linux. It's currently written in python, although that may
-change. It probably already works on OSX.
+I don't know, yet. It's very early days. It's currently written in python,
+although that may change. It's been tested on Linux and OSX, and works
+fine on both.
 
 # How buggy is it?
 

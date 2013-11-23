@@ -127,6 +127,9 @@ def main():
 
 	env = os.environ.copy()
 	def check(mods, basedir):
+		if env.get('SKIP_PYCHECKER', '0') == '1':
+			print("WARN: Skipping pychecker check ...", file=sys.stderr)
+			return
 		env['PYTHONPATH'] = basedir
 		args = ['pychecker', '--limit', '100', '--no-reimport', '--no-miximport', '--no-argsused', '--no-shadowbuiltin', '--no-classattr'] + mods
 		print("Running: %r %r" % (args, env['PYTHONPATH']))

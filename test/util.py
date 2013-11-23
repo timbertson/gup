@@ -3,6 +3,7 @@ from mocktest import *
 import mocktest
 import os
 import sys
+import time
 import tempfile
 import shutil
 import contextlib
@@ -11,12 +12,14 @@ import logging
 import unittest
 
 from gup.error import *
+from gup.log import TRACE
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=TRACE)
 log = logging.getLogger('TEST')
 
 TEMP = os.path.join(os.path.dirname(__file__), 'tmp')
 GUP_EXE = os.environ.get('GUP_EXE', 'gup')
+LAME_MTIME = sys.platform == 'darwin'
 
 def mkdirp(p):
 	if not os.path.exists(p):
@@ -35,6 +38,7 @@ class TestCase(mocktest.TestCase):
 		mkdirp(TEMP)
 		self.ROOT = tempfile.mkdtemp(dir=TEMP)
 		log.debug('root: %s', self.ROOT)
+		# self._last_build_time = None
 	
 	def path(self, p):
 		return os.path.join(self.ROOT, p)
@@ -62,8 +66,19 @@ class TestCase(mocktest.TestCase):
 		finally:
 			os.chdir(initial)
 
-	def _build(self, args, cwd=None):
+	def _build(self, args, cwd=None, last=False):
 		log.warn("\n\nRunning build with args: %r" % (list(args)))
+
+		# OSX has 1-second mtime resolution.
+		# Before each build, we sleep as long as we need to
+		# make it 1s since the last build
+		# if self._last_build_time and LAME_MTIME:
+		# 	minimum_time = self._last_build_time + 2
+		# 	sleep_time = minimum_time - time.time()
+		# 	log.warn("sleeping for %s" % (sleep_time,))
+		# 	if sleep_time > 0:
+		# 		time.sleep(sleep_time)
+
 		with self._root_cwd():
 			env = os.environ.copy()
 			for key in list(env.keys()):
@@ -86,6 +101,15 @@ class TestCase(mocktest.TestCase):
 				child_log.info(line)
 			if not proc.wait() == 0:
 				raise err
+
+		if LAME_MTIME and not last:
+			# OSX has 1-second mtime resolution.
+			# After each build, we sleep just over 1s to make sure
+			# any further modifications can't be in the same second
+
+			# tests can pass `last=True` to avoid this, on the
+			# condition that they won't rebuild this target
+			time.sleep(1.1)
 
 	def build(self, *targets, **k):
 		self._build(targets, **k)
