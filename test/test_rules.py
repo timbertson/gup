@@ -37,7 +37,7 @@ class TestBasicRules(TestCase):
 
 class TestGupdirectory(TestCase):
 	def test_gupdir_is_search_target(self):
-		self.write("gup/base.gup", '#!/bin/bash\necho -n "base" > "$1"')
+		self.write("gup/base.gup", BASH + 'echo -n "base" > "$1"')
 		self.build('base')
 		self.assertEqual(self.read('base'), 'base')
 	
@@ -76,11 +76,11 @@ class TestGupdirectory(TestCase):
 		self.write('gup/a/b/Gupfile', '../default.c.gup:\n\t*.c')
 
 		self.assertRaises(Unbuildable, lambda: self.build('a/foo.c'))
-		self.build_assert('a/b/foo.c', 'b/foo.c, called from a')
+		self.build_assert('a/b/foo.c', os.path.join('b','foo.c') + ', called from a')
 
 class TestDirectoryTargets(TestCase):
 	def test_trailing_slashes_are_ignored_in_target_name(self):
 		self.write('dir.gup', BASH + 'mkdir -p $1; echo ok > $1/hello')
-		self.build_u('dir/')
+		self.build_u('dir' + os.path.sep)
 		self.assertEqual(self.read('dir/hello'), 'ok')
 	

@@ -20,6 +20,8 @@ log = logging.getLogger('TEST')
 TEMP = os.path.join(os.path.dirname(__file__), 'tmp')
 GUP_EXE = os.environ.get('GUP_EXE', 'gup')
 LAME_MTIME = sys.platform == 'darwin'
+IS_WINDOWS = sys.platform == 'win32'
+if IS_WINDOWS: GUP_EXE += '.cmd'
 
 def mkdirp(p):
 	if not os.path.exists(p):
@@ -87,17 +89,21 @@ class TestCase(mocktest.TestCase):
 					del env[key]
 
 			env['GUP_IN_TESTS'] = '1'
-			env['GUP_COLOR'] = '1'
+			use_color = sys.stdout.isatty() and not IS_WINDOWS
+			env['GUP_COLOR'] = '1' if use_color else '0'
 			proc = subprocess.Popen([GUP_EXE] + list(args), cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
 
 			child_log = logging.getLogger('out')
 			err = SafeError('gup failed')
 			while True:
-				line = proc.stdout.readline().rstrip()
+				line = proc.stdout.readline()
 				if not line:
 						break
-				if "Don't know how to build" in line:
-					err = Unbuildable(line[len("Don't know how to build"):])
+				line = line.rstrip()
+				unbuildable_msg = "Don't know how to build"
+				unbuildable_idx = line.find(unbuildable_msg)
+				if unbuildable_idx != -1:
+					err = Unbuildable(line[unbuildable_idx + len(unbuildable_msg) + 1:])
 				child_log.info(line)
 			if not proc.wait() == 0:
 				raise err

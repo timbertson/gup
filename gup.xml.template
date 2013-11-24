@@ -32,16 +32,18 @@
 			<arg>--with-doctest</arg>
 		</command>
 
-		<command name="test-windows">
+		<!-- minimal test commands run without nosetests plugins,
+		     which don't often work so well on windows -->
+		<command name="test-min">
 			<environment insert="test/bin" name="PATH" mode="prepend"/>
-			<environment value="gup.cmd" name="GUP_EXE" mode="replace"/>
+			<environment value="gup" name="GUP_EXE" mode="replace"/>
 			<environment insert="" name="PYTHONPATH" mode="prepend"/>
 			<requires interface="http://gfxmonk.net/dist/0install/mocktest.xml"/>
 			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml" command="core"/>
 		</command>
 
-		<command name="integration-test-windows">
-			<environment mode="replace" name="GUP_EXE" insert="bin/gup.cmd"/>
+		<command name="integration-test-min">
+			<environment mode="replace" name="GUP_EXE" insert="bin/gup"/>
 			<requires interface="http://gfxmonk.net/dist/0install/mocktest.xml"/>
 			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml" command="core"/>
 		</command>

@@ -1,6 +1,6 @@
 from .util import *
 
-if sys.platform != 'win32':
+if not IS_WINDOWS:
 	# we disable parallel builds on windows, so
 	# these tests won't pass
 

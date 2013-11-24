@@ -17,7 +17,7 @@ def _default_gup_files(filename):
 		yield ("default%s.gup" % ext), ext
 
 def _up_path(n):
-	return '/'.join(itertools.repeat('..',n))
+	return os.path.sep.join(itertools.repeat('..',n))
 
 GUPFILE = 'Gupfile'
 
@@ -87,8 +87,13 @@ class BuildCandidate(object):
 				raise SafeError("Invalid %s: %s%s" % (GUPFILE, path, reason))
 			log.trace("Parsed gupfile: %r" % rules)
 	
+		match_target = self.target
+		# always use `/` as path sep in gupfile patterns
+		if os.path.sep != '/':
+			match_target = self.target.replace(os.path.sep, '/')
+
 		for script, ruleset in rules:
-			if ruleset.match(self.target):
+			if ruleset.match(match_target):
 				base = os.path.join(target_base, os.path.dirname(script))
 				script_path = os.path.join(os.path.dirname(path), script)
 				if not os.path.exists(script_path):
@@ -171,13 +176,13 @@ def possible_gup_files(p):
 	'''
 	# we need an absolute path to tell how far up the tree we should go
 	dirname,filename = os.path.split(p)
-	dirparts = os.path.normpath(os.path.join(os.getcwd(), dirname)).split('/')
+	dirparts = os.path.normpath(os.path.join(os.getcwd(), dirname)).split(os.path.sep)
 	dirdepth = len(dirparts)
 
 	# find direct match for `{target}.gup` in all possible `/gup` dirs
 	yield BuildCandidate(dirname, None, False, filename)
 	for i in xrange(0, dirdepth):
-		suff = '/'.join(dirparts[dirdepth - i:])
+		suff = os.path.sep.join(dirparts[dirdepth - i:])
 		base = path.join(dirname, _up_path(i))
 		yield BuildCandidate(base, suff, False, filename)
 
@@ -186,13 +191,13 @@ def possible_gup_files(p):
 		# of how specific the path is - least fuzzy wins.
 		#
 		# As `up` increments, we discard a folder on the base path.
-		base_suff = '/'.join(dirparts[dirdepth - up:])
+		base_suff = os.path.sep.join(dirparts[dirdepth - up:])
 		parent_base = path.join(dirname, _up_path(up))
 		target_id = os.path.join(base_suff, filename)
 		yield BuildCandidate(parent_base, None, True, target_id)
 		for i in xrange(0, dirdepth - up):
 			# `i` is how far up the directory tree we're looking for the gup/ directory
-			suff = '/'.join(dirparts[dirdepth - i - up:dirdepth - up])
+			suff = os.path.sep.join(dirparts[dirdepth - i - up:dirdepth - up])
 			base = path.join(parent_base, _up_path(i))
 			yield BuildCandidate(base, suff, True, target_id)
 

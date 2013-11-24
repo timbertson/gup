@@ -9,7 +9,7 @@ integration-test-pre: unit-test-pre bin
 
 bin/gup: $(SOURCES)
 	mkdir -p tmp bin
-	./build/combine_modules.py gup tmp/gup.py
+	python ./build/combine_modules.py gup tmp/gup.py
 	cp tmp/gup.py bin/gup
 
 local: gup-local.xml phony
@@ -25,5 +25,14 @@ unit-test: phony
 	./t
 integration-test: phony
 	./ti
+
+# minimal test action: should work everywhere
+test-min: unit-test-pre integration-test-pre
+	0install run --command=test-min gup-local.xml
+	0install run --command=integration-test-min gup-local.xml
+
+update-windows: phony
+	git fetch
+	git checkout origin/windows
 
 .PHONY: phony

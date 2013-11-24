@@ -43,28 +43,32 @@ def _init_logging(verbosity):
 
 def _bin_init():
 	'''
-	Ensude `gup` is present on $PATH
+	Ensure `gup` is present on $PATH
 	'''
 	progname = sys.argv[0]
 	log.trace('run as: %s' % (progname,))
 	if os.path.sep in progname and os.environ.get('GUP_IN_PATH', '0') != '1':
 		# gup may have been run as a relative / absolute script - check
 		# whether our directory is in $PATH
-		path_entries = os.environ.get('PATH', '').split(os.pathsep)
-		here = os.path.dirname(__file__)
-		for entry in path_entries:
-			if not entry: continue
-			try:
-				if samefile(entry, here):
-					log.trace('found `gup` in $PATH')
-					# ok, we're in path
-					break
-			except OSError: pass
+		here, filename = os.path.split(__file__)
+		if filename.startswith('cmd.py'):
+			# we're being run in-place
+			log.trace("Run from gup/ package - assuming gup in $PATH")
 		else:
-			# not found
-			here = os.path.abspath(here)
-			log.trace('`gup` not in $PATH - adding %s' % (here,))
-			os.environ['PATH'] = os.pathsep.join([here] + path_entries)
+			path_entries = os.environ.get('PATH', '').split(os.pathsep)
+			for entry in path_entries:
+				if not entry: continue
+				try:
+					if samefile(entry, here):
+						log.trace('found `gup` in $PATH')
+						# ok, we're in path
+						break
+				except OSError: pass
+			else:
+				# not found
+				here = os.path.abspath(here)
+				log.trace('`gup` not in $PATH - adding %s' % (here,))
+				os.environ['PATH'] = os.pathsep.join([here] + path_entries)
 
 		# don't bother checking next time
 		os.environ['GUP_IN_PATH'] = '1'

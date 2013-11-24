@@ -1,5 +1,7 @@
 from .util import *
 class TestScripts(TestCase):
+
+	@unittest.skipIf(IS_WINDOWS, 'posix')
 	def test_interpreter(self):
 		self.write('gup/all.gup', '#!./build abc\n# ...')
 		self.write('gup/build', BASH + '(echo "target: $4"; echo "arg: $1") > "$3"')
@@ -16,8 +18,8 @@ class TestScripts(TestCase):
 		self.write("gup/a/Gupfile", 'default.gup:\n\tb/c\nnested/default.gup:\n\tb/d')
 
 		self.build('c', 'd', cwd='a/b')
-		self.assertEquals(self.read('a/b/c'), 'b/c')
-		self.assertEquals(self.read('a/b/d'), 'nested: ../b/d')
+		self.assertEquals(self.read('a/b/c'), os.path.join('b', 'c'))
+		self.assertEquals(self.read('a/b/d'), 'nested: ' + os.path.join('..', 'b', 'd'))
 	
 	def test_cwd_is_relative_to_target(self):
 		self.write('gup/all.gup', BASH + 'mkdir -p foo; cd foo; gup -u bar')
@@ -65,6 +67,7 @@ class TestScripts(TestCase):
 		self.assertFalse(os.path.isdir(self.path('dir')))
 		self.assertEquals(self.read('dir'), 'file_now')
 	
+	@unittest.skipIf(IS_WINDOWS, 'irrelevant on windows')
 	def test_permissions_of_tempfile_are_maintained(self):
 		self.write('hello.gup', BASH + 'echo -e "#!/bin/bash\necho ok" > "$1"; chmod a+x "$1"')
 		self.build('hello')
