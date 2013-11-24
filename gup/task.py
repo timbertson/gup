@@ -52,7 +52,7 @@ class Task(object):
 			dep = FileDependency.relative_to_target(self.parent_target, mtime=mtime, path=target_path, checksum=checksum)
 			TargetState(self.parent_target).add_dependency(dep)
 	
-	def handle_result(self, _, rv):
+	def handle_result(self, rv):
 		log.trace("build process exited with status: %r" % (rv,))
 		if rv == 0:
 			return
@@ -77,9 +77,9 @@ class TaskRunner(object):
 		self.tasks.append(fn)
 
 	def run(self):
-		from .jwack import start_job, wait_all
+		from .parallel import start_job, wait_all
 		while self.tasks:
 			task = self.tasks.pop(0)
-			start_job('build', task.build, task.handle_result)
+			start_job(task.build, task.handle_result)
 		wait_all()
 	

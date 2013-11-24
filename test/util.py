@@ -25,7 +25,7 @@ def mkdirp(p):
 	if not os.path.exists(p):
 		os.makedirs(p)
 
-BASH = '#!/bin/bash\nset -eux\n'
+BASH = '#!bash\nset -eux\n'
 def echo_to_target(contents):
 	return BASH + 'echo -n "%s" > "$1"' % (contents,)
 

@@ -10,7 +10,7 @@ from .state import TargetState, AlwaysRebuild, Checksum, FileDependency, META_DI
 from .gupfile import Builder
 from .log import PLAIN, getLogger, TRACE
 from .var import INDENT, set_verbosity, DEFAULT_VERBOSITY, set_trace
-from .jwack import setup_jobserver
+from .parallel import setup_jobserver
 from .task import Task, TaskRunner
 
 log = getLogger('gup.cmd') # hard-coded in case of __main__
@@ -55,7 +55,7 @@ def _bin_init():
 		for entry in path_entries:
 			if not entry: continue
 			try:
-				if os.path.samefile(entry, here):
+				if samefile(entry, here):
 					log.trace('found `gup` in $PATH')
 					# ok, we're in path
 					break

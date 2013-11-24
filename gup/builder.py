@@ -12,7 +12,7 @@ from .util import *
 from .state import TargetState
 from .log import getLogger
 from .var import ROOT_CWD, TRACE
-from .jwack import extend_build_env
+from .parallel import extend_build_env
 log = getLogger(__name__)
 
 try:
@@ -148,7 +148,7 @@ class Target(object):
 					if os.path.isdir(self.path):
 						log.trace("calling rmtree() on previous %s", self.path)
 						shutil.rmtree(self.path)
-					os.rename(output_file, self.path)
+					rename(output_file, self.path)
 				MOVED = True
 			else:
 				log.trace("builder exited with status %s" % (ret,))

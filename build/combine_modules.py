@@ -38,7 +38,7 @@ def main():
 
 	existing_files = set(filter(is_interesting, os.listdir(root)))
 	
-	files = [mod + '.py' for mod in 'log var error util jwack lock gupfile state builder task cmd'.split()]
+	files = [mod + '.py' for mod in 'log var error util parallel gupfile state builder task cmd'.split()]
 	assert set(files) == existing_files, "file mismatch:\n%r\n%r" % (sorted(files), sorted(existing_files))
 
 	mods = []
@@ -127,13 +127,17 @@ def main():
 
 	env = os.environ.copy()
 	def check(mods, basedir):
-		if env.get('SKIP_PYCHECKER', '0') == '1':
+		if env.get('SKIP_PYCHECKER', '0').strip() == '1':
 			print("WARN: Skipping pychecker check ...", file=sys.stderr)
 			return
 		env['PYTHONPATH'] = basedir
 		args = ['pychecker', '--limit', '100', '--no-reimport', '--no-miximport', '--no-argsused', '--no-shadowbuiltin', '--no-classattr'] + mods
 		print("Running: %r %r" % (args, env['PYTHONPATH']))
-		subprocess.check_call(args, env=env, cwd=basedir)
+		try:
+			subprocess.check_call(args, env=env, cwd=basedir)
+		except OSError as e:
+			print("\nERROR: Failed to run pychecker - is it installed?\nExport SKIP_PYCHECKER=1 to skip this check", file=sys.stderr)
+			sys.exit(1)
 
 	print('\n\n# PYCHECKER')
 	print('#----- ORIGINAL ------#')

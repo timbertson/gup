@@ -2,9 +2,10 @@ import os
 import errno
 import logging
 from .log import getLogger
+from .var import IS_WINDOWS
 log = getLogger(__name__)
 
-__all__ = ['mkdirp', 'get_mtime', 'try_remove']
+__all__ = ['mkdirp', 'get_mtime', 'try_remove', 'samefile', 'rename']
 
 def mkdirp(p):
 	try:
@@ -30,12 +31,19 @@ def try_remove(path):
 	except OSError as e:
 		if e.errno != errno.ENOENT: raise
 
-def close_on_exec(fd, yes):
-	import fcntl
-	fl = fcntl.fcntl(fd, fcntl.F_GETFD)
-	fl &= ~fcntl.FD_CLOEXEC
-	if yes:
-		fl |= fcntl.FD_CLOEXEC
-	fcntl.fcntl(fd, fcntl.F_SETFD, fl)
+try:
+	samefile = os.path.samefile
+except AttributeError:
+	# Windows
+	def samefile(path1, path2):
+		return os.path.normcase(os.path.normpath(path1)) == \
+		       os.path.normcase(os.path.normpath(path2))
 
-
+if IS_WINDOWS:
+	def rename(src, dest):
+		assert not os.path.isdir(dest)
+		if os.path.exists(dest):
+			os.remove(dest)
+		os.rename(src, dest)
+else:
+	rename = os.rename

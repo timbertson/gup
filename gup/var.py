@@ -1,6 +1,8 @@
 from __future__ import print_function
-import os
+import os, sys
 import time
+
+IS_WINDOWS = sys.platform.startswith('win')
 
 INDENT = os.environ.get('GUP_INDENT', '')
 os.environ['GUP_INDENT'] = INDENT + '  '

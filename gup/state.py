@@ -5,7 +5,7 @@ import errno
 from .util import *
 from .log import getLogger
 from .gupfile import Builder
-from .lock import Lock
+from .parallel import Lock
 from .var import RUN_ID
 log = getLogger(__name__)
 
@@ -99,7 +99,7 @@ class TargetState(object):
 					if built_time is not None:
 						with open(temp, 'a') as f:
 							BuildTime(built_time).append_to(f)
-					os.rename(temp, self.meta_path('deps'))
+					rename(temp, self.meta_path('deps'))
 				return built
 
 class Dependencies(object):
