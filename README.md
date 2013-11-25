@@ -27,7 +27,36 @@ intimate knowledge of build internals to maintain correct dependencies.
 
 # How do I install it?
 
-Coming soon...
+A repository-local installation is the most foolproof at the moment.
+
+ - From a git checkout:
+   `make bin`
+   cp bin/* <your-project-workspace>/tools
+
+ - From a released tarball:
+   cp bin/* <your-project-workspace>/tools
+
+**Note**: When run from a relative or absolute path, `gup`
+will bootstrap itself by adding the directory containing
+it to `$PATH`, so that executing `gup` will do the right thing
+from within a build script. So you may wish to place it in
+its own directory to avoid accidentally adding other scripts
+to `$PATH`.
+
+### Python dependency
+
+Gup currently requires python 2.x. I have tested it on 2.7,
+I don't know how it fares in versions greater or less than this.
+Patches welcome if you find something broken on your python
+version.
+
+### Using it via `make`
+
+For convenience, you may wish to provide a `Makefile` that
+simply delegates to `gup`. You can find an example `Makefile`
+in the `resources/` directory.
+
+Other methods coming soon.
 
 # How does it build stuff?
 
@@ -382,6 +411,25 @@ migrate), but I can make no promises.
 On that note - please raise any issues you find or improvements you can think
 of as a github issue. If something is broken, I'd much rather know about it
 now than later :)
+
+# Development dependencies
+
+ - [0install](http://0install.net)
+ - PyChecker (optional; you can disable this by exporting `$SKIP_PYCHECKER=1`)
+
+The `gup` build process itself uses `make`, but you can use the included `./make`
+or `./make.bat` if you don't already have make installed.
+
+To run the automated tests, you will also need some standard GNU utilities,
+including `bash`, `find`, `cat`, etc. On Windows, MSYS provides these.
+
+# Why the name `gup`?
+
+It's short, easy to type, and it contains `up` (as in update).
+
+I pronounce it with a hard "g", rhyming with "cup". You can think of
+it as "gee-up" or "get up" or even "get thyself upwards" if you like,
+but you should just say "gup" if you have cause to say it out loud.
 
 # Licence
 

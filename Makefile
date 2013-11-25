@@ -18,7 +18,7 @@ gup-local.xml: gup.xml.template
 
 clean: phony
 	rm gup/*.pyc
-	rm -rf tmp bin
+	rm -rf tmp bin/gup
 
 # dumb alias for local test scripts
 unit-test: phony
@@ -26,11 +26,13 @@ unit-test: phony
 integration-test: phony
 	./ti
 
-# minimal test action: should work everywhere
+# Minimal test action: runs full tests, with minimal dependencies.
+# This is the only test target that is likely to work on windows
 test-min: unit-test-pre integration-test-pre
 	0install run --command=test-min gup-local.xml
 	0install run --command=integration-test-min gup-local.xml
 
+# Used for development only
 update-windows: phony
 	git fetch
 	git checkout origin/windows
