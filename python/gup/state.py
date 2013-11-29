@@ -219,11 +219,6 @@ class AlwaysRebuild(Dependency):
 		_log.debug('DIRTY: always rebuild')
 		return True
 
-class UnknownState(object):
-	def __init__(self, target, children):
-		self.target = target
-		self.children = children
-
 class FileDependency(Dependency):
 	num_fields = 3
 	tag = 'filedep:'

@@ -69,6 +69,12 @@ class TestDependencies(TestCase):
 		self.write('target.gup', echo_to_target('ok'))
 
 		self.assertRebuilds('target', lambda: self.touch('target.gup'))
+	
+	def test_depend_on_file_with_spaces(self):
+		self.write('target.gup', echo_file_contents('a b'))
+		self.write('a b', 'a b c!')
+		self.build_assert('target', 'a b c!')
+		self.assertRebuilds('target', lambda: self.touch('a b'))
 
 	def test_recursive_dependencies_include_gupfile(self):
 		self.write('child.gup', echo_to_target('ok'))

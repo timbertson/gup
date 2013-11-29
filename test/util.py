@@ -69,7 +69,7 @@ class TestCase(mocktest.TestCase):
 			os.chdir(initial)
 
 	def _build(self, args, cwd=None, last=False):
-		log.warn("\n\nRunning build with args: %r" % (list(args)))
+		log.warn("\n\nRunning build with args: %r [cwd=%r]" % (list(args), cwd))
 
 		# OSX has 1-second mtime resolution.
 		# Before each build, we sleep as long as we need to

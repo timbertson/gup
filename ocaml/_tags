@@ -1,0 +1,3 @@
+true: debug, package(batteries,unix,fileutils,sha)
+"gup": for-pack(Gup)
+<test*> or <test/*>: package(oUnit)

@@ -1,0 +1,1 @@
+exception Unbuildable of string
