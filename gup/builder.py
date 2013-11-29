@@ -11,7 +11,7 @@ from .error import *
 from .util import *
 from .state import TargetState
 from .log import getLogger
-from .var import ROOT_CWD, TRACE
+from .var import ROOT_CWD, XTRACE
 from .parallel import extend_build_env
 log = getLogger(__name__)
 
@@ -124,7 +124,7 @@ class Target(object):
 			if exe is not None:
 				args = exe + args
 
-			if TRACE:
+			if XTRACE:
 				log.info(' # %s'% (os.path.abspath(basedir),))
 				log.info(' + ' + ' '.join(map(quote, args)))
 			else:

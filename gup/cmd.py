@@ -8,7 +8,7 @@ from .error import *
 from .util import *
 from .state import TargetState, AlwaysRebuild, Checksum, FileDependency, META_DIR
 from .gupfile import Builder
-from .log import PLAIN, getLogger, TRACE
+from .log import PLAIN, getLogger, TRACE_LVL
 from .var import INDENT, set_verbosity, DEFAULT_VERBOSITY, set_trace
 from .parallel import setup_jobserver
 from .task import Task, TaskRunner
@@ -24,11 +24,11 @@ def _init_logging(verbosity):
 	elif verbosity == 1:
 		lvl = logging.DEBUG
 	elif verbosity > 1:
-		fmt = '%(color)sgup[%(process)s %(name)-11s %(levelname)-5s]  ' + INDENT + '%(bold)s%(message)s' + PLAIN
-		lvl = TRACE
+		fmt = '%(color)sgup[%(process)s %(name)-12s %(levelname)-5s]  ' + INDENT + '%(bold)s%(message)s' + PLAIN
+		lvl = TRACE_LVL
 	
 	if 'GUP_IN_TESTS' in os.environ:
-		lvl = TRACE
+		lvl = TRACE_LVL
 		fmt = fmt = '%(color)s' + INDENT + '%(bold)s%(message)s' + PLAIN
 
 	# persist for child processes

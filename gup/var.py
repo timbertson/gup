@@ -20,10 +20,10 @@ def init_root(is_root):
 
 init_root('GUP_ROOT' not in os.environ)
 
-TRACE = os.environ.get('GUP_XTRACE', '0') == '1'
+XTRACE = os.environ.get('GUP_XTRACE', '0') == '1'
 def set_trace():
-	global TRACE
-	TRACE = True
+	global XTRACE
+	XTRACE = True
 	os.environ['GUP_XTRACE'] = '1'
 
 DEFAULT_VERBOSITY = int(os.environ.get('GUP_VERBOSE', '0'))

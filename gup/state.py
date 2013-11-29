@@ -24,6 +24,9 @@ class TargetState(object):
 	def __init__(self, p):
 		self.path = p
 	
+	def __repr__(self):
+		return 'TargetState(%r)' % (self.path,)
+	
 	@staticmethod
 	def built_targets(dir):
 		'''

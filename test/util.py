@@ -12,9 +12,9 @@ import logging
 import unittest
 
 from gup.error import *
-from gup.log import TRACE
+from gup.log import TRACE_LVL
 
-logging.basicConfig(level=TRACE)
+logging.basicConfig(level=TRACE_LVL)
 log = logging.getLogger('TEST')
 
 TEMP = os.path.join(os.path.dirname(__file__), 'tmp')

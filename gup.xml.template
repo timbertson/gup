@@ -16,6 +16,11 @@
 			<environment insert="bin" name="PATH" mode="prepend"/>
 			<runner interface="http://repo.roscidus.com/python/python"/>
 		</command>
+		<command name="local" path="test/bin/gup">
+			<environment insert="test/bin" name="PATH" mode="prepend"/>
+			<environment insert="" name="PYTHONPATH" mode="prepend"/>
+			<runner interface="http://repo.roscidus.com/python/python"/>
+		</command>
 		<command name="test">
 			<!-- unit tests run from raw source code -->
 			<environment insert="test/bin" name="PATH" mode="prepend"/>
