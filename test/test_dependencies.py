@@ -175,6 +175,13 @@ class TestChecksums(TestCase):
 
 		self.assertTrue(self.mtime('cs') > csm, "`cs` target not rebuilt")
 
+	def test_recursive_dependencies_are_still_checked_when_checksum_dependency_is_unchanged(self):
+		self.write('parent.gup', self.read('parent.gup') + '\ngup -u other_dep')
+		self.write('other_dep.gup', echo_file_contents('other_dep_child'))
+		self.write('other_dep_child', '1')
+
+		self.assertRebuilds('parent', lambda: self.touch('other_dep_child'))
+
 	def test_parent_of_checksum_is_rebult_if_checksum_contents_changes(self):
 		self.assertRebuilds('parent', lambda: self.write('input', 'ok2'))
 

@@ -48,10 +48,23 @@ def _is_dirty(state):
 		return False
 
 	dirty = deps.is_dirty(builder, built = False)
+	_log.trace("deps.is_dirty(%r) -> %r", state.path, dirty)
 
 	if dirty is True:
-		_log.trace("deps.is_dirty(%r) -> True", state.path)
 		return True
+
+	if isinstance(dirty, list):
+		for target in dirty:
+			_log.trace("MAYBE_DIRTY: %s (unknown state - building it to find out)", target.path)
+			target = prepare_build(target.path)
+			if target is None:
+				_log.trace("%s turned out not to be a target - skipping", target)
+				continue
+			target.build(update=True)
+
+		dirty = deps.is_dirty(builder, built = True)
+		assert dirty in (True, False)
+		_log.trace("after rebuilding unknown targets, deps.is_dirty(%r) -> %r", state.path, dirty)
 
 	if dirty is False:
 		# not directly dirty - recurse children
@@ -61,20 +74,6 @@ def _is_dirty(state):
 			if _is_dirty(child):
 				_log.trace("_is_dirty(%r) -> True", child.path)
 				return True
-		return False
-
-	assert isinstance(dirty, list)
-	for target in dirty:
-		_log.trace("MAYBE_DIRTY: %s (unknown state - building it to find out)", target.path)
-		target = prepare_build(target.path)
-		if target is None:
-			_log.trace("%s turned out not to be a target - skipping", target)
-			continue
-		target.build(update=True)
-
-	dirty = deps.is_dirty(builder, built = True)
-	assert dirty in (True, False)
-	_log.trace("after rebuilding unknown targets, deps.is_dirty(%r) -> %r", state.path, dirty)
 	return dirty
 
 class Target(object):
