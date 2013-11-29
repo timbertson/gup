@@ -13,7 +13,7 @@ from .var import INDENT, set_verbosity, DEFAULT_VERBOSITY, set_trace
 from .parallel import setup_jobserver
 from .task import Task, TaskRunner
 
-log = getLogger('gup.cmd') # hard-coded in case of __main__
+_log = getLogger(__name__)
 
 def _init_logging(verbosity):
 	lvl = logging.INFO
@@ -46,28 +46,28 @@ def _bin_init():
 	Ensure `gup` is present on $PATH
 	'''
 	progname = sys.argv[0]
-	log.trace('run as: %s' % (progname,))
+	_log.trace('run as: %s' % (progname,))
 	if os.path.sep in progname and os.environ.get('GUP_IN_PATH', '0') != '1':
 		# gup may have been run as a relative / absolute script - check
 		# whether our directory is in $PATH
 		here, filename = os.path.split(__file__)
 		if filename.startswith('cmd.py'):
 			# we're being run in-place
-			log.trace("Run from gup/ package - assuming gup in $PATH")
+			_log.trace("Run from gup/ package - assuming gup in $PATH")
 		else:
 			path_entries = os.environ.get('PATH', '').split(os.pathsep)
 			for entry in path_entries:
 				if not entry: continue
 				try:
 					if samefile(entry, here):
-						log.trace('found `gup` in $PATH')
+						_log.trace('found `gup` in $PATH')
 						# ok, we're in path
 						break
 				except OSError: pass
 			else:
 				# not found
 				here = os.path.abspath(here)
-				log.trace('`gup` not in $PATH - adding %s' % (here,))
+				_log.trace('`gup` not in $PATH - adding %s' % (here,))
 				os.environ['PATH'] = os.pathsep.join([here] + path_entries)
 
 		# don't bother checking next time
@@ -128,7 +128,7 @@ def _main(argv):
 	_init_logging(verbosity)
 	_bin_init()
 
-	log.trace('argv: %r, action=%r', argv, action)
+	_log.trace('argv: %r, action=%r', argv, action)
 	args = [arg.rstrip(os.path.sep) for arg in args]
 	action(opts, args)
 
@@ -214,7 +214,6 @@ def _build(opts, targets):
 	
 	if len(targets) == 0:
 		targets = ['all']
-	assert len(targets) > 0
 
 	parent_target = _get_parent_target()
 
@@ -246,7 +245,7 @@ def main():
 		sys.exit(1)
 	except SafeError as e:
 		if e.message is not None:
-			log.error("%s" % (str(e),))
+			_log.error("%s" % (str(e),))
 		sys.exit(1)
 
 if __name__ == '__main__':

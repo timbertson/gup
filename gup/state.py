@@ -7,7 +7,7 @@ from .log import getLogger
 from .gupfile import Builder
 from .parallel import Lock
 from .var import RUN_ID
-log = getLogger(__name__)
+_log = getLogger(__name__)
 
 META_DIR = '.gup'
 
@@ -63,7 +63,7 @@ class TargetState(object):
 			else:
 				with f:
 					rv = Dependencies(self.path, f)
-		log.trace("Loaded serialized state: %r" % (rv,))
+		_log.trace("Loaded serialized state: %r" % (rv,))
 		return rv
 
 	def create_lock(self):
@@ -72,7 +72,7 @@ class TargetState(object):
 
 	def add_dependency(self, dep):
 		lock = Lock(self.meta_path('deps2.lock'))
-		log.debug('add dep: %s -> %s' % (self.path, dep))
+		_log.debug('add dep: %s -> %s' % (self.path, dep))
 		with lock.write():
 			with open(self.meta_path('deps2'), 'a') as f:
 				dep.append_to(f)
@@ -85,7 +85,7 @@ class TargetState(object):
 				checksum=None,
 				mtime=get_mtime(exe))
 
-			log.trace("created dep %s from builder %r" % (builder_dep, exe))
+			_log.trace("created dep %s from builder %r" % (builder_dep, exe))
 			temp = self._ensure_meta_path('deps2')
 			with open(temp, 'w') as f:
 				Dependencies.init_file(f)
@@ -117,7 +117,7 @@ class Dependencies(object):
 			self.rules.append(NeverBuilt())
 		else:
 			version_line = file.readline().strip()
-			log.trace("version_line: %s" % (version_line,))
+			_log.trace("version_line: %s" % (version_line,))
 			if not version_line.startswith('version:'): raise ValueError("Invalid file")
 			_, file_version = version_line.split(' ')
 			if int(file_version) != self.FORMAT_VERSION:
@@ -139,7 +139,7 @@ class Dependencies(object):
 	def is_dirty(self, builder, built):
 		assert isinstance(builder, Builder)
 		if not os.path.exists(self.path):
-			log.debug("DIRTY: %s (target does not exist)", self.path)
+			_log.debug("DIRTY: %s (target does not exist)", self.path)
 			return True
 
 		base = os.path.dirname(self.path)
@@ -150,13 +150,13 @@ class Dependencies(object):
 		for rule in self.rules:
 			d = rule.is_dirty(dirty_args)
 			if d is True:
-				log.trace('DIRTY: %s (from rule %r)', self.path, rule)
+				_log.trace('DIRTY: %s (from rule %r)', self.path, rule)
 				return True
 			elif d is False:
 				continue
 			else:
 				unknown_states.append(d)
-		log.trace('is_dirty: %s returning %r', self.path, unknown_states or False)
+		_log.trace('is_dirty: %s returning %r', self.path, unknown_states or False)
 		return unknown_states or False
 	
 	def already_built(self):
@@ -180,7 +180,7 @@ class Dependency(object):
 	recursive = False
 	@staticmethod
 	def parse(line):
-		log.trace("parsing line: %s" % (line,))
+		_log.trace("parsing line: %s" % (line,))
 		for candidate in [
 				FileDependency,
 				BuilderDependency,
@@ -207,7 +207,7 @@ class Dependency(object):
 class NeverBuilt(object):
 	fields = []
 	def is_dirty(self, args):
-		log.debug('DIRTY: never built')
+		_log.debug('DIRTY: never built')
 		return True
 	def append_to(self, file): pass
 
@@ -216,7 +216,7 @@ class AlwaysRebuild(Dependency):
 	num_fields = 0
 	fields = []
 	def is_dirty(self, _):
-		log.debug('DIRTY: always rebuild')
+		_log.debug('DIRTY: always rebuild')
 		return True
 
 class UnknownState(object):
@@ -265,25 +265,25 @@ class FileDependency(Dependency):
 		self._target = path
 
 		if self.checksum is not None:
-			log.trace("%s: comparing using checksum", self.path)
+			_log.trace("%s: comparing using checksum", self.path)
 			# use checksum only
 			state = TargetState(path)
 			deps = state.deps()
 			checksum = deps and deps.checksum
 			if checksum != self.checksum:
-				log.debug("DIRTY: %s (stored checksum is %s, current is %s)", self.path, self.checksum, deps.checksum)
+				_log.debug("DIRTY: %s (stored checksum is %s, current is %s)", self.path, self.checksum, deps.checksum)
 				return True
 			if built:
 				return False
 			# if not built, we don't actually know whether this dep is dirty
-			log.trace("%s: might be dirty - returning %r", self.path, state)
+			_log.trace("%s: might be dirty - returning %r", self.path, state)
 			return state
 
 		else:
 			# use mtime only
 			current_mtime = get_mtime(path)
 			if current_mtime != self.mtime:
-				log.debug("DIRTY: %s (stored mtime is %r, current is %r)" % (self.path, self.mtime, current_mtime))
+				_log.debug("DIRTY: %s (stored mtime is %r, current is %r)" % (self.path, self.mtime, current_mtime))
 				return True
 			return False
 
@@ -297,7 +297,7 @@ class BuilderDependency(FileDependency):
 		assert not os.path.isabs(builder_path)
 		assert not os.path.isabs(self.path)
 		if builder_path != self.path:
-			log.debug("DIRTY: builder changed from %s -> %s" % (self.path, builder_path))
+			_log.debug("DIRTY: builder changed from %s -> %s" % (self.path, builder_path))
 			return True
 		return super(BuilderDependency, self).is_dirty(args)
 
@@ -352,10 +352,10 @@ class BuildTime(Dependency):
 		mtime = get_mtime(path)
 		assert mtime is not None
 		if mtime != self.value:
-			log_method = log.warn
+			log_method = _log.warn
 			if os.path.isdir(path):
 				# dirs are modified externally for various reasons, not worth warning
-				log_method = log.debug
+				log_method = _log.debug
 			log_method("%s was externally modified - rebuilding" % (path,))
 			return True
 		return False

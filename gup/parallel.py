@@ -1,11 +1,11 @@
 from .log import getLogger
 from .error import SafeError, UNKNOWN_ERROR_CODE
-log = getLogger(__name__)
+_log = getLogger(__name__)
 
 try:
 	import fcntl
 except ImportError:
-	log.debug("fcntl not available - falling back to serial execution mode")
+	_log.debug("fcntl not available - falling back to serial execution mode")
 	jwack_fallback = True
 	def _setup_jobserver(maxjobs): pass
 	def _start_job(jobfunc, donefunc):
@@ -151,7 +151,7 @@ else:
 				fcntl.fcntl(b, fcntl.F_GETFL)
 			except IOError, e:
 				if e.errno == errno.EBADF:
-					log.debug("--jobserver-fds error (flags=%r, a=%r, b=%r)", flags, a, b, exc_info=True)
+					_log.debug("--jobserver-fds error (flags=%r, a=%r, b=%r)", flags, a, b, exc_info=True)
 					raise ValueError('broken --jobserver-fds from make; prefix your Makefile rule with a "+"')
 				else:
 					raise
@@ -309,7 +309,7 @@ else:
 					rv = jobfunc() or 0
 					_debug('jobfunc completed (%r, %r)' % (jobfunc,rv))
 				except SafeError as e:
-					log.error("%s" % (str(e),))
+					_log.error("%s" % (str(e),))
 					rv = SafeError.exitcode
 				except KeyboardInterrupt:
 					rv = SafeError.exitcode
@@ -379,17 +379,17 @@ else:
 				fcntl.lockf(self.lockfile, kind|fcntl.LOCK_NB, 0, 0)
 			except IOError, e:
 				if e.errno in (errno.EAGAIN, errno.EACCES):
-					log.trace("%s lock failed", self.name)
+					_log.trace("%s lock failed", self.name)
 					pass  # someone else has it locked
 				else:
 					raise
 			else:
-				log.trace("%s lock (try)", self.name)
+				_log.trace("%s lock (try)", self.name)
 				self.owned = kind
 
 		def waitlock(self, kind=fcntl.LOCK_EX):
 			assert(self.owned != kind)
-			log.trace("%s lock (wait)", self.name)
+			_log.trace("%s lock (wait)", self.name)
 			fcntl.lockf(self.lockfile, kind, 0, 0)
 			self.owned = kind
 
@@ -397,5 +397,5 @@ else:
 			if not self.owned:
 				raise Exception("can't unlock %r - we don't own it" % self.name)
 			fcntl.lockf(self.lockfile, fcntl.LOCK_UN, 0, 0)
-			log.trace("%s unlock", self.name)
+			_log.trace("%s unlock", self.name)
 			self.owned = False

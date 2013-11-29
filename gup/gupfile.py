@@ -7,7 +7,7 @@ import itertools
 from .log import getLogger
 from .error import SafeError
 from .var import INDENT
-log = getLogger(__name__)
+_log = getLogger(__name__)
 
 def _default_gup_files(filename):
 	l = filename.split('.')
@@ -62,13 +62,13 @@ class BuildCandidate(object):
 		if not os.path.exists(path):
 			return None
 		if os.path.isdir(path):
-			log.trace("skipping directory: %s", path)
+			_log.trace("skipping directory: %s", path)
 			return None
 
-		log.trace("candidate exists: %s" % (path,))
+		_log.trace("candidate exists: %s" % (path,))
 		
 		target_base = os.path.join(*self._base_parts(False))
-		log.trace("target_base: %s" % (target_base,))
+		_log.trace("target_base: %s" % (target_base,))
 
 		if not self.indirect:
 			return Builder(path, self.target, target_base)
@@ -76,7 +76,7 @@ class BuildCandidate(object):
 			target_name = os.path.basename(self.target)
 			if target_name == GUPFILE or os.path.splitext(target_name)[1].lower() == '.gup':
 				# gupfiles cannot be built by implicit targets
-				log.debug("indirect build not supported for target %s", target_name)
+				_log.debug("indirect build not supported for target %s", target_name)
 				return None
 
 		with open(path) as f:
@@ -85,7 +85,7 @@ class BuildCandidate(object):
 			except AssertionError as e:
 				reason = " (%s)" % (e.message,) if e.message else ""
 				raise SafeError("Invalid %s: %s%s" % (GUPFILE, path, reason))
-			log.trace("Parsed gupfile: %r" % rules)
+			_log.trace("Parsed gupfile: %r" % rules)
 	
 		match_target = self.target
 		# always use `/` as path sep in gupfile patterns
@@ -286,9 +286,9 @@ class MatchRule(object):
 					raise ValueError("Invalid pattern: %s" % (self.text))
 		regexp += '$'
 		regexp = re.compile(regexp)
-		log.trace("Compiled %r -> %r" % (self.text, regexp.pattern))
+		_log.trace("Compiled %r -> %r" % (self.text, regexp.pattern))
 		def match(f):
-			log.trace("Matching %r against %r" % (f, regexp.pattern))
+			_log.trace("Matching %r against %r" % (f, regexp.pattern))
 			return bool(regexp.match(f))
 		self.match = match
 		return self.match(f)

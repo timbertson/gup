@@ -3,7 +3,6 @@ import errno
 import logging
 from .log import getLogger
 from .var import IS_WINDOWS
-log = getLogger(__name__)
 
 __all__ = ['mkdirp', 'get_mtime', 'try_remove', 'samefile', 'rename']
 

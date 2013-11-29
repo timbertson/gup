@@ -7,7 +7,7 @@ from .state import FileDependency, TargetState
 from .error import Unbuildable, TargetFailed, SafeError
 from .var import IS_ROOT
 
-log = getLogger(__name__)
+_log = getLogger(__name__)
 
 class Task(object):
 	'''
@@ -53,7 +53,7 @@ class Task(object):
 			TargetState(self.parent_target).add_dependency(dep)
 	
 	def handle_result(self, rv):
-		log.trace("build process exited with status: %r" % (rv,))
+		_log.trace("build process exited with status: %r" % (rv,))
 		if rv == 0:
 			return
 		if rv == SafeError.exitcode:
@@ -64,9 +64,9 @@ class Task(object):
 
 	def report_nobuild(self):
 		if IS_ROOT:
-			log.info("%s: up to date", self.target_path)
+			_log.info("%s: up to date", self.target_path)
 		else:
-			log.trace("%s: up to date", self.target_path)
+			_log.trace("%s: up to date", self.target_path)
 
 
 class TaskRunner(object):

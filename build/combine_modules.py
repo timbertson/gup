@@ -51,7 +51,6 @@ def main():
 			output.write('\n'.join(lines))
 
 		main_section = None
-		log_defined = False
 		for filename in files:
 			if not filename.endswith('.py'):
 				continue
@@ -110,13 +109,8 @@ def main():
 							main_section.append(line)
 						continue
 
-					if line.startswith('log ='):
-						if log_defined:
-							continue
-						else:
-							log_defined = True
 					# fix getLogger calls to not use __main__
-					line = re.sub('(.*getLogger\()__name__', r"\1'gup.main'", line)
+					line = re.sub('(.*getLogger\()__name__', r"\1'gup.%s'" % (mod,), line)
 					output.write(line + '\n')
 
 		assert main_section, "No main section found!"
