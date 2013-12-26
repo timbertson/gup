@@ -30,11 +30,13 @@ intimate knowledge of build internals to maintain correct dependencies.
 A repository-local installation is the most foolproof at the moment.
 
  - From a git checkout:
-   `make bin`
-   cp bin/* <your-project-workspace>/tools
+
+        make bin
+        cp bin/* <your-project-workspace>/tools
 
  - From a released tarball:
-   cp bin/* <your-project-workspace>/tools
+
+        cp bin/* <your-project-workspace>/tools
 
 **Note**: When run from a relative or absolute path, `gup`
 will bootstrap itself by adding the directory containing
