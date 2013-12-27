@@ -676,6 +676,7 @@ cat $files &gt; "$1"</code></pre>
 		</div>
 	</rich-description>
 	<group>
+		<environment insert="bin" name="PATH" mode="prepend"/>
 		<command name="run" path="bin/gup">
 			<environment insert="bin" mode="prepend" name="PATH"/>
 			<runner interface="http://repo.roscidus.com/python/python"/>
