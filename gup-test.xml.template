@@ -1,0 +1,63 @@
+<?xml version="1.0" ?>
+<?xml-stylesheet type='text/xsl' href='interface.xsl'?>
+<interface
+	xmlns="http://zero-install.sourceforge.net/2004/injector/interface"
+	xmlns:compile="http://zero-install.sourceforge.net/2006/namespaces/0compile"
+	xmlns:release="http://zero-install.sourceforge.net/2007/namespaces/0release">
+
+	<name>gup</name>
+	<summary>gup</summary>
+	<description>
+	</description>
+	<feed-for interface="http://gfxmonk.net/dist/0install/DONT_PUBLISH.xml"/>
+
+	<group>
+		<command name="run" path="bin/gup">
+			<environment insert="bin" name="PATH" mode="prepend"/>
+			<runner interface="http://repo.roscidus.com/python/python"/>
+		</command>
+		<command name="local" path="test/bin/gup">
+			<environment insert="test/bin" name="PATH" mode="prepend"/>
+			<environment insert="" name="PYTHONPATH" mode="prepend"/>
+			<runner interface="http://repo.roscidus.com/python/python"/>
+		</command>
+		<command name="test">
+			<!-- unit tests run from raw source code -->
+			<environment insert="test/bin" name="PATH" mode="prepend"/>
+			<environment insert="" name="PYTHONPATH" mode="prepend"/>
+			<requires interface="http://gfxmonk.net/dist/0install/mocktest.xml"/>
+			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml"/>
+			<arg>--with-doctest</arg>
+		</command>
+		<command name="integration-test">
+			<!-- integration tests run the same tests as `unit`, but using the built gup script -->
+			<environment mode="replace" name="GUP_EXE" insert="bin/gup"/>
+			<requires interface="http://gfxmonk.net/dist/0install/mocktest.xml"/>
+			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml"/>
+			<arg>--with-doctest</arg>
+		</command>
+
+		<!-- minimal test commands run without nosetests plugins,
+		     which don't often work so well on windows -->
+		<command name="test-min">
+			<environment insert="test/bin" name="PATH" mode="prepend"/>
+			<environment value="gup" name="GUP_EXE" mode="replace"/>
+			<environment insert="" name="PYTHONPATH" mode="prepend"/>
+			<requires interface="http://gfxmonk.net/dist/0install/mocktest.xml"/>
+			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml" command="core"/>
+		</command>
+
+		<command name="integration-test-min">
+			<environment mode="replace" name="GUP_EXE" insert="bin/gup"/>
+			<requires interface="http://gfxmonk.net/dist/0install/mocktest.xml"/>
+			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml" command="core"/>
+		</command>
+
+		<implementation version="{version}" released="{date}">
+			<manifest-digest/>
+			<archive href="{archive}"/>
+		</implementation>
+	</group>
+
+</interface>
+
