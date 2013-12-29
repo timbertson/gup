@@ -5,14 +5,16 @@ let log = Logging.get_logger "gup.cmd"
 
 module Actions =
 struct
+	open OptParse
+
 	let _get_parent_target () =
 		let target_var = Var.get("GUP_TARGET") in
-		Option.map (fun p ->
+		target_var |> Option.map (fun p ->
 			if not @@ Utils.is_absolute p then
 				raise (Invalid_argument ("relative path in $GUP_TARGET: " ^ p))
 			else
 				p
-		) target_var
+		)
 	
 	let _assert_parent_target action : string =
 		match _get_parent_target () with
@@ -57,20 +59,19 @@ struct
 			) parent_target;
 
 			let target : Builder.target option = (Builder.prepare_build path) in
-			match target with
-				| None -> (
-					if OptParse.Opt.get update && (Sys.file_exists path) then
+			begin match target with
+				| None ->
+					if Opt.get update && (Sys.file_exists path) then
 						_report_nobuild path
 					else
 						raise (Error.Unbuildable path)
-				)
 				| Some t -> ignore @@ t#build true
-			;
+			end;
 			(* add dependency to parent *)
 			parent_target |> Option.may (fun parent_path ->
 				let mtime = Util.get_mtime path in
 				let checksum = Option.bind target (fun target ->
-					Option.bind (new State.target_state parent_path)#deps (fun deps -> deps#checksum)
+					Option.bind target#state#deps (fun deps -> deps#checksum)
 				) in
 
 				let parent_state = (new State.target_state parent_path) in
@@ -79,8 +80,6 @@ struct
 		in
 		posargs |> List.iter build_target
 	
-	let clean posargs = failwith "TODO"
-
 	let mark_ifcreate files =
 		if List.length files < 1 then Common.raise_safe "at least one file expected";
 		let parent_target = _assert_parent_target "--ifcreate" in
@@ -108,6 +107,80 @@ struct
 		if List.length args > 0 then Common.raise_safe "no arguments expected";
 		let parent_target = _assert_parent_target "--always" in
 		(new State.target_state parent_target)#mark_always_rebuild
+	
+	let clean
+		~(force:bool Opt.t)
+		~(dry_run:bool Opt.t)
+
+		~(metadata:bool Opt.t)
+		~(interactive:bool Opt.t)
+		dests
+	=
+		let metadata = Opt.get metadata in
+		let interactive = Opt.get interactive in
+		let force = match (Opt.get force, Opt.get dry_run) with
+			| (true, false) -> true
+			| (false, true) -> false
+			| _ -> Common.raise_safe "Exactly one of --force or --dry-run must be given"
+		in
+		let rm ?(isfile=false) path =
+			Return.label (fun rv ->
+				if not force then (
+					Printf.printf "Would remove: %s\n" path;
+					Return.return rv ()
+				);
+
+				Printf.eprintf "Removing: %s\n" path;
+				if interactive then (
+					Printf.eprintf "    [Y/n]: ";
+					flush_all ();
+					let response = String.trim (read_line ()) in
+					if not @@ List.mem response ["y";"Y";""] then (
+						Printf.eprintf "Skipped.\n";
+						Return.return rv ()
+					)
+				);
+				if isfile
+					then Sys.remove path
+					else Utils.rmtree path
+			)
+		in
+		let dests = if dests = [] then ["."] else dests in
+		List.enum dests |> Enum.iter (fun root ->
+			let ignore_hidden dirs =
+				dirs |> List.filter (fun dir ->
+					not @@ String.starts_with dir "."
+				)
+			in
+			Utils.walk root (fun base dirs files ->
+				let removed_dirs = ref [] in
+				if List.mem State.meta_dir_name dirs then (
+					let gupdir = Filename.concat base State.meta_dir_name in
+					if not metadata then (
+						(* remove any extant targets *)
+						let built_targets = State.built_targets gupdir in
+						List.enum built_targets |> Enum.iter (fun dep ->
+							let path = (Filename.concat base dep) in
+							if Option.is_some (Gupfile.for_target path) then (
+								if List.mem dep files then
+									rm ~isfile:true path
+								else if List.mem dep dirs then (
+									rm path;
+									removed_dirs := dep :: !removed_dirs
+								)
+							)
+						)
+					);
+					rm gupdir
+				)
+				;
+				(* return all dirs that we should recurse into *)
+				dirs |> ignore_hidden |> List.filter (fun dir -> not @@ List.mem dir !removed_dirs)
+			)
+		)
+
+
+
 end
 
 module Options =
@@ -156,7 +229,7 @@ struct
 		add options ~short_name:'n' ~long_name:"dry-run" ~help:"Just print files that would be removed" dry_run;
 		add options ~short_name:'f' ~long_name:"force" ~help:"Actually remove files" force;
 		add options ~short_name:'m' ~long_name:"metadata" ~help:"Remove .gup metadata directories, but leave targets" metadata;
-		action := Actions.clean;
+		action := Actions.clean ~force:force ~dry_run:dry_run ~metadata:metadata ~interactive:interactive;
 		options
 	;;
 

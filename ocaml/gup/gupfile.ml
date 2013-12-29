@@ -31,9 +31,7 @@ let regexp_of_rule text =
 		| Str.Delim "**" -> ".*"
 		| _ -> Common.raise_safe "Invalid pattern: %s" text
 	) in
-	let re_str = ("^" ^ (String.concat "" re_parts) ^ "$") in
-	log#trace "converted pattern %s -> %s" text re_str;
-	re_str
+	("^" ^ (String.concat "" re_parts) ^ "$")
 
 class match_rule (text:string) =
 	let invert = String.left text 1 = "!" in

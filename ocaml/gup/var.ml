@@ -11,7 +11,7 @@ let is_root = not @@ has_env "GUP_ROOT"
 
 let (run_id, root_cwd) = if is_root then
 	begin
-		let runid = string_of_int (Util.int_time (Unix.time ()))
+		let runid = string_of_int (Util.int_time (Unix.gettimeofday ()))
 		and root = Sys.getcwd () in
 		Unix.putenv "GUP_RUNID" runid;
 		Unix.putenv "GUP_ROOT" root;

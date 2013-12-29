@@ -17,7 +17,7 @@ def get_mtime(path):
 	Note: we return a microsecond int as this serializes to / from strings better
 	'''
 	try:
-		return int(os.lstat(path).st_mtime * (10 ** 6))
+		return int(os.lstat(path).st_mtime * (10 ** 3))
 	except OSError as e:
 		if e.errno == errno.ENOENT:
 			return None

@@ -1,3 +1,7 @@
-true: debug, package(batteries,unix,fileutils,sha)
+#true: debug, package(batteries,unix,fileutils,sha)
+
+#temporary: use `core` for its better mtime support
+true: debug, package(batteries,unix,fileutils,sha,core),thread
+
 "gup": for-pack(Gup)
 <test*> or <test/*>: package(oUnit)

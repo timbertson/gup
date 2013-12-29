@@ -4,10 +4,13 @@ open Std
 let int_time (time:float) : int = int_of_float (time *. 1000.0)
 let get_mtime (path:string) : int option =
 	let stats = try
-		Some (Unix.lstat path)
+		(*XXX stop using `core` just for this...*)
+		(* Some (Unix.lstat path) *)
+		Some (Core.Core_unix.stat path)
 	with Unix.Unix_error (Unix.ENOENT, _, _) -> None
 	in
-	Option.map (fun st -> int_time (st.Unix.st_mtime)) stats
+	(* Option.map (fun st -> int_time (st.Unix.st_mtime)) stats *)
+	Option.map (fun st -> int_time (st.Core.Core_unix.st_mtime)) stats
 
 let try_remove (path:string) =
 	(* Remove a file. Ignore if it doesn't exist *)

@@ -191,13 +191,12 @@ class TestChecksums(TestCase):
 	def test_parent_of_checksum_is_rebult_if_checksum_contents_changes(self):
 		self.assertRebuilds('parent', lambda: self.write('input', 'ok2'))
 
+	@skipPermutations
 	def test_checksum_accepts_a_number_of_files_instead_of_stdin(self):
 		self.write('firstline', 'line1')
 		self.write('secondline', 'line2')
 		self.write('cs_onefile.gup', BASH + 'gup --always; gup --contents input')
 		self.write('cs_twofile.gup', BASH + 'gup --always; gup --contents firstline secondline')
-
-		# self.build_u('cs', 'cs_onefile', 'cs_twofile')
 
 		def assertChecksumChanges(target, f):
 			self.build_u(target)

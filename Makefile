@@ -23,7 +23,10 @@ gup-local.xml: gup.xml.template
 test: unit-test integration-test
 
 unit-test: ocaml/unit-test python/unit-test
+
+integration-test-pre: ocaml/integration-test-pre python/integration-test-pre
 integration-test: ocaml/integration-test python/integration-test
+	python ./run_tests.py -i
 
 # Minimal test action: runs full tests, with minimal dependencies.
 # This is the only test target that is likely to work on windows

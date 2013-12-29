@@ -1,5 +1,7 @@
 open Batteries
 
+val meta_dir_name : string
+val built_targets : string -> string list
 
 type 'a dirty_result =
 	| Known of bool
@@ -17,10 +19,11 @@ class target_state : string ->
 		method mark_always_rebuild : unit
 	end
 
-and dependencies : IO.input ->
+and dependencies : string -> IO.input ->
 	object
-		method is_dirty : Gupfile.builder option -> bool -> (target_state list) dirty_result
+		method is_dirty : Gupfile.builder -> bool -> (target_state list) dirty_result
 		method checksum : string option
 		method already_built : bool
 		method children : string list
+		method print : unit IO.output -> unit
 	end

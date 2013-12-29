@@ -38,8 +38,8 @@ class target (builder:Gupfile.builder) =
 	let state = new State.target_state path in
 
 	(* XXX DUPLICATED *)
-	let create_target b = new target b in
-	let prepare_build path =
+	let create_target b : target = new target b in
+	let prepare_build path : target option =
 		let builder = Gupfile.for_target path in
 		log#trace "Prepare_build %a -> %a"
 			String.print_quoted path
@@ -48,44 +48,45 @@ class target (builder:Gupfile.builder) =
 	in
 	(* XXX end duplication *)
 
-	let rec _is_dirty state =
+	let rec _is_dirty (state:State.target_state) (builder:Gupfile.builder) =
 		(*
 		* Returns whether the dependency is dirty.
 		* Builds any targets required to check dirtiness
 		*)
-		let builder = Gupfile.for_target state#path in
-		match state#deps with
-			| None -> (
-				if Option.is_none builder then
-					(* not a target *)
-					false
-				else (
+		Return.label (fun result ->
+			match state#deps with
+				| None -> (
 					log#debug "DIRTY: %s (is buildable but has no stored deps)" state#path;
 					true
 				)
-			)
-			| Some deps -> (
-				if deps#already_built then (
-					log#trace "CLEAN: %s has already been built in this invocation" state#path;
-					false
-				) else (
+				| Some deps -> (
+					if deps#already_built then (
+						log#trace "CLEAN: %s has already been built in this invocation" state#path;
+						Return.return result false
+					)
+					;
 					let rec deps_dirty built =
 						let dirty = deps#is_dirty builder built in
-						(* log#trace "deps.is_dirty(%r) -> %r" state.path, dirty) *)
+						(* log#trace "deps.is_dirty(%r) -> %r" state.path, dirty *)
 						match dirty with
-						| State.Known true -> true
+						| State.Known true -> (Return.return result true)
 						| State.Known false -> (
 							(* not directly dirty - recurse children
 							* and return `true` for the first dirty one, otherwise `false`
 							*)
-							List.enum deps#children |> Enum.filter_map (fun path ->
+							List.enum deps#children |> Enum.iter (fun path ->
 								log#trace "Recursing over dependency: %s" path;
-								let child = new State.target_state path in
-								if _is_dirty child then (
-									log#trace "_is_dirty(%s) -> True" child#path;
-									Some true
-								) else None
-							) |> Enum.get |> Option.default false
+								match Gupfile.for_target path with
+									| None -> log#trace "CLEAN: not a target"
+									| Some builder ->
+										let child_state = new State.target_state path in
+										if _is_dirty child_state builder then (
+											log#trace "_is_dirty(%s) -> True" child_state#path;
+											Return.return result true
+										)
+							)
+							;
+							false
 						)
 						| State.Unknown deps -> (
 							if built then
@@ -104,12 +105,13 @@ class target (builder:Gupfile.builder) =
 					in
 					deps_dirty false
 				)
-			)
+		)
 	in
 
 	object (self)
 		method path = path
 		method repr = "Target(" ^ builder#repr ^ ")"
+		method state = state
 
 		method build update =
 			state#perform_build
@@ -121,18 +123,17 @@ class target (builder:Gupfile.builder) =
 			if not (Sys.file_exists exe_path) then
 				Common.raise_safe "Builder does not exist: %s" exe_path;
 
-			if not (_is_dirty state) then (
+			if not (_is_dirty state builder) then (
 				log#trace("no build needed");
 				false
 			) else (
 				let basedir = builder#basedir in
 				Utils.makedirs basedir;
 
-				let env = Array.concat [
-					[| "GUP_TARGET="^(Utils.abspath self#path) |];
-					(* TODO: jwack.build_env *)
-					Unix.environment ()
-				] in
+				let env = Unix.environment_map ()
+					|> EnvironmentMap.add "GUP_TARGET" (Utils.abspath self#path)
+					|> EnvironmentMap.array
+				in
 
 				let target_relative_to_cwd = Util.relpath ~from:Var.root_cwd self#path in
 				let output_file = Utils.abspath (state#meta_path "out") in
@@ -211,9 +212,9 @@ class target (builder:Gupfile.builder) =
 			)
 	end
 
-let create_target b = new target b
+let create_target b : target = new target b
 
-let prepare_build path =
+let prepare_build path : target option =
 	let builder = Gupfile.for_target path in
 	log#trace "Prepare_build %a -> %a"
 		String.print_quoted path

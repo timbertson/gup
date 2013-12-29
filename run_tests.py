@@ -14,6 +14,10 @@ args = sys.argv[2:]
 
 cwd = os.getcwd()
 kind = os.path.basename(cwd)
+kinds = ('python', 'ocaml')
+if kind not in kinds:
+	kind = None
+
 root = os.path.abspath(os.path.dirname(__file__))
 test_dir = os.path.join(root, 'test')
 
@@ -33,7 +37,11 @@ try:
 
 	if action == INTEGRATION:
 		# run without adding to PATH
-		os.environ['GUP_EXE'] = os.path.join(cwd, 'bin', 'gup')
+		if kind is None:
+			exe = os.pathsep.join([os.path.join(cwd, kind, 'bin', 'gup') for kind in kinds])
+		else:
+			exe = os.path.join(cwd, 'bin', 'gup')
+		os.environ['GUP_EXE'] = exe
 		run_nose(['-w', test_dir] + args)
 	else:
 		assert action == UNIT

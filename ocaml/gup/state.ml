@@ -31,11 +31,25 @@ let version_marker = "version: "
 let readline f = try Some (IO.read_line f) with IO.No_more_input -> None
 let int_option_of_string s = try Some (Int.of_string s) with Invalid_argument _ -> None
 
+let built_targets dir =
+	let contents = Sys.readdir dir in
+	contents |> Array.filter_map (fun f ->
+		if String.ends_with f ".deps"
+			then Some (Tuple.Tuple2.first (String.rsplit f "."))
+			else None
+	) |> Array.to_list
+
 class run_id id =
 	object (self)
 		method is_current = id = Var.run_id
+		method repr = "run_id(" ^ id ^ ")"
+		method fields = [id]
+		method tag = RunId
+		method print (out: unit IO.output) =
+			Printf.fprintf out "run_id(%s)" id
 	end
 
+let current_run_id = new run_id Var.run_id
 
 type 'a intermediate_dependencies = {
 	checksum: string option ref;
@@ -77,13 +91,18 @@ let write_dependency output (tag,fields) =
 	if List.length fields <> typ.num_fields then Common.raise_safe "invalid fields";
 	IO.write_line output @@ (string_of_dependency_type tag) ^ ": " ^ (String.join " " fields)
 
-class virtual base_dependency = object
+class virtual base_dependency = object (self)
 	method virtual tag : dependency_type
 	method virtual fields : string list
 	method virtual is_dirty : dirty_args -> target_state dirty_result
-	method recursive = false
+	method print out =
+		Printf.fprintf out "<#%s: %a>"
+			(string_of_dependency_type self#tag)
+			(List.print String.print_quoted) self#fields
+	method child : string option = None
 end
 
+(* TODO: can this just be a serializable subclass of base_dependency? *)
 and unserializable = object
 	method tag : dependency_type = assert false
 	method fields : string list = assert false
@@ -93,7 +112,7 @@ and file_dependency ~(mtime:int option) ~(checksum:string option) (path:string) 
 	object (self)
 		inherit base_dependency
 		method tag = FileDependency
-		method recursive = true
+		method child = Some path
 		method fields =
 			let mtime_str = Option.default "0" (Option.map string_of_int mtime) in
 			let checksum_str = Option.default empty_checksum checksum in
@@ -148,9 +167,17 @@ and file_dependency ~(mtime:int option) ~(checksum:string option) (path:string) 
 
 and builder_dependency ~mtime ~checksum path =
 	object (self)
-		inherit file_dependency ~mtime ~checksum path
-		method recursive = false
+		inherit file_dependency ~mtime ~checksum path as super
+		method child : string option = None
 		method tag = Builder
+		method is_dirty args =
+			let builder_path = args.builder_path in
+			assert (not @@ Utils.is_absolute builder_path);
+			assert (not @@ Utils.is_absolute path);
+			if builder_path <> path then (
+				log#debug "DIRTY: builder changed from %s -> %s" path builder_path;
+				Known true
+			) else super#is_dirty args
 	end
 
 and never_built =
@@ -189,7 +216,7 @@ and build_time time =
 			)
 	end
 
-and dependencies (input:IO.input) =
+and dependencies target_path (input:IO.input) =
 	let update_singleton r v =
 		assert (Option.is_none !r);
 		r := v;
@@ -261,24 +288,54 @@ and dependencies (input:IO.input) =
 			| None -> false
 			| Some r -> r#is_current
 
-		method children : string list = [] (* TODO... *)
+		method children : string list = !(data.rules) |> List.filter_map (fun dep ->
+			dep#child
+		)
 
-		method is_dirty (builder: Gupfile.builder option) (built:bool) : (target_state list) dirty_result =
-			Known true
-			(* method is_dirty = *)
-			(* 	(Enum.filter_map *)
-			(* 		(fun r -> *)
-			(* 			let state = r#is_dirty in *)
-			(* 			match state with *)
-			(* 			| Known false -> None (* ignore clean targets *) *)
-			(* 			| _ -> Some state) *)
-			(* 		rules *)
-			(* 	) |> Enum.get |> Option.or_else (Known false) *)
+		method print out =
+			Printf.fprintf out "<#Dependencies(run=%a, cs=%a, rules=%a)>"
+				(Option.print print_obj) !(data.run_id)
+				(Option.print String.print) !(data.checksum)
+				(List.print print_obj) !(data.rules)
+
+		method is_dirty (builder: Gupfile.builder) (built:bool) : (target_state list) dirty_result =
+			Return.label (fun rv ->
+				if not (Sys.file_exists target_path) then (
+					log#debug "DIRTY: %s (target does not exist)" target_path;
+					Return.return rv (Known true)
+			)
+			;
+			let base_path = Filename.dirname target_path in
+			let args = {
+				path = target_path;
+				base_path = base_path;
+				builder_path = Util.relpath ~from:base_path builder#path;
+				built = built
+			} in
+
+				let unknown_states = List.enum !(data.rules) |> Enum.filter_map (fun r ->
+					let state = r#is_dirty args in
+					match state with
+					| Known false -> None (* ignore clean targets *)
+					| Known true -> (
+						log#trace "is_dirty: %s returning true" target_path;
+						Return.return rv (Known true)
+					)
+					| Unknown state -> Some state
+				) |> List.of_enum in
+				if List.length unknown_states = 0 then (
+					log#trace "is_dirty: %s returning false" target_path;
+					Known false
+				) else (
+					log#trace "is_dirty: %s returning %a" target_path (List.print print_repr) unknown_states;
+					Unknown unknown_states
+				)
+			)
 
 		method checksum = !(data.checksum)
 end
 
-and target_state (path:string) =
+and target_state (target_path:string) =
 	object (self)
 		method private ensure_meta_path ext =
 			let p = self#meta_path ext in
@@ -286,8 +343,8 @@ and target_state (path:string) =
 			p
 
 		method meta_path ext =
-			let base = Filename.dirname path in
-			let target = Filename.basename path in
+			let base = Filename.dirname target_path in
+			let target = Filename.basename target_path in
 			let meta_dir = Filename.concat base meta_dir_name in
 			Filename.concat meta_dir (target ^ "." ^ ext)
 
@@ -295,16 +352,16 @@ and target_state (path:string) =
 			(* TODO: lock this file *)
 			ignore @@ self#ensure_meta_path "deps"
 
-		method path = path
+		method path = target_path
 		
 		method repr =
-			"TargetState(" ^ path ^ ")"
+			"TargetState(" ^ target_path ^ ")"
 
 		method private parse_dependencies path : dependencies option =
 			if Sys.file_exists path then (
 				self#ensure_dep_lock;
 				File.with_file_in path (fun f ->
-					Some (new dependencies f)
+					Some (new dependencies target_path f)
 				)
 			) else
 				None
@@ -312,7 +369,7 @@ and target_state (path:string) =
 		method deps =
 			let deps_path = self#meta_path "deps" in
 			let deps = self#parse_dependencies deps_path in
-			(* log#trace "Loaded serialized state: %a" print_repr deps; *)
+			log#trace "Loaded serialized state: %a" (Option.print print_obj) deps;
 			deps
 
 
@@ -327,6 +384,7 @@ and target_state (path:string) =
 
 		method add_file_dependency ~(mtime:int option) ~(checksum:string option) path =
 			let dep = (new file_dependency ~mtime:mtime ~checksum:checksum path) in
+			log#trace "Adding dependency %s -> %a" (Filename.basename target_path) print_obj dep;
 			self#add_dependency (serializable dep)
 
 		method add_checksum checksum =
@@ -347,7 +405,8 @@ and target_state (path:string) =
 			File.with_file_out temp (fun file ->
 				IO.write_line file (version_marker ^ (string_of_int format_version));
 				(* TODO: make Dependencies module to store init stuff *)
-				write_dependency file (serializable builder_dep)
+				write_dependency file (serializable builder_dep);
+				write_dependency file (serializable current_run_id)
 			);
 			let built = try
 				block exe

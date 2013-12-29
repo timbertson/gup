@@ -197,6 +197,21 @@ let getenv_ex system name =
   | Some value -> value
   | None -> raise_safe "Environment variable '%s' not set" name
 
+let readdir_exc sys path =
+  match sys#readdir path with
+  | Success files -> files
+  | Problem ex -> raise_safe "Can't read directory '%s': %s" path (Printexc.to_string ex)
+
+let walk root fn : unit =
+  let sys = System.real_system in
+  let rec _walk path =
+    let contents = readdir_exc sys path in
+    let (dirs, files) = List.partition (fun name -> Sys.is_directory (path +/ name)) (Array.to_list contents) in
+    let dirs = fn path dirs files in
+    Batteries.List.enum dirs |> Batteries.Enum.iter (fun dir -> _walk dir)
+  in
+  _walk root
+
 let rmtree ?(sys:system = System.real_system) root =
   try
     let rec rmtree path =
