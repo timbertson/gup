@@ -159,7 +159,7 @@ def _mark_ifcreate(opts, files):
 		parent_state.add_dependency(FileDependency.relative_to_target(parent_target, mtime=None, checksum=None, path = filename))
 
 def _mark_contents(opts, targets):
-	parent_target = _assert_parent_target('--content')
+	parent_target = _assert_parent_target('--contents')
 	if len(targets) == 0:
 		assert not sys.stdin.isatty()
 		checksum = Checksum.from_stream(sys.stdin)
