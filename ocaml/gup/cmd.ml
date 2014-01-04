@@ -1,3 +1,4 @@
+open Std
 open Batteries
 open Extlib
 
@@ -10,7 +11,7 @@ struct
 	let _get_parent_target () =
 		let target_var = Var.get("GUP_TARGET") in
 		target_var |> Option.map (fun p ->
-			if not @@ Utils.is_absolute p then
+			if not @@ Util.is_absolute p then
 				raise (Invalid_argument ("relative path in $GUP_TARGET: " ^ p))
 			else
 				p
@@ -18,7 +19,7 @@ struct
 	
 	let _assert_parent_target action : string =
 		match _get_parent_target () with
-			| None -> Common.raise_safe "%s was used outside of a gup target" action
+			| None -> Error.raise_safe "%s was used outside of a gup target" action
 			| Some p -> p
 
 	let _init_path () =
@@ -30,17 +31,17 @@ struct
 		   (Var.get_or "GUP_IN_PATH" "0") <> "1" then (
 			(* gup may have been run as a relative / absolute script - check *)
 			(* whether our directory is in $PATH *)
-			let bin_path = Filename.dirname @@ Utils.abspath (progname) in
-			let path_entries : string list = existing_path |> String.nsplit ~by: Util.pathsep in
+			let bin_path = Filename.dirname @@ Util.abspath (progname) in
+			let path_entries : string list = existing_path |> String.nsplit ~by: Util.path_sep in
 			let already_in_path = List.enum path_entries |> Enum.exists (
 				fun entry ->
 					(not @@ String.is_empty entry) &&
-					Util.samefile bin_path (Utils.abspath entry)) in
+					Util.samefile bin_path (Util.abspath entry)) in
 			if already_in_path then
 				log#trace("found `gup` in $PATH")
 			else (
 				log#trace "`gup` not in $PATH - adding %s" bin_path;
-				Unix.putenv "PATH" @@ bin_path ^ Util.pathsep ^ existing_path
+				Unix.putenv "PATH" @@ bin_path ^ Util.path_sep ^ existing_path
 			)
 		);
 		Unix.putenv "GUP_IN_PATH" "1"
@@ -48,45 +49,52 @@ struct
 	let _report_nobuild path =
 		(if Var.is_root then log#info else log#trace) "%s: up to date" path
 
-	let build update posargs =
+	let build ~update ~jobs posargs =
+		let update = Opt.get update in
 		_init_path ();
 
-		let parent_target = _get_parent_target () in
-		let build_target (path:string) : unit =
-			Option.may (fun parent ->
-				if Util.samefile (Utils.abspath path) parent then
-					raise (Invalid_argument ("Target "^path^" attempted to build itself"));
-			) parent_target;
+		let jobs = Opt.get jobs in
+		assert (jobs > 0 && jobs < 1000);
+		Parallel.Jobserver.setup jobs (fun () ->
+			let parent_target = _get_parent_target () in
+			let build_target (path:string) : unit Lwt.t =
+				Option.may (fun parent ->
+					if Util.samefile (Util.abspath path) parent then
+						raise (Invalid_argument ("Target "^path^" attempted to build itself"));
+				) parent_target;
 
-			let target : Builder.target option = (Builder.prepare_build path) in
-			begin match target with
-				| None ->
-					if Opt.get update && (Sys.file_exists path) then
-						_report_nobuild path
-					else
-						raise (Error.Unbuildable path)
-				| Some t -> ignore @@ t#build true
-			end;
-			(* add dependency to parent *)
-			parent_target |> Option.may (fun parent_path ->
-				let mtime = Util.get_mtime path in
-				let checksum = Option.bind target (fun target ->
-					Option.bind target#state#deps (fun deps -> deps#checksum)
-				) in
+				let target : Builder.target option = (Builder.prepare_build path) in
+				lwt (_:bool) = begin match target with
+					| None ->
+						if update && (Sys.file_exists path) then (
+							_report_nobuild path;
+							Lwt.return false
+						) else
+							raise (Error.Unbuildable path)
+					| Some t -> t#build update
+				end in
+				(* add dependency to parent *)
+				parent_target |> Option.map (fun parent_path ->
+					lwt mtime = Util.get_mtime path
+					and checksum = target |> Lwt_option.bind (fun target ->
+						lwt deps = target#state#deps in
+						Lwt.return (Option.bind deps (fun deps -> deps#checksum))
+					) in
 
-				let parent_state = (new State.target_state parent_path) in
-				parent_state#add_file_dependency ~checksum:checksum ~mtime:mtime path
-			)
-		in
-		posargs |> List.iter build_target
+					let parent_state = (new State.target_state parent_path) in
+					parent_state#add_file_dependency ~checksum:checksum ~mtime:mtime path
+				) |> Option.default Lwt.return_unit
+			in
+			Lwt_list.iter_p build_target posargs
+		)
 	
 	let mark_ifcreate files =
-		if List.length files < 1 then Common.raise_safe "at least one file expected";
+		if List.length files < 1 then Error.raise_safe "at least one file expected";
 		let parent_target = _assert_parent_target "--ifcreate" in
 		let parent_state = new State.target_state parent_target in
-		List.enum files |> Enum.iter (fun filename ->
+		files |> Lwt_list.iter_s (fun filename ->
 			if Sys.file_exists filename then
-				Common.raise_safe "File already exists: %s" filename
+				Error.raise_safe "File already exists: %s" filename
 			;
 			parent_state#add_file_dependency ~mtime:None ~checksum:None filename
 		)
@@ -95,7 +103,7 @@ struct
 		let parent_target = _assert_parent_target "--contents" in
 		let checksum =
 			if List.length targets = 0 then (
-				if (Unix.isatty Unix.stdin) then Common.raise_safe "stdin is a TTY";
+				if (Unix.isatty Unix.stdin) then Error.raise_safe "stdin is a TTY";
 				Checksum.from_stream IO.stdin
 			) else (
 				Checksum.from_files targets
@@ -104,7 +112,7 @@ struct
 		(new State.target_state parent_target)#add_checksum checksum
 
 	let mark_always args =
-		if List.length args > 0 then Common.raise_safe "no arguments expected";
+		if List.length args > 0 then Error.raise_safe "no arguments expected";
 		let parent_target = _assert_parent_target "--always" in
 		(new State.target_state parent_target)#mark_always_rebuild
 	
@@ -121,7 +129,7 @@ struct
 		let force = match (Opt.get force, Opt.get dry_run) with
 			| (true, false) -> true
 			| (false, true) -> false
-			| _ -> Common.raise_safe "Exactly one of --force or --dry-run must be given"
+			| _ -> Error.raise_safe "Exactly one of --force or --dry-run must be given"
 		in
 		let rm ?(isfile=false) path =
 			Return.label (fun rv ->
@@ -142,7 +150,7 @@ struct
 				);
 				if isfile
 					then Sys.remove path
-					else Utils.rmtree path
+					else Util.rmtree path
 			)
 		in
 		let dests = if dests = [] then ["."] else dests in
@@ -152,7 +160,7 @@ struct
 					not @@ String.starts_with dir "."
 				)
 			in
-			Utils.walk root (fun base dirs files ->
+			Util.walk root (fun base dirs files ->
 				let removed_dirs = ref [] in
 				if List.mem State.meta_dir_name dirs then (
 					let gupdir = Filename.concat base State.meta_dir_name in
@@ -178,6 +186,8 @@ struct
 				dirs |> ignore_hidden |> List.filter (fun dir -> not @@ List.mem dir !removed_dirs)
 			)
 		)
+		;
+		Lwt.return_unit
 
 
 
@@ -196,7 +206,7 @@ struct
 	let dry_run = StdOpt.store_true ()
 	let force = StdOpt.store_true ()
 	let metadata = StdOpt.store_true ()
-	let action = ref (Actions.build update)
+	let action = ref (Actions.build ~update:update ~jobs:jobs)
 	let clean_mode () =
 		match (Opt.get force, Opt.get dry_run) with
 			| (true, false) -> `Force
@@ -297,13 +307,13 @@ let main () =
 
 		_init_logging !Options.verbosity;
 
-		!Options.action posargs
+		Lwt_main.run (!Options.action posargs)
 	) with
 		| Error.Unbuildable path -> (
 				log#error "Don't know how to build %s" path;
 				exit 1
 		)
-		| Common.Safe_exception (msg, ctx) -> (
+		| Error.Safe_exception (msg, ctx) -> (
 				(* TODO: context?*)
 				log#error "%s" msg;
 				exit 1

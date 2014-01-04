@@ -1,16 +1,17 @@
 open Batteries
 open Std
 
+include Zeroinstall_utils
+
+(* TODO: use Big_int to avoid issues on 32 bit arches *)
 let int_time (time:float) : int = int_of_float (time *. 1000.0)
-let get_mtime (path:string) : int option =
-	let stats = try
-		(*XXX stop using `core` just for this...*)
-		(* Some (Unix.lstat path) *)
-		Some (Core.Core_unix.stat path)
-	with Unix.Unix_error (Unix.ENOENT, _, _) -> None
+let get_mtime (path:string) : int option Lwt.t =
+	lwt stats = try_lwt
+		lwt rv = Lwt_unix.lstat path in
+		Lwt.return @@ Some rv
+	with Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return None
 	in
-	(* Option.map (fun st -> int_time (st.Unix.st_mtime)) stats *)
-	Option.map (fun st -> int_time (st.Core.Core_unix.st_mtime)) stats
+	Lwt.return @@ Option.map (fun st -> int_time (st.Lwt_unix.st_mtime)) stats
 
 let try_remove (path:string) =
 	(* Remove a file. Ignore if it doesn't exist *)
@@ -20,17 +21,16 @@ let try_remove (path:string) =
 
 let print_mtime : (unit IO.output -> int Option.t -> unit) = Option.print Int.print
 
-let pathsep = ":" (* TODO: ";" on windows *)
 let samefile a b =
-	assert (Utils.is_absolute a);
-	assert (Utils.is_absolute b);
+	assert (Zeroinstall_utils.is_absolute a);
+	assert (Zeroinstall_utils.is_absolute b);
 	(* TODO: windows case-insensitivity *)
-	Utils.normpath a = Utils.normpath b
+	Zeroinstall_utils.normpath a = Zeroinstall_utils.normpath b
 
 let relpath ~from path =
 	(* TODO: windows *)
 	let to_list p = List.filter (not $ String.is_empty) @@
-		String.nsplit (Utils.abspath p) Filename.dir_sep
+		String.nsplit (Zeroinstall_utils.abspath p) Filename.dir_sep
 	in
 	let start_list = to_list from in
 	let path_list = to_list path in
@@ -45,3 +45,4 @@ let relpath ~from path =
 	if List.length rel_list = 0
 		then "."
 		else String.join Filename.dir_sep rel_list
+

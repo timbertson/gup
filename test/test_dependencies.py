@@ -11,6 +11,15 @@ class TestDependencies(TestCase):
 		self.write("counter", "2")
 		self.build_u_assert("dep", "COUNT: 2")
 
+	def test_rebuilds_if___update_was_not_specified(self):
+		self.write("counter", "1")
+
+		target = 'dep'
+		self.build(target)
+		mtime = self.mtime(target)
+		self.build(target)
+		self.assertNotEqual(self.mtime(target), mtime, "target %s didn't get rebuilt" % (target,))
+
 	def test_rebuilds_if_file_was_modified_outside_gup(self):
 		self.write("counter", "1")
 		self.build_u_assert("dep", "COUNT: 1")

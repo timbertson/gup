@@ -29,7 +29,7 @@ let regexp_of_rule text =
 		| Str.Text t -> Str.quote t
 		| Str.Delim "*" -> "[^/]*"
 		| Str.Delim "**" -> ".*"
-		| _ -> Common.raise_safe "Invalid pattern: %s" text
+		| _ -> Error.raise_safe "Invalid pattern: %s" text
 	) in
 	("^" ^ (String.concat "" re_parts) ^ "$")
 
@@ -112,7 +112,7 @@ let parse_gupfile_at path =
 	try
 		File.with_file_in path parse_gupfile
 	with Invalid_gupfile (line, reason) ->
-		Common.raise_safe "Invalid gupfile - %s:%d (%s)" path line reason
+		Error.raise_safe "Invalid gupfile - %s:%d (%s)" path line reason
 
 class builder
 	(script_path:string)
@@ -132,7 +132,7 @@ class build_candidate
 	(gupfile:gupfile)
 	(target:string) =
 	object (self)
-		val root = Utils.normpath root
+		val root = Util.normpath root
 		method _base_parts include_gup : string list =
 			let parts = ref [ root ] in
 			(match suffix with
@@ -196,7 +196,7 @@ class build_candidate
 										let base = Filename.concat target_base (Filename.dirname script) in
 										let script_path = Filename.concat (Filename.dirname path) script in
 										if not (Sys.file_exists script_path) then
-											Common.raise_safe "Build script not found: %s\n     %s(specified in %s)" script_path Var.indent path;
+											Error.raise_safe "Build script not found: %s\n     %s(specified in %s)" script_path Var.indent path;
 										Some (new builder
 											script_path
 											(Util.relpath ~from:base (Filename.concat target_base target))
@@ -211,7 +211,7 @@ class build_candidate
 let possible_builders path : build_candidate Enum.t =
 	(* we need an absolute path to tell how far up the tree we should go *)
 	let filename = Filename.basename path and dirname = Filename.dirname path in
-	let dirparts = path_split (Utils.abspath dirname) in
+	let dirparts = path_split (Util.abspath dirname) in
 	let dirdepth = len dirparts in
 	let direct_gupfile = Gupscript (filename ^ ".gup") in
 
@@ -222,7 +222,7 @@ let possible_builders path : build_candidate Enum.t =
 	let direct_target = Enum.singleton @@ new build_candidate dirname None direct_gupfile filename in
 
 	let direct_gup_targets = (Enum.range 0 ~until:dirdepth) |> Enum.map (fun i ->
-		let suff = make_suffix (Utils.slice ~start:(dirdepth - i) dirparts) in
+		let suff = make_suffix (Util.slice ~start:(dirdepth - i) dirparts) in
 		let base = Filename.concat dirname (_up_path i) in
 		new build_candidate base (Some suff) direct_gupfile filename
 	) in
@@ -232,14 +232,14 @@ let possible_builders path : build_candidate Enum.t =
 		 * of how specific the path is - least fuzzy wins.
 		 *
 		 * As `up` increments, we discard a folder on the base path. *)
-		let base_suff = path_join (Utils.slice ~start:(dirdepth - up) dirparts) in
+		let base_suff = path_join (Util.slice ~start:(dirdepth - up) dirparts) in
 		let parent_base = Filename.concat dirname (_up_path up) in
 		let target_id = Filename.concat base_suff filename in
 		Enum.concat @@ List.enum [
 			(Enum.singleton @@ new build_candidate parent_base None Gupfile target_id);
 			(Enum.range 0 ~until:(dirdepth - up)) |> Enum.map (fun i ->
 				(* `i` is how far up the directory tree we're looking for the gup/ directory *)
-				let suff = make_suffix @@ Utils.slice ~start:(dirdepth - i - up) ~stop:(dirdepth - up) dirparts in
+				let suff = make_suffix @@ Util.slice ~start:(dirdepth - i - up) ~stop:(dirdepth - up) dirparts in
 				let base = Filename.concat parent_base (_up_path i) in
 				new build_candidate base (Some suff) Gupfile target_id
 			)]

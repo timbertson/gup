@@ -1,5 +1,7 @@
 open Batteries
 open Std
+open Lwt
+open Parallel
 
 type 'a dirty_result =
 	| Known of bool
@@ -12,6 +14,18 @@ type dirty_args = {
 	built:bool;
 }
 
+let with_file_in path fn =
+	let flags = [Unix.O_CLOEXEC; Unix.O_RDONLY] in
+	Lwt_io.with_file ~flags:flags ~mode:Lwt_io.input path fn
+
+let with_file_out ?(flags) path fn =
+	let default_flags = [Unix.O_CLOEXEC; Unix.O_WRONLY; Unix.O_CREAT] in
+	let flags = match flags with
+		| Some f -> List.concat [default_flags; f]
+		| None -> default_flags
+	in
+	Lwt_io.with_file ~flags:flags ~mode:Lwt_io.output path fn
+
 type dependency_type =
 	| FileDependency
 	| Checksum
@@ -22,19 +36,26 @@ type dependency_type =
 
 let log = Logging.get_logger "gup.state"
 let meta_dir_name = ".gup"
+let deps_ext = "deps"
+let new_deps_ext = "deps2"
 
 let empty_checksum = "-"
 let format_version = 1
 let version_marker = "version: "
 
 (* exceptionless helpers *)
-let readline f = try Some (IO.read_line f) with IO.No_more_input -> None
+let readline f =
+	try_lwt
+		lwt line = Lwt_io.read_line f in
+		Lwt.return @@ Some line
+	with End_of_file -> Lwt.return None
+
 let int_option_of_string s = try Some (Int.of_string s) with Invalid_argument _ -> None
 
 let built_targets dir =
 	let contents = Sys.readdir dir in
 	contents |> Array.filter_map (fun f ->
-		if String.ends_with f ".deps"
+		if String.ends_with f ("." ^ deps_ext)
 			then Some (Tuple.Tuple2.first (String.rsplit f "."))
 			else None
 	) |> Array.to_list
@@ -88,13 +109,13 @@ let serializable dep = (dep#tag, dep#fields)
 
 let write_dependency output (tag,fields) =
 	let (_, typ) = List.find (fun (t, _) -> t = tag) tag_assoc in
-	if List.length fields <> typ.num_fields then Common.raise_safe "invalid fields";
-	IO.write_line output @@ (string_of_dependency_type tag) ^ ": " ^ (String.join " " fields)
+	if List.length fields <> typ.num_fields then Error.raise_safe "invalid fields";
+	Lwt_io.write_line output @@ (string_of_dependency_type tag) ^ ": " ^ (String.join " " fields)
 
 class virtual base_dependency = object (self)
 	method virtual tag : dependency_type
 	method virtual fields : string list
-	method virtual is_dirty : dirty_args -> target_state dirty_result
+	method virtual is_dirty : dirty_args -> target_state dirty_result Lwt.t
 	method print out =
 		Printf.fprintf out "<#%s: %a>"
 			(string_of_dependency_type self#tag)
@@ -103,9 +124,10 @@ class virtual base_dependency = object (self)
 end
 
 (* TODO: can this just be a serializable subclass of base_dependency? *)
-and unserializable = object
+and virtual unserializable = object
 	method tag : dependency_type = assert false
 	method fields : string list = assert false
+	method virtual is_dirty : dirty_args -> target_state dirty_result Lwt.t
 end
 
 and file_dependency ~(mtime:int option) ~(checksum:string option) (path:string) =
@@ -124,7 +146,8 @@ and file_dependency ~(mtime:int option) ~(checksum:string option) (path:string) 
 			(* checksum-based check *)
 			log#trace "%s: comparing using checksum" self#path;
 			let state = new target_state full_path in
-			let latest_checksum = Option.bind state#deps (fun deps -> deps#checksum) in
+			lwt deps = state#deps in
+			let latest_checksum = Option.bind deps (fun deps -> deps#checksum) in
 			let checksum_matches = match latest_checksum with
 				| None -> false
 				| Some dep_cs -> dep_cs = checksum
@@ -132,34 +155,34 @@ and file_dependency ~(mtime:int option) ~(checksum:string option) (path:string) 
 			if not checksum_matches then (
 				log#debug "DIRTY: %s (stored checksum is %s, current is %a)"
 					self#path checksum (Option.print String.print) latest_checksum;
-				Known true)
+				Lwt.return @@ Known true)
 			else (
 				if args.built then
-					Known false
+					Lwt.return @@ Known false
 				else (
 					log#trace "%s: might be dirty - returning %a"
 						self#path
 						print_repr state;
-					Unknown (state :> target_state)
+					Lwt.return @@ Unknown (state :> target_state)
 				)
 			)
 
 		method private is_dirty_mtime full_path =
 			(* pure mtime-based check *)
-			let current_mtime = Util.get_mtime full_path in
-			if not @@ Option.eq current_mtime self#mtime then (
+			lwt current_mtime = Util.get_mtime full_path in
+			Lwt.return @@ if not @@ Option.eq current_mtime self#mtime then (
 				log#debug "DIRTY: %s (stored mtime is %a, current is %a)"
 					self#path
 					Util.print_mtime self#mtime
 					Util.print_mtime current_mtime;
-				true
-			) else false
+				Known true
+			) else Known false
 
 		method is_dirty args =
 			let full_path = self#full_path args.base_path in
 			match checksum with
 				| Some checksum -> self#is_dirty_cs full_path checksum args
-				| None -> Known (self#is_dirty_mtime full_path)
+				| None -> self#is_dirty_mtime full_path
 
 		method private full_path base =
 			Filename.concat base self#path
@@ -172,18 +195,18 @@ and builder_dependency ~mtime ~checksum path =
 		method tag = Builder
 		method is_dirty args =
 			let builder_path = args.builder_path in
-			assert (not @@ Utils.is_absolute builder_path);
-			assert (not @@ Utils.is_absolute path);
+			assert (not @@ Util.is_absolute builder_path);
+			assert (not @@ Util.is_absolute path);
 			if builder_path <> path then (
 				log#debug "DIRTY: builder changed from %s -> %s" path builder_path;
-				Known true
+				Lwt.return (Known true)
 			) else super#is_dirty args
 	end
 
 and never_built =
 	object (self)
 		inherit unserializable
-		method is_dirty (_:dirty_args) : target_state dirty_result = Known true
+		method is_dirty (_:dirty_args) = Lwt.return (Known true)
 	end
 
 and always_rebuild =
@@ -191,7 +214,7 @@ and always_rebuild =
 		inherit base_dependency
 		method tag = AlwaysRebuild
 		method fields = []
-		method is_dirty (_:dirty_args) : target_state dirty_result = Known true
+		method is_dirty (_:dirty_args) = Lwt.return (Known true)
 	end
 
 and build_time time =
@@ -199,10 +222,11 @@ and build_time time =
 		inherit base_dependency
 		method tag = BuildTime
 		method fields = [string_of_int time]
-		method is_dirty args = 
+		method is_dirty args =
 			let path = args.path in
-			let mtime = Option.get (Util.get_mtime path) in
-			Known (
+			lwt mtime = Util.get_mtime path in
+			let mtime = Option.get mtime in
+			Lwt.return @@ Known (
 				if mtime <> time then (
 					let log_method = ref log#warn in
 					if Sys.is_directory path then
@@ -216,73 +240,7 @@ and build_time time =
 			)
 	end
 
-and dependencies target_path (input:IO.input) =
-	let update_singleton r v =
-		assert (Option.is_none !r);
-		r := v;
-		None
-	in
-
-	let parse_line line : (dependency_class * string list) =
-		let tag, content = String.split line ":" in
-		let (_, typ) =
-			try List.find (fun (prefix, typ) -> prefix = tag) tag_assoc_str
-			with Not_found -> Common.raise_safe "invalid dep line: %s" line
-		in
-		let fields = Str.bounded_split (Str.regexp " ") (String.lchop content) typ.num_fields in
-		(typ, fields)
-	in
-
-	let _parse input rv =
-		rv.rules := IO.lines_of input |> Enum.filter_map (fun line ->
-			let typ, fields = parse_line (String.strip line) in
-			let parse_cs cs = if cs = empty_checksum then None else Some cs in
-			let parse_mtime mtime = match Int.of_string mtime with
-				| 0 -> None
-				| t -> Some t
-			in
-			match (typ.tag, fields) with
-				| (Checksum, [cs]) -> update_singleton rv.checksum (Some cs)
-				| (RunId, [r])     -> update_singleton rv.run_id (Some (new run_id r))
-				| (FileDependency, [mtime; cs; path]) ->
-						Some (new file_dependency
-							~mtime:(parse_mtime mtime)
-							~checksum:(parse_cs cs)
-							path)
-				| (Builder, [mtime; cs; path;]) ->
-						Some (new builder_dependency
-							~mtime:(parse_mtime mtime)
-							~checksum:(parse_cs cs)
-							path)
-				| (BuildTime, [time]) -> Some (new build_time (int_option_of_string time |> Option.get))
-				| (AlwaysRebuild, []) -> Some (new always_rebuild)
-				| _ -> Common.raise_safe "Invalid dependency line: %s" line
-		) |> List.of_enum;
-		rv
-	in
-
-	let data =
-		let rv = {
-			checksum = ref None;
-			run_id = ref None;
-			rules = ref [];
-		} in
-		let version_line = readline input in
-		log#trace "version_line: %a" (Option.print String.print) version_line;
-		let version_number = Option.bind version_line (fun line ->
-			if String.starts_with line version_marker then (
-				let (_, version_string) = String.split line " " in
-				int_option_of_string version_string
-			) else None
-		) in
-		match version_number with
-			| None -> Common.raise_safe "Invalid dependency file"
-			| Some v ->
-				if v <> format_version
-					then Common.raise_safe "Version mismatch: can't read format version: %d" v
-		;
-		_parse input rv
-	in
+and dependencies target_path (data:base_dependency intermediate_dependencies) =
 	object (self)
 		method already_built = match !(data.run_id) with
 			| None -> false
@@ -298,48 +256,129 @@ and dependencies target_path (input:IO.input) =
 				(Option.print String.print) !(data.checksum)
 				(List.print print_obj) !(data.rules)
 
-		method is_dirty (builder: Gupfile.builder) (built:bool) : (target_state list) dirty_result =
-			Return.label (fun rv ->
-				if not (Sys.file_exists target_path) then (
-					log#debug "DIRTY: %s (target does not exist)" target_path;
-					Return.return rv (Known true)
-			)
-			;
-			let base_path = Filename.dirname target_path in
-			let args = {
-				path = target_path;
-				base_path = base_path;
-				builder_path = Util.relpath ~from:base_path builder#path;
-				built = built
-			} in
+		method is_dirty (builder: Gupfile.builder) (built:bool) : (target_state list) dirty_result Lwt.t =
+			if not (Sys.file_exists target_path) then (
+				log#debug "DIRTY: %s (target does not exist)" target_path;
+				return (Known true)
+			) else (
+				let base_path = Filename.dirname target_path in
+				let args = {
+					path = target_path;
+					base_path = base_path;
+					builder_path = Util.relpath ~from:base_path builder#path;
+					built = built
+				} in
 
-				let unknown_states = List.enum !(data.rules) |> Enum.filter_map (fun r ->
-					let state = r#is_dirty args in
-					match state with
-					| Known false -> None (* ignore clean targets *)
-					| Known true -> (
-						log#trace "is_dirty: %s returning true" target_path;
-						Return.return rv (Known true)
+				let rec collapse rules unknown_states =
+					match rules with
+					| [] -> (
+						(* no more rules to consider; final return *)
+						match unknown_states with
+						| [] ->
+							log#trace "is_dirty: %s returning false" target_path;
+							return @@ Known false
+						| _ ->
+							log#trace "is_dirty: %s returning %a" target_path (List.print print_repr) unknown_states;
+							return @@ Unknown (unknown_states)
 					)
-					| Unknown state -> Some state
-				) |> List.of_enum in
-				if List.length unknown_states = 0 then (
-					log#trace "is_dirty: %s returning false" target_path;
-					Known false
-				) else (
-					log#trace "is_dirty: %s returning %a" target_path (List.print print_repr) unknown_states;
-					Unknown unknown_states
-				)
+					| (rule::remaining_rules) ->
+						lwt state = rule#is_dirty args in
+						match state with
+						| Known true -> (
+							log#trace "is_dirty: %s returning true" target_path;
+							return (Known true)
+						)
+						| Known false   -> collapse remaining_rules unknown_states
+						| Unknown state -> collapse remaining_rules (state :: unknown_states)
+				in
+				collapse !(data.rules) []
 			)
 
 		method checksum = !(data.checksum)
 end
 
+and dependency_builder target_path (input:Lwt_io.input_channel) = object (self)
+	(* extracted into its own object because we can't use lwt in an object consutrctor
+	 * syntax *)
+	method build = 
+		let update_singleton r v =
+			assert (Option.is_none !r);
+			r := v;
+			None
+		in
+
+		let parse_line line : (dependency_class * string list) =
+			let tag, content = String.split line ":" in
+			let (_, typ) =
+				try List.find (fun (prefix, typ) -> prefix = tag) tag_assoc_str
+				with Not_found -> Error.raise_safe "invalid dep line: %s" line
+			in
+			let fields = Str.bounded_split (Str.regexp " ") (String.lchop content) typ.num_fields in
+			(typ, fields)
+		in
+
+		let _parse input rv =
+			lwt rules = Lwt_io.read_lines input |> Lwt_stream.filter_map (fun line ->
+				let typ, fields = parse_line (String.strip line) in
+				let parse_cs cs = if cs = empty_checksum then None else Some cs in
+				let parse_mtime mtime = match Int.of_string mtime with
+					| 0 -> None
+					| t -> Some t
+				in
+				match (typ.tag, fields) with
+					| (Checksum, [cs]) -> update_singleton rv.checksum (Some cs)
+					| (RunId, [r])     -> update_singleton rv.run_id (Some (new run_id r))
+					| (FileDependency, [mtime; cs; path]) ->
+							Some (new file_dependency
+								~mtime:(parse_mtime mtime)
+								~checksum:(parse_cs cs)
+								path)
+					| (Builder, [mtime; cs; path;]) ->
+							Some (new builder_dependency
+								~mtime:(parse_mtime mtime)
+								~checksum:(parse_cs cs)
+								path)
+					| (BuildTime, [time]) -> Some (new build_time (int_option_of_string time |> Option.get))
+					| (AlwaysRebuild, []) -> Some (new always_rebuild)
+					| _ -> Error.raise_safe "Invalid dependency line: %s" line
+			) |> Lwt_stream.to_list
+			in
+			rv.rules := rules;
+			Lwt.return rv
+		in
+
+		lwt data =
+			let rv = {
+				checksum = ref None;
+				run_id = ref None;
+				rules = ref [];
+			} in
+			lwt version_line = readline input in
+			log#trace "version_line: %a" (Option.print String.print) version_line;
+			let version_number = Option.bind version_line (fun line ->
+				if String.starts_with line version_marker then (
+					let (_, version_string) = String.split line " " in
+					int_option_of_string version_string
+				) else None
+			) in
+			match version_number with
+				| None -> Error.raise_safe "Invalid dependency file"
+				| Some v ->
+					if v <> format_version
+						then Error.raise_safe "Version mismatch: can't read format version: %d" v
+			;
+			_parse input rv
+		in
+
+		Lwt.return @@ new dependencies target_path data
+	end
+
 and target_state (target_path:string) =
+
 	object (self)
 		method private ensure_meta_path ext =
 			let p = self#meta_path ext in
-			Utils.makedirs (Filename.dirname p);
+			Util.makedirs (Filename.dirname p);
 			p
 
 		method meta_path ext =
@@ -348,38 +387,39 @@ and target_state (target_path:string) =
 			let meta_dir = Filename.concat base meta_dir_name in
 			Filename.concat meta_dir (target ^ "." ^ ext)
 
-		method private ensure_dep_lock =
-			(* TODO: lock this file *)
-			ignore @@ self#ensure_meta_path "deps"
-
 		method path = target_path
 		
 		method repr =
 			"TargetState(" ^ target_path ^ ")"
 
-		method private parse_dependencies path : dependencies option =
-			if Sys.file_exists path then (
-				self#ensure_dep_lock;
-				File.with_file_in path (fun f ->
-					Some (new dependencies target_path f)
+		method private locked_meta_path : 'a. Parallel.lock_mode -> string -> (string -> 'a Lwt.t) -> 'a Lwt.t
+		= fun mode ext f ->
+			let path = self#meta_path ext in
+			let lock_path = self#ensure_meta_path (ext^".lock") in
+			Parallel.with_lock mode lock_path (fun () -> f path)
+
+		method private parse_dependencies : dependencies option Lwt.t =
+			log#trace "parse_deps %s" self#path;
+			let deps_path = self#meta_path deps_ext in
+			if Sys.file_exists deps_path then (
+				self#locked_meta_path Parallel.ReadLock deps_ext (fun deps_path ->
+					with_file_in deps_path (fun f ->
+						(new dependency_builder target_path f)#build >>= (fun d -> Lwt.return (Some d))
+					)
 				)
 			) else
-				None
+				Lwt.return None
 
 		method deps =
-			let deps_path = self#meta_path "deps" in
-			let deps = self#parse_dependencies deps_path in
+			lwt deps = self#parse_dependencies in
 			log#trace "Loaded serialized state: %a" (Option.print print_obj) deps;
-			deps
+			Lwt.return deps
 
-
-		method private add_dependency dep =
-			(* lock = Lock(self.meta_path('deps2.lock')) *)
+		method private add_dependency dep : unit Lwt.t =
 			(* log#debug "add dep: %s -> %s" self#path dep *)
-			(* TODO: lock *)
-			let out_filename = self#meta_path "deps2" in
-			File.with_file_out ~mode:[`append] out_filename (fun output ->
-				write_dependency output dep
+			self#locked_meta_path Parallel.WriteLock new_deps_ext (fun out_filename ->
+				with_file_out ~flags:[Unix.O_APPEND] out_filename
+					(fun output -> write_dependency output dep)
 			)
 
 		method add_file_dependency ~(mtime:int option) ~(checksum:string option) path =
@@ -393,37 +433,62 @@ and target_state (target_path:string) =
 		method mark_always_rebuild =
 			self#add_dependency (serializable (new always_rebuild))
 
-		method perform_build exe block =
+		method perform_build exe block : bool Lwt.t =
 			assert (Sys.file_exists exe);
-			let builder_dep = new builder_dependency
-				~mtime: (Util.get_mtime exe)
-				~checksum: None
-				(Util.relpath ~from: (Filename.dirname self#path) exe)
-			in
+			log#trace "perform_build %s" self#path;
 
-			let temp = self#ensure_meta_path "deps2" in
-			File.with_file_out temp (fun file ->
-				IO.write_line file (version_marker ^ (string_of_int format_version));
-				(* TODO: make Dependencies module to store init stuff *)
-				write_dependency file (serializable builder_dep);
-				write_dependency file (serializable current_run_id)
-			);
-			let built = try
-				block exe
-			with ex ->
-				Unix.unlink temp;
-				raise ex
+			(* TODO: quicker mtime-based check *)
+			let still_needs_build = (fun () ->
+				log#trace "Checking if %s still needs buld after releasing lock" self#path;
+				lwt deps = self#deps in
+				Lwt.return @@ match deps with
+					| Some d -> not d#already_built
+					| None -> true
+			) in
+
+			let build = (fun deps_path ->
+				lwt wanted = still_needs_build () in
+
+				if wanted then (
+					lwt builder_mtime = Util.get_mtime exe in
+					let builder_dep = new builder_dependency
+						~mtime: builder_mtime
+						~checksum: None
+						(Util.relpath ~from: (Filename.dirname self#path) exe)
+					in
+
+					let temp = self#ensure_meta_path "deps2" in
+					with_file_out temp (fun file ->
+						Lwt_io.write_line file (version_marker ^ (string_of_int format_version)) >>
+						(* TODO: make Dependencies module to store init stuff *)
+						write_dependency file (serializable builder_dep) >>
+						write_dependency file (serializable current_run_id)
+					) >>
+					lwt built = try_lwt
+						block exe
+					with ex ->
+						Lwt_unix.unlink temp >>
+						raise_lwt ex
+					in
+					lwt () = if built then (
+						lwt mtime = Util.get_mtime self#path in
+						mtime |> Lwt_option.may (fun time ->
+							with_file_out ~flags:[Unix.O_APPEND] temp (fun output ->
+								let timedep = new build_time time in
+								write_dependency output (serializable timedep)
+							)
+						) >>
+						Lwt_unix.rename temp deps_path
+					) else return_unit in
+					return built
+				) else Lwt.return false
+			) in
+
+			lwt built =
+				Jobserver.run_job (fun () ->
+					self#locked_meta_path Parallel.WriteLock deps_ext build
+				)
 			in
-			if built then (
-				let mtime = Util.get_mtime self#path in
-				mtime |> Option.may (fun time ->
-					File.with_file_out ~mode:[`append] temp (fun output ->
-						let timedep = new build_time time in
-						write_dependency output (serializable timedep)
-					)
-				);
-				Unix.rename temp (self#meta_path "deps")
-			);
-			built
+			return built
 	end
 

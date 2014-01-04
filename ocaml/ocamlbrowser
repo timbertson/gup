@@ -1,2 +1,2 @@
 #!/bin/bash
-ocamlbrowser -I +../batteries -I +../unix -I +../fileutils
+ocamlbrowser -I +../batteries -I +../unix -I +../fileutils "$@"

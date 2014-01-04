@@ -5,9 +5,14 @@ bin: bin/gup
 
 unit-test-pre: test.byte
 integration-test-pre: bin
-bin/gup: main.byte
+
+bin/gup: main.byte phony
 	mkdir -p bin
 	cp main.byte bin/gup
+
+native: main.native phony
+	mkdir -p bin
+	cp main.native bin/gup
 
 test: unit-test-pre integration-test-pre phony
 	../run_tests.py -u
@@ -16,16 +21,21 @@ test: unit-test-pre integration-test-pre phony
 test.byte: test/test.byte phony ;
 test/test.byte: test.mlpack gup.cmo
 
+main.byte: gup.mlpack
+main.native: gup.mlpack
+
 %.byte: phony
+	rainbow -- ocamlbuild -use-ocamlfind $@
+
+%.native: phony
 	rainbow -- ocamlbuild -use-ocamlfind $@
 
 %.cmo: phony
 	rainbow -- ocamlbuild -use-ocamlfind $@
 
-main.byte: gup.mlpack
 
 clean: phony
-	rm -rf _build
+	rm -rf _build *.mlpack
 
 %.mlpack: phony
 	@ls -1 "$$(basename "$@" ".mlpack")"/ | piep 'p.endswith(".ml") | p[:-3] | p[0].upper() + p[1:]' > $@
