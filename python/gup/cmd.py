@@ -200,13 +200,15 @@ def _clean_targets(opts, dests):
 				if not opts.metadata:
 					deps = TargetState.built_targets(gupdir)
 					for dep in deps:
-						if dep in filenames:
+						if dep in (filenames + dirnames):
 							target = os.path.join(dirpath, dep)
 							if Builder.for_target(target) is not None:
 								rm(target)
 				rm(gupdir, isdir=True)
 			# filter out hidden directories
-			dirnames = [d for d in dirnames if not d.startswith('.')]
+			hidden_dirs = [d for d in dirnames if d.startswith('.')]
+			for hidden in hidden_dirs:
+				dirnames.remove(hidden)
 
 def _build(opts, targets):
 	if opts.trace:
