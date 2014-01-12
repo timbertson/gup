@@ -238,14 +238,14 @@ class FileDependency(Dependency):
 	@classmethod
 	def deserialize(cls, mtime, checksum, path):
 		return cls(
-			int(mtime) or None,
+			None if mtime == '-' else int(mtime),
 			None if checksum == '-' else checksum,
 			path)
 	
 	@property
 	def fields(self):
 		return [
-			str(self.mtime or 0),
+			'-' if self.mtime is None else str(self.mtime),
 			self.checksum or '-',
 			self.path]
 

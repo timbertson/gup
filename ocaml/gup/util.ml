@@ -3,9 +3,8 @@ open Std
 
 include Zeroinstall_utils
 
-(* TODO: use Big_int to avoid issues on 32 bit arches *)
-let int_time (time:float) : int = int_of_float (time *. 1000.0)
-let get_mtime (path:string) : int option Lwt.t =
+let int_time (time:float) : Big_int.t = Big_int.of_float (time *. 1000.0)
+let get_mtime (path:string) : Big_int.t option Lwt.t =
 	lwt stats = try_lwt
 		lwt rv = Lwt_unix.lstat path in
 		Lwt.return @@ Some rv
@@ -19,7 +18,7 @@ let try_remove (path:string) =
 		Unix.unlink path
 	with Unix.Unix_error (Unix.ENOENT, _, _) -> ()
 
-let print_mtime : (unit IO.output -> int Option.t -> unit) = Option.print Int.print
+let print_mtime : (unit IO.output -> Big_int.t Option.t -> unit) = Option.print Big_int.print
 
 let samefile a b =
 	assert (Zeroinstall_utils.is_absolute a);

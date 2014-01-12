@@ -179,8 +179,8 @@ class target (builder:Gupfile.builder) =
 							end
 						in
 						lwt new_mtime = Util.get_mtime self#path in
-						if neq (Option.compare ~cmp:Int.compare) mtime new_mtime then (
-							let p = Option.print Int.print in
+						if neq (Option.compare ~cmp:Big_int.compare) mtime new_mtime then (
+							let p = Option.print Big_int.print in
 							log#trace "old_mtime=%a, new_mtime=%a" p mtime p new_mtime;
 							if not (Sys.is_directory self#path) then (
 								(* directories often need to be created directly *)

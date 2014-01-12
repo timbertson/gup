@@ -19,7 +19,7 @@ class target_state : string ->
 		(* async methods *)
 		method perform_build : string -> (string -> bool Lwt.t) -> bool Lwt.t
 		method deps : dependencies option Lwt.t
-		method add_file_dependency : mtime:(int option) -> checksum:(string option) -> string -> unit Lwt.t
+		method add_file_dependency : mtime:(Big_int.t option) -> checksum:(string option) -> string -> unit Lwt.t
 		method add_checksum : string -> unit Lwt.t
 		method mark_always_rebuild : unit Lwt.t
 	end

@@ -39,7 +39,7 @@ let meta_dir_name = ".gup"
 let deps_ext = "deps"
 let new_deps_ext = "deps2"
 
-let empty_checksum = "-"
+let empty_field = "-"
 let format_version = 1
 let version_marker = "version: "
 
@@ -130,14 +130,14 @@ and virtual unserializable = object
 	method virtual is_dirty : dirty_args -> target_state dirty_result Lwt.t
 end
 
-and file_dependency ~(mtime:int option) ~(checksum:string option) (path:string) =
+and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:string) =
 	object (self)
 		inherit base_dependency
 		method tag = FileDependency
 		method child = Some path
 		method fields =
-			let mtime_str = Option.default "0" (Option.map string_of_int mtime) in
-			let checksum_str = Option.default empty_checksum checksum in
+			let mtime_str = Option.default empty_field (Option.map Big_int.to_string mtime) in
+			let checksum_str = Option.default empty_field checksum in
 			[mtime_str; checksum_str; path]
 
 		method private path = path
@@ -170,7 +170,7 @@ and file_dependency ~(mtime:int option) ~(checksum:string option) (path:string) 
 		method private is_dirty_mtime full_path =
 			(* pure mtime-based check *)
 			lwt current_mtime = Util.get_mtime full_path in
-			Lwt.return @@ if not @@ Option.eq current_mtime self#mtime then (
+			Lwt.return @@ if not @@ eq (Option.compare ~cmp:Big_int.compare) current_mtime self#mtime then (
 				log#debug "DIRTY: %s (stored mtime is %a, current is %a)"
 					self#path
 					Util.print_mtime self#mtime
@@ -221,13 +221,12 @@ and build_time time =
 	object (self)
 		inherit base_dependency
 		method tag = BuildTime
-		method fields = [string_of_int time]
+		method fields = [Big_int.to_string time]
 		method is_dirty args =
 			let path = args.path in
-			lwt mtime = Util.get_mtime path in
-			let mtime = Option.get mtime in
+			lwt mtime = Util.get_mtime path >>= (return $ Option.get) in
 			Lwt.return @@ Known (
-				if mtime <> time then (
+				if neq Big_int.compare mtime time then (
 					let log_method = ref log#warn in
 					if Sys.is_directory path then
 						(* dirs are modified externally for various reasons, not worth warning *)
@@ -300,7 +299,7 @@ end
 and dependency_builder target_path (input:Lwt_io.input_channel) = object (self)
 	(* extracted into its own object because we can't use lwt in an object consutrctor
 	 * syntax *)
-	method build = 
+	method build =
 		let update_singleton r v =
 			assert (Option.is_none !r);
 			r := v;
@@ -320,11 +319,8 @@ and dependency_builder target_path (input:Lwt_io.input_channel) = object (self)
 		let _parse input rv =
 			lwt rules = Lwt_io.read_lines input |> Lwt_stream.filter_map (fun line ->
 				let typ, fields = parse_line (String.strip line) in
-				let parse_cs cs = if cs = empty_checksum then None else Some cs in
-				let parse_mtime mtime = match Int.of_string mtime with
-					| 0 -> None
-					| t -> Some t
-				in
+				let parse_cs cs = if cs = empty_field then None else Some cs in
+				let parse_mtime mtime = if mtime = empty_field then None else Some (Big_int.of_string mtime) in
 				match (typ.tag, fields) with
 					| (Checksum, [cs]) -> update_singleton rv.checksum (Some cs)
 					| (RunId, [r])     -> update_singleton rv.run_id (Some (new run_id r))
@@ -338,7 +334,7 @@ and dependency_builder target_path (input:Lwt_io.input_channel) = object (self)
 								~mtime:(parse_mtime mtime)
 								~checksum:(parse_cs cs)
 								path)
-					| (BuildTime, [time]) -> Some (new build_time (int_option_of_string time |> Option.get))
+					| (BuildTime, [time]) -> Some (new build_time (Big_int.of_string time))
 					| (AlwaysRebuild, []) -> Some (new always_rebuild)
 					| _ -> Error.raise_safe "Invalid dependency line: %s" line
 			) |> Lwt_stream.to_list
@@ -422,7 +418,7 @@ and target_state (target_path:string) =
 					(fun output -> write_dependency output dep)
 			)
 
-		method add_file_dependency ~(mtime:int option) ~(checksum:string option) path =
+		method add_file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) path =
 			let dep = (new file_dependency ~mtime:mtime ~checksum:checksum path) in
 			log#trace "Adding dependency %s -> %a" (Filename.basename target_path) print_obj dep;
 			self#add_dependency (serializable dep)
