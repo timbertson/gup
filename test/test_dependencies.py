@@ -270,3 +270,11 @@ class TestChecksums(TestCase):
 
 		for target in ['grandparent']:
 			self.assertEqual(times2[target], times[target], "expected target %s not to be rebuilt" % target)
+
+class TestVersion(TestCase):
+	def write_old_deps(self):
+		self.write('.gup/target.deps', '\n'.join(['version: 0', 'some_old_key: xyz']))
+
+	def test_overwrites_and_rebuilds_if_deps_are_a_different_version(self):
+		self.write('target.gup', echo_to_target('hello'))
+		self.assertRebuilds('target', self.write_old_deps)

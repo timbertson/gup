@@ -14,6 +14,8 @@ type dirty_args = {
 	built:bool;
 }
 
+exception Version_mismatch of string
+
 let with_file_in path fn =
 	let flags = [Unix.O_CLOEXEC; Unix.O_RDONLY] in
 	Lwt_io.with_file ~flags:flags ~mode:Lwt_io.input path fn
@@ -40,7 +42,7 @@ let deps_ext = "deps"
 let new_deps_ext = "deps2"
 
 let empty_field = "-"
-let format_version = 1
+let format_version = 2
 let version_marker = "version: "
 
 (* exceptionless helpers *)
@@ -87,7 +89,7 @@ type dependency_class = {
 let string_of_dependency_type = function
 	| Checksum -> "checksum"
 	| RunId -> "run"
-	| FileDependency -> "filedep"
+	| FileDependency -> "file"
 	| BuildTime -> "built"
 	| Builder -> "builder"
 	| AlwaysRebuild -> "always"
@@ -360,8 +362,8 @@ and dependency_builder target_path (input:Lwt_io.input_channel) = object (self)
 			match version_number with
 				| None -> Error.raise_safe "Invalid dependency file"
 				| Some v ->
-					if v <> format_version
-						then Error.raise_safe "Version mismatch: can't read format version: %d" v
+					if v <> format_version then
+						raise @@ Version_mismatch ("can't read format version: " ^ (string_of_int v))
 			;
 			_parse input rv
 		in
@@ -398,11 +400,15 @@ and target_state (target_path:string) =
 			log#trace "parse_deps %s" self#path;
 			let deps_path = self#meta_path deps_ext in
 			if Sys.file_exists deps_path then (
-				self#locked_meta_path Parallel.ReadLock deps_ext (fun deps_path ->
-					with_file_in deps_path (fun f ->
-						(new dependency_builder target_path f)#build >>= (fun d -> Lwt.return (Some d))
+				try_lwt
+					self#locked_meta_path Parallel.ReadLock deps_ext (fun deps_path ->
+						with_file_in deps_path (fun f ->
+							(new dependency_builder target_path f)#build >>= (fun d -> Lwt.return (Some d))
+						)
 					)
-				)
+				with Version_mismatch _ -> (
+					log#debug "dep file is a previous version: %s" deps_path;
+					Lwt.return None)
 			) else
 				Lwt.return None
 
