@@ -27,7 +27,20 @@ intimate knowledge of build internals to maintain correct dependencies.
 
 # How do I install it?
 
-A repository-local installation is the most foolproof at the moment.
+For [ZeroInstall][] users, you can just run it:
+
+    $ 0install run http://gfxmonk.net/dist/0install/gup.xml
+
+That's handy for use in build scripts (as there's no setup step),
+but for interactive use you're not going to type that each time.
+To make a local alias so you can just run it as `gup`,
+you should run (once):
+
+    $ 0install add gup http://gfxmonk.net/dist/0install/gup.xml
+
+For repositories where you don't want to make everyone set
+up `gup` as above, you can just commit the `gup` python script
+to your project's repository:
 
  - From a git checkout:
    `make python`
@@ -35,6 +48,8 @@ A repository-local installation is the most foolproof at the moment.
 
  - From a released tarball:
    cp python/bin/* <your-project-workspace>/tools
+
+Then, you can run it as `./tools/gup`.
 
 **Note**: When run from a relative or absolute path, `gup`
 will bootstrap itself by adding the directory containing

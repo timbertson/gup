@@ -23,6 +23,8 @@ test_dir = os.path.join(root, 'test')
 
 try:
 	def run_nose(args):
+		if os.environ.get('CI', 'false') == 'true':
+			args = args + ['-v']
 		subprocess.check_call(['make', '-C', root, 'gup-local.xml'])
 		subprocess.check_call([
 			'0install', 'run', '--command=' + os.environ.get('TEST_COMMAND', 'test'),

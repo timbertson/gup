@@ -1,0 +1,43 @@
+language: c
+env:
+  global:
+    - ocaml_ppa=avsm/ocaml41+opam10
+  matrix:
+    - subdir=python task=test
+    - subdir=ocaml task=test
+    - task=permutation-test
+notifications:
+  email: false
+
+before_install:
+ - |
+      set -eux
+      export subdir=${subdir:-.}
+      sudo apt-get install zeroinstall-injector
+      if [ $subdir != python ]; then
+        # ./ocaml or ./
+        echo "yes" | sudo add-apt-repository "ppa:$ocaml_ppa"
+        export OPAMYES=yes # no questions
+        sudo apt-get update -qq
+        sudo apt-get install -qq ocaml opam
+
+        opam init --no-setup
+        eval "$(opam config env)"
+
+        opam repo add gfxmonk_lwt "git://github.com/gfxmonk/lwt.git#opam"
+        opam install batteries fileutils sha extunix lwt
+      fi
+      if [ $subdir != ocaml ]; then
+        # ./python or ./
+        sudo apt-get install -qq pychecker
+      fi
+
+      # not required, just useful for colour-coding of test results
+      0install run \
+        http://gfxmonk.net/dist/0install/zeroinstall-plugin-manager.xml \
+        http://gfxmonk.net/dist/0install/nosetests-runner.xml \
+        --plugin-add http://gfxmonk.net/dist/0install/rednose.xml
+      set +eux
+
+script: "cd $subdir && make $task"
+

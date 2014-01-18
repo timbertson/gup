@@ -20,13 +20,15 @@ local: gup-local.xml phony
 gup-local.xml: gup.xml.template
 	0install run --not-before=0.2.4 http://gfxmonk.net/dist/0install/0local.xml gup.xml.template
 
-test: unit-test integration-test
+test: phony unit-test integration-test
 
-unit-test: ocaml/unit-test python/unit-test
+unit-test: phony ocaml/unit-test python/unit-test
 
-integration-test-pre: ocaml/integration-test-pre python/integration-test-pre
-integration-test: ocaml/integration-test python/integration-test
+integration-test-pre: phony ocaml/integration-test-pre python/integration-test-pre
+permutation-test: phony integration-test-pre
 	python ./run_tests.py -i
+
+integration-test: phony ocaml/integration-test python/integration-test permutation-test
 
 # Minimal test action: runs full tests, with minimal dependencies.
 # This is the only test target that is likely to work on windows
