@@ -8,6 +8,13 @@ let assert_exists bin = if Util.is_absolute bin && not (Sys.file_exists bin) the
 	Error.raise_safe "No such interpreter: %s" bin;
 	bin
 
+let _prepare_build : 'c. (Gupfile.buildscript -> 'c) -> string -> 'c option = fun cons path ->
+	let buildscript = Gupfile.find_buildscript path in
+	log#trace "Prepare_build %a -> %a"
+		String.print_quoted path
+		(Option.print print_repr) buildscript;
+	Option.map cons buildscript
+
 let _guess_executable path =
 	File.with_file_in path (fun file ->
 		let initial = IO.nread file 255 in
@@ -33,22 +40,11 @@ let in_dir wd action =
 	Unix.chdir wd;
 	Util.finally_do (fun _ -> Unix.chdir initial_wd) () action
 
-class target (builder:Gupfile.builder) =
-	let path = builder#target_path in
+class target (buildscript:Gupfile.buildscript) =
+	let path = buildscript#target_path in
 	let state = new State.target_state path in
 
-	(* XXX DUPLICATED *)
-	let create_target b : target = new target b in
-	let prepare_build path : target option =
-		let builder = Gupfile.for_target path in
-		log#trace "Prepare_build %a -> %a"
-			String.print_quoted path
-			(Option.print print_repr) builder;
-		Option.map create_target builder
-	in
-	(* XXX end duplication *)
-
-	let rec _is_dirty (state:State.target_state) (builder:Gupfile.builder) =
+	let rec _is_dirty (state:State.target_state) (buildscript:Gupfile.buildscript) =
 		(*
 		* Returns whether the dependency is dirty.
 		* Builds any targets required to check dirtiness
@@ -65,7 +61,7 @@ class target (builder:Gupfile.builder) =
 					Lwt.return false
 				) else (
 					let rec deps_dirty built : bool Lwt.t =
-						lwt dirty = deps#is_dirty builder built in
+						lwt dirty = deps#is_dirty buildscript built in
 						(* log#trace "deps.is_dirty(%r) -> %r" state.path, dirty *)
 						match dirty with
 						| State.Known true -> (Lwt.return_true)
@@ -77,13 +73,13 @@ class target (builder:Gupfile.builder) =
 								try_lwt
 									deps#children |> Lwt_list.exists_p (fun path ->
 										log#trace "Recursing over dependency: %s" path;
-										match Gupfile.for_target path with
+										match Gupfile.find_buildscript path with
 											| None ->
 												log#trace "CLEAN: not a target";
 												Lwt.return_false
-											| Some builder ->
+											| Some buildscript ->
 												let child_state = new State.target_state path in
-												lwt child_dirty = _is_dirty child_state builder in
+												lwt child_dirty = _is_dirty child_state buildscript in
 												if child_dirty then (
 													log#trace "_is_dirty(%s) -> True" child_state#path;
 													Lwt.return true
@@ -99,7 +95,7 @@ class target (builder:Gupfile.builder) =
 								(* build undecided deps first, then retry: *)
 								lwt () = deps |> Lwt_list.iter_s (fun dep ->
 									log#trace "MAYBE_DIRTY: %s (unknown state - building it to find out)" dep#path;
-									match prepare_build dep#path with
+									match _prepare_build (new target) dep#path with
 										| None ->
 												log#trace "%s turned out not to be a target - skipping" dep#path;
 												Lwt.return_unit
@@ -117,24 +113,24 @@ class target (builder:Gupfile.builder) =
 
 	object (self)
 		method path = path
-		method repr = "Target(" ^ builder#repr ^ ")"
+		method repr = "Target(" ^ buildscript#repr ^ ")"
 		method state = state
 
-		method build update : bool Lwt.t = self#_perform_build builder#path update
+		method build update : bool Lwt.t = self#_perform_build buildscript#path update
 
 		method private _perform_build (exe_path:string) (update: bool) : bool Lwt.t =
-			let exe_path = builder#path in
+			let exe_path = buildscript#path in
 			if not (Sys.file_exists exe_path) then
-				Error.raise_safe "Builder does not exist: %s" exe_path;
+				Error.raise_safe "Build script does not exist: %s" exe_path;
 
-			lwt needs_build = if update then (_is_dirty state builder) else Lwt.return_true in
+			lwt needs_build = if update then (_is_dirty state buildscript) else Lwt.return_true in
 			if not needs_build then (
 				log#trace("no build needed");
 				Lwt.return false
 			) else (
 				state#perform_build exe_path (fun exe ->
 
-					let basedir = builder#basedir in
+					let basedir = buildscript#basedir in
 					Util.makedirs basedir;
 
 					let env = Unix.environment_map ()
@@ -157,7 +153,7 @@ class target (builder:Gupfile.builder) =
 						let args = List.concat
 							[
 								_guess_executable exe_path;
-								[ Util.abspath exe_path; output_file; builder#target ]
+								[ Util.abspath exe_path; output_file; buildscript#target ]
 							]
 						in
 
@@ -216,12 +212,4 @@ class target (builder:Gupfile.builder) =
 			)
 	end
 
-let create_target b : target = new target b
-
-let prepare_build path : target option =
-	let builder = Gupfile.for_target path in
-	log#trace "Prepare_build %a -> %a"
-		String.print_quoted path
-		(Option.print print_repr) builder;
-	Option.map create_target builder
-
+let prepare_build : string -> target option = _prepare_build (new target)

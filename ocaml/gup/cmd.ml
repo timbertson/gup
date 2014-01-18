@@ -169,7 +169,7 @@ struct
 						let built_targets = State.built_targets gupdir in
 						List.enum built_targets |> Enum.iter (fun dep ->
 							let path = (Filename.concat base dep) in
-							if Option.is_some (Gupfile.for_target path) then (
+							if Option.is_some (Gupfile.find_buildscript path) then (
 								if List.mem dep files then
 									rm ~isfile:true path
 								else if List.mem dep dirs then (

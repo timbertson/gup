@@ -114,12 +114,12 @@ let parse_gupfile_at path =
 	with Invalid_gupfile (line, reason) ->
 		Error.raise_safe "Invalid gupfile - %s:%d (%s)" path line reason
 
-class builder
+class buildscript
 	(script_path:string)
 	(target:string)
 	(basedir:string) =
 	object (self)
-		method repr = Printf.sprintf "builder(%s, %s, %s)" script_path target basedir
+		method repr = Printf.sprintf "buildscript(%s, %s, %s)" script_path target basedir
 		method target = target
 		method target_path = Filename.concat basedir target
 		method path = script_path
@@ -158,7 +158,7 @@ class build_candidate
 		method guppath =
 			path_join @@ (self#_base_parts true) @ [string_of_gupfile gupfile]
 
-		method get_builder : builder option =
+		method get_buildscript : buildscript option =
 			let path = self#guppath in
 			let file_path = try (
 				match Sys.is_directory path with
@@ -169,7 +169,7 @@ class build_candidate
 				log#trace "candidate exists: %s" path;
 				let target_base = path_join(self#_base_parts false) in
 				match gupfile with
-					| Gupscript script -> Some (new builder path target target_base)
+					| Gupscript script -> Some (new buildscript path target target_base)
 					| Gupfile ->
 						let target_name = Filename.basename target in
 						if
@@ -197,7 +197,7 @@ class build_candidate
 										let script_path = Filename.concat (Filename.dirname path) script in
 										if not (Sys.file_exists script_path) then
 											Error.raise_safe "Build script not found: %s\n     %s(specified in %s)" script_path Var.indent path;
-										Some (new builder
+										Some (new buildscript
 											script_path
 											(Util.relpath ~from:base (Filename.concat target_base target))
 											base)
@@ -251,8 +251,8 @@ let possible_builders path : build_candidate Enum.t =
 		Enum.concat indirect_gup_targets
 	]
 
-let for_target path : builder option  =
+let find_buildscript path : buildscript option  =
 	let builders = (possible_builders path) |>
-		Enum.filter_map (fun candidate -> candidate#get_builder) in
+		Enum.filter_map (fun candidate -> candidate#get_buildscript) in
 	Enum.get builders
 

@@ -16,6 +16,7 @@ type dirty_args = {
 
 exception Version_mismatch of string
 
+(* lwt wrappers for with_file_in and with_file_out *)
 let with_file_in path fn =
 	let flags = [Unix.O_CLOEXEC; Unix.O_RDONLY] in
 	Lwt_io.with_file ~flags:flags ~mode:Lwt_io.input path fn
@@ -104,8 +105,8 @@ let serializable_dependencies = [
 	{ tag = AlwaysRebuild; num_fields = 0; };
 ]
 
-let tag_assoc_str = serializable_dependencies |> List.map (fun dep -> (string_of_dependency_type dep.tag, dep))
 let tag_assoc     = serializable_dependencies |> List.map (fun dep -> (dep.tag, dep))
+let tag_assoc_str = tag_assoc |> List.map (fun (tag, dep) -> (string_of_dependency_type tag, dep))
 
 let serializable dep = (dep#tag, dep#fields)
 
@@ -118,18 +119,12 @@ class virtual base_dependency = object (self)
 	method virtual tag : dependency_type
 	method virtual fields : string list
 	method virtual is_dirty : dirty_args -> target_state dirty_result Lwt.t
+
+	method child : string option = None
 	method print out =
 		Printf.fprintf out "<#%s: %a>"
 			(string_of_dependency_type self#tag)
 			(List.print String.print_quoted) self#fields
-	method child : string option = None
-end
-
-(* TODO: can this just be a serializable subclass of base_dependency? *)
-and virtual unserializable = object
-	method tag : dependency_type = assert false
-	method fields : string list = assert false
-	method virtual is_dirty : dirty_args -> target_state dirty_result Lwt.t
 end
 
 and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:string) =
@@ -205,12 +200,6 @@ and builder_dependency ~mtime ~checksum path =
 			) else super#is_dirty args
 	end
 
-and never_built =
-	object (self)
-		inherit unserializable
-		method is_dirty (_:dirty_args) = Lwt.return (Known true)
-	end
-
 and always_rebuild =
 	object (self)
 		inherit base_dependency
@@ -257,7 +246,7 @@ and dependencies target_path (data:base_dependency intermediate_dependencies) =
 				(Option.print String.print) !(data.checksum)
 				(List.print print_obj) !(data.rules)
 
-		method is_dirty (builder: Gupfile.builder) (built:bool) : (target_state list) dirty_result Lwt.t =
+		method is_dirty (buildscript: Gupfile.buildscript) (built:bool) : (target_state list) dirty_result Lwt.t =
 			if not (Sys.file_exists target_path) then (
 				log#debug "DIRTY: %s (target does not exist)" target_path;
 				return (Known true)
@@ -266,7 +255,7 @@ and dependencies target_path (data:base_dependency intermediate_dependencies) =
 				let args = {
 					path = target_path;
 					base_path = base_path;
-					builder_path = Util.relpath ~from:base_path builder#path;
+					builder_path = Util.relpath ~from:base_path buildscript#path;
 					built = built
 				} in
 
@@ -319,7 +308,7 @@ and dependency_builder target_path (input:Lwt_io.input_channel) = object (self)
 		in
 
 		let _parse input rv =
-			lwt rules = Lwt_io.read_lines input |> Lwt_stream.filter_map (fun line ->
+			let process_line line : base_dependency option =
 				let typ, fields = parse_line (String.strip line) in
 				let parse_cs cs = if cs = empty_field then None else Some cs in
 				let parse_mtime mtime = if mtime = empty_field then None else Some (Big_int.of_string mtime) in
@@ -339,13 +328,16 @@ and dependency_builder target_path (input:Lwt_io.input_channel) = object (self)
 					| (BuildTime, [time]) -> Some (new build_time (Big_int.of_string time))
 					| (AlwaysRebuild, []) -> Some (new always_rebuild)
 					| _ -> Error.raise_safe "Invalid dependency line: %s" line
-			) |> Lwt_stream.to_list
+			in
+			lwt rules = Lwt_io.read_lines input
+				|> Lwt_stream.filter_map process_line
+				|> Lwt_stream.to_list
 			in
 			rv.rules := rules;
 			Lwt.return rv
 		in
 
-		lwt data =
+		lwt (data : base_dependency intermediate_dependencies) =
 			let rv = {
 				checksum = ref None;
 				run_id = ref None;

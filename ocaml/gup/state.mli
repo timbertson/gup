@@ -26,7 +26,7 @@ class target_state : string ->
 
 and dependencies : string -> base_dependency intermediate_dependencies ->
 	object
-		method is_dirty : Gupfile.builder -> bool -> (target_state list) dirty_result Lwt.t
+		method is_dirty : Gupfile.buildscript -> bool -> (target_state list) dirty_result Lwt.t
 		method checksum : string option
 		method already_built : bool
 		method children : string list
