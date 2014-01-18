@@ -30,11 +30,11 @@ intimate knowledge of build internals to maintain correct dependencies.
 A repository-local installation is the most foolproof at the moment.
 
  - From a git checkout:
-   `make bin`
-   cp bin/* <your-project-workspace>/tools
+   `make python`
+   cp python/bin/* <your-project-workspace>/tools
 
  - From a released tarball:
-   cp bin/* <your-project-workspace>/tools
+   cp python/bin/* <your-project-workspace>/tools
 
 **Note**: When run from a relative or absolute path, `gup`
 will bootstrap itself by adding the directory containing
@@ -412,17 +412,6 @@ On that note - please raise any issues you find or improvements you can think
 of as a github issue. If something is broken, I'd much rather know about it
 now than later :)
 
-# Development dependencies
-
- - [0install](http://0install.net)
- - PyChecker (optional; you can disable this by exporting `$SKIP_PYCHECKER=1`)
-
-The `gup` build process itself uses `make`, but you can use the included `./make`
-or `./make.bat` if you don't already have make installed.
-
-To run the automated tests, you will also need some standard GNU utilities,
-including `bash`, `find`, `cat`, etc. On Windows, MSYS provides these.
-
 # Why the name `gup`?
 
 It's short, easy to type, and it contains `up` (as in update).
@@ -430,6 +419,55 @@ It's short, easy to type, and it contains `up` (as in update).
 I pronounce it with a hard "g", rhyming with "cup". You can think of
 it as "gee-up" or "get up" or even "get thyself upwards" if you like,
 but you should just say "gup" if you have cause to say it out loud.
+
+# Hacking on `gup`:
+
+The python code (under `python/` and `test/`) is currently the supported version
+of `gup`.
+
+There is an experimental ocaml implementation (under `ocaml/`), which I intend to be
+100% interchangeable with the python version. The purpose of the ocaml version is
+twofold: It should be quite a bit faster than python, and I wanted to learn OCaml.
+The ocaml version is less easily portable than the python version though, and probably
+doesn't even compile on non-linux systems yet.
+
+I don't require contributors to make changes to both codebases (i.e fixing a bug
+in _just_ the python code is fine with me). It would of course be convenient
+if you do update the python & ocaml code simultaneously when submitting a change,
+but I know that's a lot to ask, so I will assume responsibility of
+keeping the codebases in sync as necessary.
+
+If you do add tests or fix bugs, please include tests. These are written in
+python, and are run over both the python & ocaml versions. Doing this (aside
+from generally being a good idea) will help avoid disparity between the
+two versions.
+
+### Build dependencies:
+
+ - [0install](http://0install.net)
+
+For `python/`:
+
+ - PyChecker (optional; you can disable this by exporting `$SKIP_PYCHECKER=1`)
+
+For `ocaml/` (I plan to simplify this in the future):
+
+ - OPAM
+ - ocamlbuild
+ - ocamlfind
+ - https://github.com/gfxmonk/lwt/tree/subsecond-stat-results
+ - additional packages as listed in ocaml/_tags
+
+### Building
+
+The `gup` build process itself uses `make`, but you can use the included `./make`
+or `./make.bat` if you don't already have make installed.
+
+Most operations work from the appropriate directory - e.g running `make bin`, `make unit-test`,
+`make integration-test` in either the `ocaml/` or `python/` directories will do the right thing.
+
+To run the automated tests, you will also need some standard GNU utilities,
+including `bash`, `find`, `cat`, etc. On Windows, MSYS provides these.
 
 # Licence
 
@@ -440,6 +478,10 @@ Gup is distributed under th LGPL - see the LICENCE file.
 `jwack.py` and `lock.py` are adapted from the [redo][] project, which is LGPL
 and is Copyright Avery Pennarun
 
+`zeroinstall_utils.ml` is adapted from the [ZeroInstall][] project, which is LGPL
+and is copyright Thomas Leonard.
+
 All other source code is Copyright Tim Cuthbertson, 2013.
 
 [redo]: https://github.com/apenwarr/redo
+[ZeroInstall]: https://github.com/apenwarr/redo

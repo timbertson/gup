@@ -3,6 +3,12 @@ open Std
 open Lwt
 open Parallel
 
+(* TODO: a bunch of type definitions are needlessly paramaterised,
+ * just to avoid forward type definitions which ocaml
+ * doesn't support. There should be a better way of structuring
+ * this though.
+ *)
+
 type 'a dirty_result =
 	| Known of bool
 	| Unknown of 'a
@@ -74,7 +80,7 @@ class run_id id =
 	end
 
 let current_run_id = new run_id Var.run_id
-
+ 
 type 'a intermediate_dependencies = {
 	checksum: string option ref;
 	run_id: run_id option ref;
