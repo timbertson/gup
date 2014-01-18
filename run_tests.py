@@ -47,7 +47,7 @@ try:
 		assert action == UNIT
 		add_to_env('PATH', os.path.join(root, 'test/bin'))
 		if kind == 'ocaml':
-			subprocess.check_call(['./test.byte'] + args)
+			subprocess.check_call(['./test.byte', '-runner', 'sequential'] + args)
 		else:
 			run_nose(args)
 
