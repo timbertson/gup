@@ -25,10 +25,10 @@ try:
 	def run_nose(args):
 		if os.environ.get('CI', 'false') == 'true':
 			args = args + ['-v']
-		subprocess.check_call(['make', '-C', root, 'gup-local.xml'])
+		subprocess.check_call(['make', '-C', root, 'gup-test-local.xml'])
 		subprocess.check_call([
 			'0install', 'run', '--command=' + os.environ.get('TEST_COMMAND', 'test'),
-			os.path.join(root, 'gup-local.xml')] + args)
+			os.path.join(root, 'gup-test-local.xml')] + args)
 
 	subprocess.check_call(['make', '%s-test-pre' % action_name])
 
@@ -51,6 +51,7 @@ try:
 		if kind == 'ocaml':
 			subprocess.check_call(['./test.byte', '-runner', 'sequential'] + args)
 		else:
+			add_to_env('PYTHONPATH', os.path.join(root, 'python'))
 			run_nose(args)
 
 except subprocess.CalledProcessError: sys.exit(1)
