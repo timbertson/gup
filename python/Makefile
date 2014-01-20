@@ -6,9 +6,13 @@ all: bin
 unit-test-pre: phony
 integration-test-pre: phony bin
 
-test: unit-test-pre integration-test-pre phony
+unit-test: unit-test-pre phony
 	../run_tests.py -u
+
+integration-test: integration-test-pre phony
 	../run_tests.py -i
+
+test: unit-test integration-test
 
 bin/gup: $(SOURCES)
 	mkdir -p tmp bin
