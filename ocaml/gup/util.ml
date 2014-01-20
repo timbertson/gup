@@ -3,7 +3,7 @@ open Std
 
 include Zeroinstall_utils
 
-let int_time (time:float) : Big_int.t = Big_int.of_float (time *. 1000.0)
+let int_time (time:float) : Big_int.t = Big_int.of_float (floor (time *. 1000.0))
 let get_mtime (path:string) : Big_int.t option Lwt.t =
 	lwt stats = try_lwt
 		lwt rv = Lwt_unix.lstat path in
