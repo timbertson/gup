@@ -399,6 +399,16 @@ accident.
 
 Not yet, sorry. `gup` is still very new.
 
+# Where can I discuss stuff?
+
+If it's a straighforward bug or feature request, it can probably go straight
+on the [github issues page][issues].
+
+For all other discussion, there's a [mailing list][gup-users].
+
+[issues]: https://github.com/gfxmonk/gup/issues
+[gup-users]: https://groups.google.com/forum/#!forum/gup-users
+
 # What platforms does it work on?
 
 I don't know, yet. It's very early days. It's currently written in python,
