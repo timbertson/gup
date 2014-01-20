@@ -1,36 +1,39 @@
-SOURCES:=VERSION Makefile $(shell find gup build -type f -name "*.py")
+all: python ocaml
 
-bin: phony bin/gup
-all: bin local
+python: python/all
+ocaml: ocaml/all
+clean: ocaml/clean python/clean
 
-test: unit-test integration-test
-unit-test-pre: phony gup-test-local.xml
-integration-test-pre: unit-test-pre bin
+ocaml/%: phony
+	make -C ocaml "$$(basename "$@")"
 
-bin/gup: $(SOURCES)
-	mkdir -p tmp bin
-	python ./build/combine_modules.py gup tmp/gup.py
-	cp tmp/gup.py bin/gup
+python/%: phony
+	make -C python "$$(basename "$@")"
+
+ocaml/unit-test: phony
+	cd ocaml && python ../run_tests.py -u
+
+ocaml/integration-test: phony
+	cd python && python ../run_tests.py -i
 
 local: gup-test-local.xml phony
 gup-test-local.xml: gup-test.xml.template
 	0install run --not-before=0.2.4 http://gfxmonk.net/dist/0install/0local.xml gup-test.xml.template
 
-clean: phony
-	rm gup/*.pyc
-	rm -rf tmp bin/gup
+test: phony unit-test integration-test
 
-# dumb alias for local test scripts
-unit-test: phony
-	./t
-integration-test: phony
-	./ti
+unit-test: phony ocaml/unit-test python/unit-test
+
+integration-test-pre: phony ocaml/integration-test-pre python/integration-test-pre
+permutation-test: phony integration-test-pre
+	python ./run_tests.py -i
+
+integration-test: phony ocaml/integration-test python/integration-test permutation-test
 
 # Minimal test action: runs full tests, with minimal dependencies.
 # This is the only test target that is likely to work on windows
-test-min: unit-test-pre integration-test-pre
-	0install run --command=test-min gup-test-local.xml
-	0install run --command=integration-test-min gup-test-local.xml
+test-min:
+	env TEST_COMMAND=test-min make test
 
 # Used for development only
 update-windows: phony

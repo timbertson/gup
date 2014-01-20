@@ -46,7 +46,7 @@ def main():
 	with open(output_path, 'w') as output:
 		with open(os.path.join(here, 'header.py')) as header:
 			lines = header.read().splitlines()
-			with open(os.path.join(here, '../VERSION')) as ver:
+			with open(os.path.join(here, '../../VERSION')) as ver:
 				lines.insert(2, '# VERSION: %s' % ver.read().strip())
 			output.write('\n'.join(lines))
 

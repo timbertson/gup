@@ -11,6 +11,8 @@ _log = getLogger(__name__)
 
 META_DIR = '.gup'
 
+class VersionMismatch(ValueError): pass
+
 class _dirty_args(object):
 	def __init__(self, deps, base, builder_path, built):
 		self.deps = deps
@@ -56,13 +58,17 @@ class TargetState(object):
 			return rv
 
 		with self._ensure_dep_lock().read():
+			deps_path = self.meta_path('deps')
 			try:
-				f = open(self.meta_path('deps'))
+				f = open(deps_path)
 			except IOError as e:
 				if e.errno != errno.ENOENT: raise
 			else:
-				with f:
-					rv = Dependencies(self.path, f)
+				try:
+					with f:
+						rv = Dependencies(self.path, f)
+				except VersionMismatch as e:
+					_log.debug("dep file is a previous version: %s", deps_path)
 		_log.trace("Loaded serialized state: %r" % (rv,))
 		return rv
 
@@ -106,7 +112,7 @@ class TargetState(object):
 				return built
 
 class Dependencies(object):
-	FORMAT_VERSION = 1
+	FORMAT_VERSION = 2
 	def __init__(self, path, file):
 		self.path = path
 		self.rules = []
@@ -121,7 +127,7 @@ class Dependencies(object):
 			if not version_line.startswith('version:'): raise ValueError("Invalid file")
 			_, file_version = version_line.split(' ')
 			if int(file_version) != self.FORMAT_VERSION:
-				raise ValueError("version mismatch: can't read format version %s" % (file_version,))
+				raise VersionMismatch("can't read format version %s" % (file_version,))
 
 			while True:
 				line = file.readline()
@@ -219,14 +225,9 @@ class AlwaysRebuild(Dependency):
 		_log.debug('DIRTY: always rebuild')
 		return True
 
-class UnknownState(object):
-	def __init__(self, target, children):
-		self.target = target
-		self.children = children
-
 class FileDependency(Dependency):
 	num_fields = 3
-	tag = 'filedep:'
+	tag = 'file:'
 	recursive = True
 
 	def __init__(self, mtime, checksum, path):
@@ -243,14 +244,14 @@ class FileDependency(Dependency):
 	@classmethod
 	def deserialize(cls, mtime, checksum, path):
 		return cls(
-			int(mtime) or None,
+			None if mtime == '-' else int(mtime),
 			None if checksum == '-' else checksum,
 			path)
 	
 	@property
 	def fields(self):
 		return [
-			str(self.mtime or 0),
+			'-' if self.mtime is None else str(self.mtime),
 			self.checksum or '-',
 			self.path]
 

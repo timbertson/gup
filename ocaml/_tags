@@ -1,0 +1,7 @@
+true: lwt_debug, debug, package(batteries,unix,fileutils,sha,extunix,lwt,lwt.unix),strict_sequence
+
+<gup/state.ml> or <gup/builder.ml> or <gup/parallel.ml> or <gup/cmd.ml> or <gup/util.ml>: syntax(camlp4o), package(lwt.syntax), lwt_debug
+
+"gup": for-pack(Gup)
+<gup/*.cmx>: for-pack(Gup)
+<test*> or <test/*>: package(oUnit)

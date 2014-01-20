@@ -159,7 +159,7 @@ def _mark_ifcreate(opts, files):
 		parent_state.add_dependency(FileDependency.relative_to_target(parent_target, mtime=None, checksum=None, path = filename))
 
 def _mark_contents(opts, targets):
-	parent_target = _assert_parent_target('--content')
+	parent_target = _assert_parent_target('--contents')
 	if len(targets) == 0:
 		assert not sys.stdin.isatty()
 		checksum = Checksum.from_stream(sys.stdin)
@@ -200,13 +200,15 @@ def _clean_targets(opts, dests):
 				if not opts.metadata:
 					deps = TargetState.built_targets(gupdir)
 					for dep in deps:
-						if dep in filenames:
+						if dep in (filenames + dirnames):
 							target = os.path.join(dirpath, dep)
 							if Builder.for_target(target) is not None:
 								rm(target)
 				rm(gupdir, isdir=True)
 			# filter out hidden directories
-			dirnames = [d for d in dirnames if not d.startswith('.')]
+			hidden_dirs = [d for d in dirnames if d.startswith('.')]
+			for hidden in hidden_dirs:
+				dirnames.remove(hidden)
 
 def _build(opts, targets):
 	if opts.trace:

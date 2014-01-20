@@ -1,4 +1,2 @@
 #!/bin/bash
-set -eu
-make unit-test-pre
-exec 0install run --command=test gup-test-local.xml "$@"
+"$(dirname "$0")"/run_tests.py -u "$@"

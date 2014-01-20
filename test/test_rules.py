@@ -16,6 +16,7 @@ class TestBasicRules(TestCase):
 	def test_fails_on_updating_nonexitent_file(self):
 		self.assertRaises(Unbuildable, lambda: self.build_u("nonexistent.txt"))
 
+	@skipPermutations
 	def test_only_creates_new_files_matching_pattern(self):
 		self.assertRaises(Unbuildable, lambda: self.build("output.txt"))
 

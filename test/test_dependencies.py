@@ -11,6 +11,15 @@ class TestDependencies(TestCase):
 		self.write("counter", "2")
 		self.build_u_assert("dep", "COUNT: 2")
 
+	def test_rebuilds_if___update_was_not_specified(self):
+		self.write("counter", "1")
+
+		target = 'dep'
+		self.build(target)
+		mtime = self.mtime(target)
+		self.build(target)
+		self.assertNotEqual(self.mtime(target), mtime, "target %s didn't get rebuilt" % (target,))
+
 	def test_rebuilds_if_file_was_modified_outside_gup(self):
 		self.write("counter", "1")
 		self.build_u_assert("dep", "COUNT: 1")
@@ -69,6 +78,12 @@ class TestDependencies(TestCase):
 		self.write('target.gup', echo_to_target('ok'))
 
 		self.assertRebuilds('target', lambda: self.touch('target.gup'))
+	
+	def test_depend_on_file_with_spaces(self):
+		self.write('target.gup', echo_file_contents('a b'))
+		self.write('a b', 'a b c!')
+		self.build_assert('target', 'a b c!')
+		self.assertRebuilds('target', lambda: self.touch('a b'))
 
 	def test_recursive_dependencies_include_gupfile(self):
 		self.write('child.gup', echo_to_target('ok'))
@@ -185,13 +200,12 @@ class TestChecksums(TestCase):
 	def test_parent_of_checksum_is_rebult_if_checksum_contents_changes(self):
 		self.assertRebuilds('parent', lambda: self.write('input', 'ok2'))
 
+	@skipPermutations
 	def test_checksum_accepts_a_number_of_files_instead_of_stdin(self):
 		self.write('firstline', 'line1')
 		self.write('secondline', 'line2')
 		self.write('cs_onefile.gup', BASH + 'gup --always; gup --contents input')
 		self.write('cs_twofile.gup', BASH + 'gup --always; gup --contents firstline secondline')
-
-		# self.build_u('cs', 'cs_onefile', 'cs_twofile')
 
 		def assertChecksumChanges(target, f):
 			self.build_u(target)
@@ -256,3 +270,11 @@ class TestChecksums(TestCase):
 
 		for target in ['grandparent']:
 			self.assertEqual(times2[target], times[target], "expected target %s not to be rebuilt" % target)
+
+class TestVersion(TestCase):
+	def write_old_deps(self):
+		self.write('.gup/target.deps', '\n'.join(['version: 0', 'some_old_key: xyz']))
+
+	def test_overwrites_and_rebuilds_if_deps_are_a_different_version(self):
+		self.write('target.gup', echo_to_target('hello'))
+		self.assertRebuilds('target', self.write_old_deps)

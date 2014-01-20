@@ -31,6 +31,24 @@ class TestClean(TestCase):
 		self.assertTrue(self.exists('source'))
 		self.assertFalse(self.exists('target'))
 		self.assertFalse(self.exists('.gup'))
+	
+	def test_ignores_hidden_directories(self):
+		self.write('.foo/foo.gup', echo_to_target('target contents'))
+		self.build('.foo/foo')
+		self.build('--clean', '-f')
+		self.assertTrue(self.exists('.foo/.gup'))
+	
+	def test_removes_directory_targets(self):
+		self.write('foo.gup', BASH + 'mkdir -p $1; touch $1/bar')
+		self.write('.foo.gup', BASH + 'mkdir -p $1; touch $1/bar')
+		self.build_u('foo')
+		self.build_u('.foo')
+		self.assertTrue(self.exists('foo/bar'))
+		self.assertTrue(self.exists('.foo/bar'))
+
+		self.build('--clean', '-f')
+		self.assertFalse(self.exists('foo'))
+		self.assertFalse(self.exists('.foo'))
 
 	def test_removes_only_metadata_when___metadata(self):
 		self.build('--clean', '-f', '--metadata')
