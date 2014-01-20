@@ -51,7 +51,6 @@ try:
 		if kind == 'ocaml':
 			subprocess.check_call(['./test.byte', '-runner', 'sequential'] + args)
 		else:
-			add_to_env('PYTHONPATH', os.path.join(root, 'python'))
 			run_nose(args)
 
 except subprocess.CalledProcessError: sys.exit(1)
