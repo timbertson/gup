@@ -471,19 +471,15 @@ two versions.
 
 ### Build dependencies:
 
- - [0install](http://0install.net)
+ - [0install][ZeroInstall]
 
 For `python/`:
 
  - PyChecker (optional; you can disable this by exporting `$SKIP_PYCHECKER=1`)
 
-For `ocaml/` (I plan to simplify this in the future):
-
- - OPAM
- - ocamlbuild
- - ocamlfind
- - https://github.com/gfxmonk/lwt/tree/subsecond-stat-results
- - additional packages as listed in ocaml/_tags
+For `ocaml/`, the best bet is to look at the before_install script in `.travis.yml`
+and follow those instructions. I plan on formalizing this in the future, and
+hopefully removing the requirement for a custom fork of `lwt`.
 
 ### Building
 
@@ -511,4 +507,4 @@ and is copyright Thomas Leonard.
 All other source code is Copyright Tim Cuthbertson, 2013.
 
 [redo]: https://github.com/apenwarr/redo
-[ZeroInstall]: https://github.com/apenwarr/redo
+[ZeroInstall]: http://0install.net/
