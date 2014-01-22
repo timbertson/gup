@@ -1,3 +1,5 @@
+ZEROLOCAL=0install run --not-before=0.2.4 http://gfxmonk.net/dist/0install/0local.xml
+
 all: python ocaml
 
 python: python/all
@@ -16,9 +18,12 @@ ocaml/unit-test: phony
 ocaml/integration-test: phony
 	cd python && python ../run_tests.py -i
 
-local: gup-test-local.xml
+local: gup-test-local.xml gup-local.xml
 gup-test-local.xml: gup-test.xml.template
-	0install run --not-before=0.2.4 http://gfxmonk.net/dist/0install/0local.xml gup-test.xml.template
+	${ZEROLOCAL} gup-test.xml.template
+
+gup-local.xml: gup.xml.template
+	${ZEROLOCAL} gup.xml.template
 
 test: phony unit-test integration-test
 
