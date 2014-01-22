@@ -16,7 +16,9 @@ let try_remove (path:string) =
 	(* Remove a file. Ignore if it doesn't exist *)
 	try
 		Unix.unlink path
-	with Unix.Unix_error (Unix.ENOENT, _, _) -> ()
+	with
+		| Unix.Unix_error (Unix.EISDIR, _, _) -> rmtree path
+		| Unix.Unix_error (Unix.ENOENT, _, _) -> ()
 
 let print_mtime : (unit IO.output -> Big_int.t Option.t -> unit) = Option.print Big_int.print
 

@@ -207,7 +207,10 @@ class target (buildscript:Gupfile.buildscript) =
 								raise @@ Target_failed (target_relative_to_cwd)
 							end
 					in
-					Util.finally_do cleanup () do_build
+					try_lwt
+						do_build ()
+					finally
+						Lwt.return (cleanup ())
 				)
 			)
 	end

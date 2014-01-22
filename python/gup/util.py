@@ -1,6 +1,7 @@
 import os
 import errno
 import logging
+import shutil
 from .log import getLogger
 from .var import IS_WINDOWS
 
@@ -24,10 +25,16 @@ def get_mtime(path):
 		raise e
 
 def try_remove(path):
-	'''Remove a file. Ignore if it doesn't exist'''
+	'''
+	Remove a file or directory (including contents).
+	Ignore if it doesn't exist.
+	'''
 	try:
 		os.remove(path)
 	except OSError as e:
+		if e.errno == errno.EISDIR:
+			shutil.rmtree(path)
+			return
 		if e.errno != errno.ENOENT: raise
 
 try:
