@@ -10,8 +10,9 @@ all: phony ${GUP}
 %: phony ${GUP}
 	@+${GUP} $@
 
-# Remove explicit Makefile rule
+# Remove self-rules
 Makefile: ;
+${GUP}: ;
 
 # Always rebuild gup targets
 .PHONY: phony
