@@ -678,29 +678,10 @@ cat $files &gt; "$1"</code></pre>
 	<group>
 		<command name="run" path="python/bin/gup">
 			<environment insert="bin" name="PATH" mode="prepend"/>
-			<runner interface="http://repo.roscidus.com/python/python"/>
+			<runner interface="http://repo.roscidus.com/python/python">
+				<version before="3"/>
+			</runner>
 		</command>
-		<command name="local" path="test/bin/gup">
-			<environment insert="test/bin" name="PATH" mode="prepend"/>
-			<environment insert="python" name="PYTHONPATH" mode="prepend"/>
-			<runner interface="http://repo.roscidus.com/python/python"/>
-		</command>
-		<command name="test">
-			<environment value="b" name="OCAMLRUNPARAM" mode="prepend" separator=","/>
-			<environment insert="python" name="PYTHONPATH" mode="prepend"/>
-			<requires interface="http://gfxmonk.net/dist/0install/mocktest.xml"/>
-			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml"/>
-			<arg>--with-doctest</arg>
-		</command>
-
-		<!-- minimal test commands run without nosetests plugins,
-		     which don't often work so well on windows -->
-		<command name="test-min">
-			<environment insert="" name="PYTHONPATH" mode="prepend"/>
-			<requires interface="http://gfxmonk.net/dist/0install/mocktest.xml"/>
-			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml" command="core"/>
-		</command>
-
 		<implementation version="{version}" released="{date}">
 			<manifest-digest/>
 			<archive href="{archive}"/>
