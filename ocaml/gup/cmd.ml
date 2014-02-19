@@ -306,6 +306,7 @@ let main () =
 		let posargs = OptParse.OptParser.parse p ~first:!firstarg Sys.argv in
 
 		_init_logging !Options.verbosity;
+		Var.set_trace (OptParse.Opt.get Options.trace);
 
 		Lwt_main.run (!Options.action posargs)
 	) with

@@ -28,5 +28,9 @@ let set_verbosity v = Unix.putenv "GUP_VERBOSE" (string_of_int v)
 
 let trace = ref (get_or "GUP_XTRACE" "0" = "1")
 let set_trace t =
-	trace := t;
-	Unix.putenv "GUP_XTRACE" (if t then "1" else "0")
+	(* Note: we ignore set_trace if trace is already true -
+	 * you cannot turn trace off *)
+	if (!trace) = false then (
+		trace := t;
+		Unix.putenv "GUP_XTRACE" (if t then "1" else "0")
+	)
