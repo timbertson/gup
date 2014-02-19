@@ -159,7 +159,13 @@ class Target(object):
 
 	
 	def _run_process(self, args, cwd, env):
-		return subprocess.Popen(args, cwd = cwd, env = env).wait()
+		try:
+			proc = subprocess.Popen(args, cwd = cwd, env = env)
+		except OSError as e:
+			if e.errno == errno.ENOENT:
+				raise SafeError("Executable not found: %s" % (args[0],))
+			raise e
+		return proc.wait()
 
 def _guess_executable(p):
 	with open(p) as f:
