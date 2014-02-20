@@ -82,6 +82,13 @@ class TestScripts(TestCase):
 		self.assertRaises(SafeError, lambda: self.build('dir'))
 		self.assertEquals(self._output_files(), [])
 
+	def test_cleans_up_symlink_to_directory_if_build_fails(self):
+		self.write('link.gup', BASH + 'mkdir dir; touch dir/1 dir/2; ln -s "$(pwd)/dir" "$1"; exit 1')
+		self.assertRaises(SafeError, lambda: self.build('link'))
+		# should only remove _symlink_ - not actual contents
+		self.assertTrue(os.path.exists(self.path('dir/1')))
+		self.assertTrue(os.path.exists(self.path('dir/2')))
+
 	def test_moves_broken_symlink_if_build_succeeds(self):
 		self.write('link.gup', BASH + 'ln -s NOT_HERE "$1"')
 		self.build('link')
