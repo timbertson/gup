@@ -66,7 +66,7 @@ struct
 				let target : Builder.target option = (Builder.prepare_build path) in
 				lwt (_:bool) = begin match target with
 					| None ->
-						if update && (Sys.file_exists path) then (
+						if update && (Util.lexists path) then (
 							_report_nobuild path;
 							Lwt.return false
 						) else
@@ -93,7 +93,7 @@ struct
 		let parent_target = _assert_parent_target "--ifcreate" in
 		let parent_state = new State.target_state parent_target in
 		files |> Lwt_list.iter_s (fun filename ->
-			if Sys.file_exists filename then
+			if Util.lexists filename then
 				Error.raise_safe "File already exists: %s" filename
 			;
 			parent_state#add_file_dependency ~mtime:None ~checksum:None filename

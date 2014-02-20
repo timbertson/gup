@@ -12,6 +12,12 @@ let get_mtime (path:string) : Big_int.t option Lwt.t =
 	in
 	Lwt.return @@ Option.map (fun st -> int_time (st.Lwt_unix.st_mtime)) stats
 
+let lexists (path:string) : bool =
+	try
+		let (_:Unix.stats) = Unix.lstat path in
+		true
+	with Unix.Unix_error (Unix.ENOENT, _, _) -> false
+
 let try_remove (path:string) =
 	(* Remove a file. Ignore if it doesn't exist *)
 	try

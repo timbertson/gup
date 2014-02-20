@@ -253,7 +253,7 @@ and dependencies target_path (data:base_dependency intermediate_dependencies) =
 				(List.print print_obj) !(data.rules)
 
 		method is_dirty (buildscript: Gupfile.buildscript) (built:bool) : (target_state list) dirty_result Lwt.t =
-			if not (Sys.file_exists target_path) then (
+			if not (Util.lexists target_path) then (
 				log#debug "DIRTY: %s (target does not exist)" target_path;
 				return (Known true)
 			) else (
@@ -397,7 +397,7 @@ and target_state (target_path:string) =
 		method private parse_dependencies : dependencies option Lwt.t =
 			log#trace "parse_deps %s" self#path;
 			let deps_path = self#meta_path deps_ext in
-			if Sys.file_exists deps_path then (
+			if Util.lexists deps_path then (
 				try_lwt
 					self#locked_meta_path Parallel.ReadLock deps_ext (fun deps_path ->
 						with_file_in deps_path (fun f ->

@@ -186,7 +186,7 @@ class target (buildscript:Gupfile.buildscript) =
 
 						match ret with
 							| Unix.WEXITED 0 -> begin
-								if Sys.file_exists output_file then (
+								if Util.lexists output_file then (
 									if (try Sys.is_directory self#path with Sys_error _ -> false) then (
 										log#trace "calling rmtree() on previous %s" self#path;
 										Util.rmtree self#path
