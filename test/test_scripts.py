@@ -81,7 +81,18 @@ class TestScripts(TestCase):
 		self.write('dir.gup', BASH + 'mkdir "$1"; echo hello > "$1"/file; exit 1')
 		self.assertRaises(SafeError, lambda: self.build('dir'))
 		self.assertEquals(self._output_files(), [])
+	
+	def test_rebuild_symlink_to_directory(self):
+		self.mkdirp('dir')
+		self.touch('dir/1')
+		self.touch('dir/2')
 
+		self.write('link.gup', BASH + 'ln -s dir "$1"')
+		self.build('link')
+		self.build('link')
+		self.assertTrue(os.path.islink(self.path('link')))
+		self.assertTrue(os.path.isdir(self.path('dir')))
+	
 	def test_cleans_up_symlink_to_directory_if_build_fails(self):
 		self.write('link.gup', BASH + 'mkdir dir; touch dir/1 dir/2; ln -s "$(pwd)/dir" "$1"; exit 1')
 		self.assertRaises(SafeError, lambda: self.build('link'))

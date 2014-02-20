@@ -144,7 +144,7 @@ class Target(object):
 					_log.warn("%s modified %s directly" % (exe_path, self.path))
 			if ret == 0:
 				if os.path.lexists(output_file):
-					if os.path.isdir(self.path):
+					if os.path.isdir(self.path) and not os.path.islink(self.path):
 						_log.trace("calling rmtree() on previous %s", self.path)
 						shutil.rmtree(self.path)
 					rename(output_file, self.path)
