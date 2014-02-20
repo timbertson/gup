@@ -154,7 +154,7 @@ def _mark_ifcreate(opts, files):
 	parent_target = _assert_parent_target('--ifcreate')
 	parent_state = TargetState(parent_target)
 	for filename in files:
-		if os.path.exists(filename):
+		if os.path.lexists(filename):
 			raise SafeError("File already exists: %s" % (filename,))
 		parent_state.add_dependency(FileDependency.relative_to_target(parent_target, mtime=None, checksum=None, path = filename))
 

@@ -144,7 +144,7 @@ class Dependencies(object):
 	
 	def is_dirty(self, builder, built):
 		assert isinstance(builder, Builder)
-		if not os.path.exists(self.path):
+		if not os.path.lexists(self.path):
 			_log.debug("DIRTY: %s (target does not exist)", self.path)
 			return True
 

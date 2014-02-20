@@ -25,7 +25,7 @@ class Task(object):
 
 		target = self.target = prepare_build(target_path)
 		if target is None:
-			if opts.update and os.path.exists(target_path):
+			if opts.update and os.path.lexists(target_path):
 				self.report_nobuild()
 				return None
 			raise Unbuildable(target_path)
