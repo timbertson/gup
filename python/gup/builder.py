@@ -143,7 +143,7 @@ class Target(object):
 					# directories often need to be created directly
 					_log.warn("%s modified %s directly" % (exe_path, self.path))
 			if ret == 0:
-				if os.path.exists(output_file):
+				if os.path.lexists(output_file):
 					if os.path.isdir(self.path):
 						_log.trace("calling rmtree() on previous %s", self.path)
 						shutil.rmtree(self.path)

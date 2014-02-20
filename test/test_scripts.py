@@ -69,7 +69,7 @@ class TestScripts(TestCase):
 	
 	def _output_files(self):
 		meta_files = os.listdir(self.path('.gup'))
-		meta_files = filter(lambda f: not f.endswith('.lock'), meta_files)
+		meta_files = filter(lambda f: not (f.endswith('.lock') or f.endswith('.deps')), meta_files)
 		return list(meta_files)
 
 	def test_cleans_up_file_if_build_fails(self):
@@ -80,6 +80,17 @@ class TestScripts(TestCase):
 	def test_cleans_up_directory_if_build_fails(self):
 		self.write('dir.gup', BASH + 'mkdir "$1"; echo hello > "$1"/file; exit 1')
 		self.assertRaises(SafeError, lambda: self.build('dir'))
+		self.assertEquals(self._output_files(), [])
+
+	def test_moves_broken_symlink_if_build_succeeds(self):
+		self.write('link.gup', BASH + 'ln -s NOT_HERE "$1"')
+		self.build('link')
+		self.assertTrue(os.path.islink(self.path('link')))
+		self.assertEquals(self._output_files(), [])
+
+	def test_cleans_up_broken_symlink_if_build_fails(self):
+		self.write('target.gup', BASH + 'ln -s NOT_HERE "$1"; exit 1')
+		self.assertRaises(SafeError, lambda: self.build('target'))
 		self.assertEquals(self._output_files(), [])
 	
 	@unittest.skipIf(IS_WINDOWS, 'irrelevant on windows')
