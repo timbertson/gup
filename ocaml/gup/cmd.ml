@@ -1,5 +1,5 @@
-open Std
 open Batteries
+open Std
 open Extlib
 
 let log = Logging.get_logger "gup.cmd"
@@ -189,7 +189,16 @@ struct
 		;
 		Lwt.return_unit
 
-
+	let list_targets
+		~(recursive:bool Opt.t)
+		dirs
+	=
+		if List.length dirs > 1 then
+			raise (Invalid_argument "Too many arguments")
+		;
+		let base = List.headOpt dirs |> Option.default "." in
+		Gupfile.buildable_files_in base |> Enum.iter print_endline;
+		Lwt.return_unit
 
 end
 
@@ -205,6 +214,7 @@ struct
 	let interactive = StdOpt.store_true ()
 	let dry_run = StdOpt.store_true ()
 	let force = StdOpt.store_true ()
+	let recursive = StdOpt.store_true ()
 	let metadata = StdOpt.store_true ()
 	let action = ref (Actions.build ~update:update ~jobs:jobs)
 	let clean_mode () =
@@ -260,6 +270,13 @@ struct
 		action := Actions.mark_always;
 		options
 	;;
+
+	let list_targets () =
+		let options = OptParser.make ~usage: "Usage: gup --targets [directory]" () in
+		add options ~short_name:'r' ~long_name:"recursive" ~help:"List targets recursively" recursive;
+		action := Actions.list_targets ~recursive:recursive;
+		options
+	;;
 end
 
 let _init_logging verbosity =
@@ -298,6 +315,7 @@ let main () =
 		| Some "--clean" -> Options.clean ()
 		| Some "--ifcreate" -> Options.ifcreate ()
 		| Some "--contents" -> Options.contents ()
+		| Some "--targets" -> Options.list_targets ()
 		| Some "--always" -> Options.always ()
 		| _ -> firstarg := 1; Options.main ()
 		in

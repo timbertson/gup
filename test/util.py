@@ -139,10 +139,12 @@ class TestCase(mocktest.TestCase):
 
 			child_log = logging.getLogger('out')
 			err = SafeError('gup failed')
+			lines = []
 			while True:
 				line = proc.stdout.readline()
 				if not line:
 						break
+				lines.append(line)
 				line = line.rstrip()
 				unbuildable_msg = "Don't know how to build"
 				unbuildable_idx = line.find(unbuildable_msg)
@@ -160,6 +162,8 @@ class TestCase(mocktest.TestCase):
 			# tests can pass `last=True` to avoid this, on the
 			# condition that they won't rebuild this target
 			time.sleep(1.1)
+
+		return lines
 
 	def build(self, *targets, **k):
 		self._build(targets, **k)
@@ -182,8 +186,12 @@ class TestCase(mocktest.TestCase):
 	
 	def touch(self, target):
 		path = self.path(target)
+		self.mkdirp(os.path.dirname(path))
 		with open(path, 'a'):
 			os.utime(path, None)
+	
+	def completionTargets(self, dir):
+		return self._build(['--targets', dir])
 
 	def assertRebuilds(self, target, fn, built=False):
 		if not built: self.build_u(target)
@@ -207,5 +215,4 @@ class TestCase(mocktest.TestCase):
 	
 	def exists(self, p):
 		return os.path.exists(self.path(p))
-
 

@@ -4,8 +4,8 @@ open Gup.Gupfile
 open Gup
 
 let possible_gup_files path = List.of_enum (possible_builders path)
+let print_builder (candidate, gupfile, target) -> Printf.sprintf2 "%s (%s)" (Filename.concat candidate#repr (string_of_gupfile gupfile)) target
 let print_str_list lst = "[ " ^ (lst |> String.concat "\n") ^ " ]"
-let map_repr = List.map(fun x -> x#repr)
 let custom_printf fn obj = Printf.sprintf2 "%a" fn obj
 let lift_compare m f a b = m (f a) (f b)
 let eq cmp a b = (cmp a b) = 0
@@ -48,7 +48,7 @@ let suite = "Gupfile" >:::
 				"/Gupfile (a/b/c/d/e)";
 				"/[gup]/Gupfile (a/b/c/d/e)"
 			]
-			(possible_gup_files("/a/b/c/d/e") |> map_repr)
+			(possible_gup_files("/a/b/c/d/e") |> List.map print_builder)
 		;
 
 		assert_equal
@@ -58,7 +58,7 @@ let suite = "Gupfile" >:::
 				"x/y/[gup]/somefile.gup (somefile)";
 				"x/[gup]/y/somefile.gup (somefile)"
 			]
-			(possible_gup_files("x/y/somefile") |> List.take 3 |> map_repr)
+			(possible_gup_files("x/y/somefile") |> List.take 3 |> List.map print_builder)
 		;
 
 		assert_equal
@@ -68,7 +68,7 @@ let suite = "Gupfile" >:::
 				"/x/y/[gup]/somefile.gup (somefile)";
 				"/x/[gup]/y/somefile.gup (somefile)"
 			]
-			(possible_gup_files "/x/y/somefile" |> List.take 3 |> map_repr)
+			(possible_gup_files "/x/y/somefile" |> List.take 3 |> List.map print_builder)
 		;
 
 		assert_equal
@@ -77,7 +77,7 @@ let suite = "Gupfile" >:::
 				"./somefile.gup (somefile)";
 				"./[gup]/somefile.gup (somefile)";
 			]
-			(possible_gup_files("somefile") |> List.take 2 |> map_repr)
+			(possible_gup_files("somefile") |> List.take 2 |> List.map print_builder)
 	)
 
 	; "gupfile parsing" >:: (fun _ ->
