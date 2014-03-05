@@ -12,11 +12,6 @@ let neq cmp a b = (cmp a b) <> 0
 let print_repr out r = String.print out r#repr
 let print_obj out r = r#print out
 
-module Option = struct
-	include Option
-	let or_else default opt = match opt with Some x -> x | None -> default
-end
-
 module EnvironmentMap = struct
 	include Map.Make (String)
 	let array env = enum env |> Enum.map (fun (k, v) -> k^"="^v) |> Array.of_enum
@@ -58,4 +53,9 @@ module Lwt_option = struct
 		match v with
 		| None -> Lwt.return_unit
 		| Some v -> Lwt.(>>=) (f v) (fun _ -> Lwt.return_unit)
+end
+
+module List = struct
+	include Batteries.List
+	let headOpt l = try Some (List.hd l) with Not_found -> None
 end

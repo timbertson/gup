@@ -23,7 +23,7 @@ else
 		Unix.getenv "GUP_ROOT"
 	)
 
-let default_verbosity = Option.or_else 0 (Option.map int_of_string (get "GUP_VERBOSE"))
+let default_verbosity = Option.default 0 (Option.map int_of_string (get "GUP_VERBOSE"))
 let set_verbosity v = Unix.putenv "GUP_VERBOSE" (string_of_int v)
 
 let trace = ref (get_or "GUP_XTRACE" "0" = "1")
