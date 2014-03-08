@@ -16,6 +16,11 @@ struct
 			else
 				p
 		)
+
+	let ignore_hidden dirs =
+		dirs |> List.filter (fun dir ->
+			not @@ String.starts_with dir "."
+		)
 	
 	let _assert_parent_target action : string =
 		match _get_parent_target () with
@@ -155,11 +160,6 @@ struct
 		in
 		let dests = if dests = [] then ["."] else dests in
 		List.enum dests |> Enum.iter (fun root ->
-			let ignore_hidden dirs =
-				dirs |> List.filter (fun dir ->
-					not @@ String.starts_with dir "."
-				)
-			in
 			Util.walk root (fun base dirs files ->
 				let removed_dirs = ref [] in
 				if List.mem State.meta_dir_name dirs then (
@@ -189,14 +189,12 @@ struct
 		;
 		Lwt.return_unit
 
-	let list_targets ~(recursive:bool Opt.t) dirs =
-		(* TODO: recurse *)
+	let list_targets dirs =
 		if List.length dirs > 1 then
 			raise (Invalid_argument "Too many arguments")
 		;
 		let base = List.headOpt dirs in
 		let basedir = (Option.default "." base) in
-		(* TODO: remove duplicates *)
 		let add_prefix = begin match base with
 			| Some base -> fun file -> Filename.concat base file
 			| None -> identity
@@ -220,7 +218,6 @@ struct
 	let interactive = StdOpt.store_true ()
 	let dry_run = StdOpt.store_true ()
 	let force = StdOpt.store_true ()
-	let recursive = StdOpt.store_true ()
 	let metadata = StdOpt.store_true ()
 	let action = ref (Actions.build ~update:update ~jobs:jobs)
 	let clean_mode () =
@@ -279,8 +276,7 @@ struct
 
 	let list_targets () =
 		let options = OptParser.make ~usage: "Usage: gup --targets [directory]" () in
-		add options ~short_name:'r' ~long_name:"recursive" ~help:"List targets recursively" recursive;
-		action := Actions.list_targets ~recursive:recursive;
+		action := Actions.list_targets;
 		options
 	;;
 end
@@ -321,7 +317,7 @@ let main () =
 		| Some "--clean" -> Options.clean ()
 		| Some "--ifcreate" -> Options.ifcreate ()
 		| Some "--contents" -> Options.contents ()
-		| Some "--targets" -> Options.list_targets ()
+		| Some "--targets" | Some "-t" -> Options.list_targets ()
 		| Some "--always" -> Options.always ()
 		| _ -> firstarg := 1; Options.main ()
 		in
