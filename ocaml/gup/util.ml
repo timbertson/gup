@@ -52,3 +52,7 @@ let relpath ~from path =
 	if List.length rel_list = 0
 		then "."
 		else String.join Filename.dir_sep rel_list
+
+let isdir path =
+	try Sys.is_directory path
+	with Sys_error _ -> false

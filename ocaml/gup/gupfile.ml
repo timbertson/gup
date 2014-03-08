@@ -1,4 +1,10 @@
-open Batteries open Std let path_join = String.concat Filename.dir_sep let path_split path = List.filter (fun x -> not @@ String.is_empty x) (String.nsplit path Filename.dir_sep) let len = List.length let file_extension path = let filename = Filename.basename path in
+open Batteries
+open Std
+let path_join = String.concat Filename.dir_sep
+let path_split path = List.filter (fun x -> not @@ String.is_empty x) (String.nsplit path Filename.dir_sep)
+let len = List.length
+let file_extension path =
+	let filename = Filename.basename path in
 	try (
 		let _, ext = String.rsplit filename "." in
 		"." ^ ext
@@ -32,9 +38,10 @@ let extant_file_path path = try (
 	) with Sys_error _ -> None
 
 (* converts path.sep into "/" for matching purposes *)
+let canonical_sep = "/"
 let canonicalize_target_name target =
-	if Filename.dir_sep = "/" then target
-	else String.concat "/" (path_split target)
+	if Filename.dir_sep = canonical_sep then target
+	else String.concat canonical_sep (path_split target)
 
 let regexp_of_rule text =
 	let re_parts = Str.full_split _match_rule_splitter text |> List.map (fun part ->
@@ -50,11 +57,45 @@ class match_rule (text:string) =
 	let invert = String.left text 1 = "!" in
 	let pattern_text = if invert then String.tail text 1 else text in
 	let regexp = lazy (Str.regexp @@ regexp_of_rule pattern_text) in
-	object
+	object (self)
 		method matches (str:string) =
 			Str.string_match (Lazy.force regexp) str 0
 		method invert = invert
 		method text = text
+		method is_wildcard =
+			try
+				let (_:int) = Str.search_forward _match_rule_splitter pattern_text 0 in
+				true
+			with Not_found -> false
+
+		method definite_targets_in prefix existing_files =
+			if invert then assert false;
+			let nothing = Enum.empty () in
+			let full_path = begin match prefix with
+				| "" -> identity
+				| prefix -> (^) canonical_sep
+			end in
+
+			let declared_targets = begin match prefix with
+				| "" ->
+					if self#is_wildcard then nothing
+					else Enum.singleton pattern_text (* rule defines an exact match for a file *)
+				| prefix ->
+					try
+						let dir_match, file_match = String.split pattern_text canonical_sep in
+						let dir_match = new match_rule dir_match in
+						if dir_match#matches prefix then (
+							(new match_rule file_match)#definite_targets_in "" existing_files
+						) else nothing
+					with Not_found -> nothing
+			end in
+
+			(* if rule happens to match existing files, include them *)
+			let existing_file_targets = existing_files |> Array.enum |> Enum.filter (function filename ->
+				self#matches (full_path filename)
+			) in
+
+			Enum.append declared_targets existing_file_targets
 	end
 
 let print_match_rule out r =
@@ -73,7 +114,7 @@ class match_rules (rules:match_rule list) =
 		method rules = rules
 
 		(* return targets which *must* be buildable under `prefix`, based on either:
-		 * - a non-wildcard match within the target directory
+		 * - a non-wildcard match within the target prefix
 		 *   (e.g foo/bar/baz or foo/*/baz or **/baz)
 		 *
 		 * - any match on an existing file
@@ -81,12 +122,11 @@ class match_rules (rules:match_rule list) =
 		 *)
 		method definite_targets_in
 			(prefix:string)
-			(existing_files:string array Lazy.t) : string Enum.t
+			(existing_files:string array) : string Enum.t
 		=
-			ignore existing_files;
-			ignore prefix;
-			(* TODO ... *)
-			Enum.empty ()
+			includes |> List.enum
+				|> Enum.map (fun r -> r#definite_targets_in prefix existing_files)
+				|> Enum.concat
 	end
 
 let print_match_rules out r =
@@ -176,16 +216,11 @@ class build_candidate
 			);
 			!parts
 
-		method repr : string =
-			let parts = (self#_base_parts true) |>
-				List.map (fun part -> if part = "gup" then "[gup]" else part) in
-			path_join parts
-
 		method base_path =
 			path_join @@ (self#_base_parts true)
 
 		method guppath (gupfile:gupfile) =
-			Filename.concat self#base_path (string_of_gupfile gupfile)
+			path_join ([ self#base_path ] @ [string_of_gupfile gupfile])
 
 		method get_buildscript gupfile target : buildscript option =
 			let path = self#guppath gupfile |> extant_file_path in
@@ -300,7 +335,7 @@ let buildable_files_in dir : string Enum.t =
 	with
 		| Sys_error _ -> [| |]
 	in
-	let existing_files = lazy (readdir dir) in
+	let existing_files = readdir dir in
 	let extract_targets source : string Enum.t =
 		match source with
 			| Direct (root, suff) ->
@@ -311,8 +346,7 @@ let buildable_files_in dir : string Enum.t =
 					let files = files
 						|> Array.enum
 						|> Enum.filter (fun f -> String.length f > 4 && has_gup_extension f)
-						|> Enum.map (Filename.concat base_path)
-						|> Enum.filter_map extant_file_path
+						|> Enum.filter (fun f -> Util.lexists (Filename.concat base_path f))
 					in
 					files |> Enum.map remove_gup_extension
 			| Indirect (root, suff, target_prefix) ->
@@ -328,8 +362,19 @@ let buildable_files_in dir : string Enum.t =
 					in
 					guppath |> Option.map get_targets |> Option.default (Enum.empty ())
 	in
-	Enum.concat (build_sources dir |> Enum.map extract_targets)
+	let all_results = Enum.concat (build_sources dir |> Enum.map extract_targets) in
 
+	(* all_results may have dupes - instead return an enum that lazily filters out successive seen elements *)
+	let module Set = Set.Make(String) in
+	let seen = ref Set.empty in
+	let next_new = fun f -> not (Set.mem f !seen) in
+	Enum.from (fun () ->
+		try
+			let elem = Enum.find next_new all_results in
+			seen := Set.add elem !seen;
+			elem
+		with Not_found -> raise Enum.No_more_elements
+	)
 
 let find_buildscript path : buildscript option  =
 	possible_builders path |> Enum.filter_map (fun (candidate, gupfile, target) ->

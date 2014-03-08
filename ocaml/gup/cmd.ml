@@ -189,15 +189,21 @@ struct
 		;
 		Lwt.return_unit
 
-	let list_targets
-		~(recursive:bool Opt.t)
-		dirs
-	=
+	let list_targets ~(recursive:bool Opt.t) dirs =
+		(* TODO: recurse *)
 		if List.length dirs > 1 then
 			raise (Invalid_argument "Too many arguments")
 		;
-		let base = List.headOpt dirs |> Option.default "." in
-		Gupfile.buildable_files_in base |> Enum.iter print_endline;
+		let base = List.headOpt dirs in
+		let basedir = (Option.default "." base) in
+		(* TODO: remove duplicates *)
+		let add_prefix = begin match base with
+			| Some base -> fun file -> Filename.concat base file
+			| None -> identity
+		end in
+		Gupfile.buildable_files_in basedir |> Enum.iter (fun f ->
+			print_endline (add_prefix f)
+		);
 		Lwt.return_unit
 
 end

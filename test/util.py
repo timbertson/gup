@@ -18,6 +18,8 @@ from gup.log import TRACE_LVL
 logging.basicConfig(level=TRACE_LVL)
 log = logging.getLogger('TEST')
 
+os.environ['OCAMLRUNPARAM'] = 'b' # make ocaml print backtraces
+
 TEMP = os.path.join(os.path.dirname(__file__), 'tmp')
 GUP_EXES = os.environ.get('GUP_EXE', 'gup').split(os.pathsep)
 LAME_MTIME = sys.platform == 'darwin'
@@ -144,8 +146,8 @@ class TestCase(mocktest.TestCase):
 				line = proc.stdout.readline()
 				if not line:
 						break
-				lines.append(line)
 				line = line.rstrip()
+				lines.append(line)
 				unbuildable_msg = "Don't know how to build"
 				unbuildable_idx = line.find(unbuildable_msg)
 				if unbuildable_idx != -1:
@@ -190,8 +192,10 @@ class TestCase(mocktest.TestCase):
 		with open(path, 'a'):
 			os.utime(path, None)
 	
-	def completionTargets(self, dir):
-		return self._build(['--targets', dir])
+	def completionTargets(self, dir=None):
+		args = ['--targets']
+		if dir is not None: args.append(dir)
+		return self._build(args)
 
 	def assertRebuilds(self, target, fn, built=False):
 		if not built: self.build_u(target)
