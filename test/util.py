@@ -147,7 +147,7 @@ class TestCase(mocktest.TestCase):
 				if not line:
 						break
 				line = line.rstrip()
-				lines.append(line)
+				if not line.startswith('#'): lines.append(line)
 				unbuildable_msg = "Don't know how to build"
 				unbuildable_idx = line.find(unbuildable_msg)
 				if unbuildable_idx != -1:

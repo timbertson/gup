@@ -43,6 +43,13 @@ let canonicalize_target_name target =
 	if Filename.dir_sep = canonical_sep then target
 	else String.concat canonical_sep (path_split target)
 
+(* join` prefix` to `target` using canonical_sep *)
+let join_target prefix = begin match prefix with
+	| "" -> identity
+	| prefix -> (^) (prefix ^ canonical_sep)
+end
+
+
 let regexp_of_rule text =
 	let re_parts = Str.full_split _match_rule_splitter text |> List.map (fun part ->
 		match part with
@@ -71,11 +78,7 @@ class match_rule (text:string) =
 		method definite_targets_in prefix existing_files =
 			if invert then assert false;
 			let nothing = Enum.empty () in
-			let full_path = begin match prefix with
-				| "" -> identity
-				| prefix -> (^) canonical_sep
-			end in
-
+			let full_target = join_target prefix in
 			let declared_targets = begin match prefix with
 				| "" ->
 					if self#is_wildcard then nothing
@@ -92,7 +95,7 @@ class match_rule (text:string) =
 
 			(* if rule happens to match existing files, include them *)
 			let existing_file_targets = existing_files |> Array.enum |> Enum.filter (function filename ->
-				self#matches (full_path filename)
+				self#matches (full_target filename)
 			) in
 
 			Enum.append declared_targets existing_file_targets
@@ -105,12 +108,10 @@ class match_rules (rules:match_rule list) =
 	let (excludes, includes) = rules |> List.partition (fun rule -> rule#invert) in
 	object
 		method matches (str:string) =
-			let any = Enum.exists (fun r ->
+			let any = List.exists (fun r ->
 				r#matches str
-		) in
-			(any @@ List.enum includes)
-				&& not
-			(any @@ List.enum excludes)
+			) in
+			(any includes) && not (any excludes)
 		method rules = rules
 
 		(* return targets which *must* be buildable under `prefix`, based on either:
@@ -127,6 +128,11 @@ class match_rules (rules:match_rule list) =
 			includes |> List.enum
 				|> Enum.map (fun r -> r#definite_targets_in prefix existing_files)
 				|> Enum.concat
+				|> Enum.filter (fun f ->
+					(* remove files matched by an inverted rule *)
+					let target = join_target prefix f in
+					not @@ List.exists (fun rule -> rule#matches target) excludes
+				)
 	end
 
 let print_match_rules out r =
