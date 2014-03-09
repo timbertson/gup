@@ -16,7 +16,13 @@ native: main.native phony
 	cp main.native bin/gup
 
 test: unit-test-pre integration-test-pre phony
+	$(MAKE) unit-test
+	$(MAKE) integration-test
+
+unit-test: unit-test-pre phony
 	../run_tests.py -u
+
+integration-test: integration-test-pre phony
 	../run_tests.py -i
 
 test.byte: test/test.byte phony ;
@@ -25,15 +31,27 @@ test/test.byte: test.mlpack main.byte
 main.byte: gup.mlpack
 main.native: gup.mlpack
 
-%.byte: phony
+PREBUILD: phony version
+version: phony gup/version.ml
+
+%.byte: PREBUILD
 	${OCAMLBUILD} -use-ocamlfind $@
 
-%.native: phony
+%.native: PREBUILD
 	${OCAMLBUILD} -use-ocamlfind $@
 
-%.cmo: phony
+%.cmo: PREBUILD
 	${OCAMLBUILD} -use-ocamlfind $@
 
+gup/version.ml: ../VERSION
+	echo "let version = \"$$(cat ../VERSION)\"" > $@
+
+install: phony native
+	[ -n "${DISTDIR}" ]
+	mkdir -p "${DISTDIR}/bin"
+	cp main.native "${DISTDIR}/bin/gup"
+	mkdir -p "${DISTDIR}/share/fish/completions"
+	cp -a ../share "${DISTDIR}/"
 
 clean: phony
 	rm -rf _build *.mlpack

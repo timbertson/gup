@@ -16,6 +16,7 @@
 		<requires interface="http://repo.roscidus.com/python/python">
 			<version before="3"/>
 		</requires>
+		<requires interface="http://gfxmonk.net/dist/0install/python-which.xml"/>
 		<command name="test">
 			<requires interface="http://gfxmonk.net/dist/0install/mocktest.xml"/>
 			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml"/>

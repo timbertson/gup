@@ -12,12 +12,6 @@ ocaml/%: phony
 python/%: phony
 	make -C python "$$(basename "$@")"
 
-ocaml/unit-test: phony
-	cd ocaml && python ../run_tests.py -u
-
-ocaml/integration-test: phony
-	cd python && python ../run_tests.py -i
-
 local: gup-test-local.xml gup-local.xml
 gup-test-local.xml: gup-test.xml.template
 	${ZEROLOCAL} gup-test.xml.template
@@ -25,15 +19,22 @@ gup-test-local.xml: gup-test.xml.template
 gup-local.xml: gup.xml.template
 	${ZEROLOCAL} gup.xml.template
 
-test: phony unit-test integration-test
+test: phony
+	$(MAKE) unit-test
+	$(MAKE) integration-test
 
-unit-test: phony ocaml/unit-test python/unit-test
+unit-test: phony
+	$(MAKE) ocaml/unit-test
+	$(MAKE) python/unit-test
 
 integration-test-pre: phony ocaml/integration-test-pre python/integration-test-pre
 permutation-test: phony integration-test-pre
 	python ./run_tests.py -i
 
-integration-test: phony ocaml/integration-test python/integration-test permutation-test
+integration-test: phony
+	$(MAKE) ocaml/integration-test
+	$(MAKE) python/integration-test
+	$(MAKE) permutation-test
 
 # Minimal test action: runs full tests, with minimal dependencies.
 # This is the only test target that is likely to work on windows

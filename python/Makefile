@@ -1,4 +1,5 @@
 SOURCES:=../VERSION Makefile $(shell find gup build -type f -name "*.py")
+SOURCES+=gup/version.py
 
 bin: phony bin/gup
 all: bin
@@ -18,6 +19,9 @@ bin/gup: $(SOURCES)
 	mkdir -p tmp bin
 	python ./build/combine_modules.py gup tmp/gup.py
 	cp tmp/gup.py bin/gup
+
+gup/version.py: ../VERSION
+	echo "VERSION = \"$$(cat ../VERSION)\"" > $@
 
 clean: phony
 	rm gup/*.pyc

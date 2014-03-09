@@ -18,6 +18,8 @@ from gup.log import TRACE_LVL
 logging.basicConfig(level=TRACE_LVL)
 log = logging.getLogger('TEST')
 
+os.environ['OCAMLRUNPARAM'] = 'b' # make ocaml print backtraces
+
 TEMP = os.path.join(os.path.dirname(__file__), 'tmp')
 GUP_EXES = os.environ.get('GUP_EXE', 'gup').split(os.pathsep)
 LAME_MTIME = sys.platform == 'darwin'
@@ -39,6 +41,42 @@ def echo_file_contents(dep):
 _skip_permutation_sentinel = object()
 def skipPermutations(fn):
 	fn.skip_permutations = _skip_permutation_sentinel
+	return fn
+
+def has_feature(name):
+	return all([name in _build(exe, args=['--features'], cwd=None) for exe in GUP_EXES])
+
+def _build(exe, args, cwd):
+	log.warn("\n\nRunning build with args: %r [cwd=%r]" % (list(args), cwd))
+	env = os.environ.copy()
+	for key in list(env.keys()):
+		# clear out any gup state
+		if key.startswith('GUP_'):
+			del env[key]
+
+	env['GUP_IN_TESTS'] = '1'
+	use_color = sys.stdout.isatty() and not IS_WINDOWS
+	env['GUP_COLOR'] = '1' if use_color else '0'
+
+	proc = subprocess.Popen([exe] + list(args), cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
+
+	child_log = logging.getLogger('out')
+	err = SafeError('gup failed')
+	lines = []
+	while True:
+		line = proc.stdout.readline()
+		if not line:
+				break
+		line = line.rstrip()
+		if not line.startswith('#'): lines.append(line)
+		unbuildable_msg = "Don't know how to build"
+		unbuildable_idx = line.find(unbuildable_msg)
+		if unbuildable_idx != -1:
+			err = Unbuildable(line[unbuildable_idx + len(unbuildable_msg) + 1:])
+		child_log.info(line)
+	if not proc.wait() == 0:
+		raise err
+	return lines
 
 class TestCase(mocktest.TestCase):
 	exes = None
@@ -110,47 +148,12 @@ class TestCase(mocktest.TestCase):
 			os.chdir(initial)
 
 	def _build(self, args, cwd=None, last=False):
-		log.warn("\n\nRunning build with args: %r [cwd=%r]" % (list(args), cwd))
 		self.invocation_count += 1
 		log.debug("invocation count = %r", self.invocation_count)
 
-		# OSX has 1-second mtime resolution.
-		# Before each build, we sleep as long as we need to
-		# make it 1s since the last build
-		# if self._last_build_time and LAME_MTIME:
-		# 	minimum_time = self._last_build_time + 2
-		# 	sleep_time = minimum_time - time.time()
-		# 	log.warn("sleeping for %s" % (sleep_time,))
-		# 	if sleep_time > 0:
-		# 		time.sleep(sleep_time)
-
 		with self._root_cwd():
-			env = os.environ.copy()
-			for key in list(env.keys()):
-				# clechild_ar out any gup state
-				if key.startswith('GUP_'):
-					del env[key]
-
-			env['GUP_IN_TESTS'] = '1'
-			use_color = sys.stdout.isatty() and not IS_WINDOWS
-			env['GUP_COLOR'] = '1' if use_color else '0'
 			exe = next(self.exes)
-			proc = subprocess.Popen([exe] + list(args), cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
-
-			child_log = logging.getLogger('out')
-			err = SafeError('gup failed')
-			while True:
-				line = proc.stdout.readline()
-				if not line:
-						break
-				line = line.rstrip()
-				unbuildable_msg = "Don't know how to build"
-				unbuildable_idx = line.find(unbuildable_msg)
-				if unbuildable_idx != -1:
-					err = Unbuildable(line[unbuildable_idx + len(unbuildable_msg) + 1:])
-				child_log.info(line)
-			if not proc.wait() == 0:
-				raise err
+			lines = _build(exe, args=args, cwd=cwd)
 
 		if LAME_MTIME and not last:
 			# OSX has 1-second mtime resolution.
@@ -160,6 +163,8 @@ class TestCase(mocktest.TestCase):
 			# tests can pass `last=True` to avoid this, on the
 			# condition that they won't rebuild this target
 			time.sleep(1.1)
+
+		return lines
 
 	def build(self, *targets, **k):
 		self._build(targets, **k)
@@ -182,8 +187,14 @@ class TestCase(mocktest.TestCase):
 	
 	def touch(self, target):
 		path = self.path(target)
+		self.mkdirp(os.path.dirname(path))
 		with open(path, 'a'):
 			os.utime(path, None)
+	
+	def completionTargets(self, dir=None):
+		args = ['--targets']
+		if dir is not None: args.append(dir)
+		return self._build(args)
 
 	def assertRebuilds(self, target, fn, built=False):
 		if not built: self.build_u(target)
@@ -207,5 +218,4 @@ class TestCase(mocktest.TestCase):
 	
 	def exists(self, p):
 		return os.path.exists(self.path(p))
-
 

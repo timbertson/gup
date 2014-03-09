@@ -1,5 +1,5 @@
-open Std
 open Batteries
+open Std
 open Extlib
 
 let log = Logging.get_logger "gup.cmd"
@@ -16,11 +16,19 @@ struct
 			else
 				p
 		)
+
+	let ignore_hidden dirs =
+		dirs |> List.filter (fun dir ->
+			not @@ String.starts_with dir "."
+		)
 	
 	let _assert_parent_target action : string =
 		match _get_parent_target () with
 			| None -> Error.raise_safe "%s was used outside of a gup target" action
 			| Some p -> p
+
+	let expect_no args =
+		if List.length args > 0 then Error.raise_safe "no arguments expected"
 
 	let _init_path () =
 		(* ensure `gup` is present on $PATH *)
@@ -112,7 +120,7 @@ struct
 		(new State.target_state parent_target)#add_checksum checksum
 
 	let mark_always args =
-		if List.length args > 0 then Error.raise_safe "no arguments expected";
+		expect_no args;
 		let parent_target = _assert_parent_target "--always" in
 		(new State.target_state parent_target)#mark_always_rebuild
 	
@@ -155,11 +163,6 @@ struct
 		in
 		let dests = if dests = [] then ["."] else dests in
 		List.enum dests |> Enum.iter (fun root ->
-			let ignore_hidden dirs =
-				dirs |> List.filter (fun dir ->
-					not @@ String.starts_with dir "."
-				)
-			in
 			Util.walk root (fun base dirs files ->
 				let removed_dirs = ref [] in
 				if List.mem State.meta_dir_name dirs then (
@@ -189,7 +192,61 @@ struct
 		;
 		Lwt.return_unit
 
+	let _list_targets base =
+		let basedir = (Option.default "." base) in
+		let add_prefix = begin match base with
+			| Some base -> fun file -> Filename.concat base file
+			| None -> identity
+		end in
+		Gupfile.buildable_files_in basedir |> Enum.iter (fun f ->
+			print_endline (add_prefix f)
+		)
 
+	let list_targets dirs =
+		if List.length dirs > 1 then
+			raise (Invalid_argument "Too many arguments")
+		;
+		let base = List.headOpt dirs in
+		_list_targets base;
+		Lwt.return_unit
+
+	let list_features args =
+		expect_no args;
+		let features = [
+			"version " ^ Version.version;
+			"list-targets";
+			"command-completion";
+		] in
+		List.iter print_endline features;
+		Lwt.return_unit
+
+	let complete_args args =
+		let dir = List.headOpt args in
+
+		let get_dir arg =
+			try
+				let (dir, _) = String.rsplit arg Filename.dir_sep in
+				Some dir
+			with Not_found -> None
+		in
+
+		let dir = Option.bind dir get_dir in
+		_list_targets dir;
+
+		(* also add dirs, since they _may_ contain targets *)
+		let root = Option.default "." dir in
+		let subdirs =
+			try
+				let files = Sys.readdir root in
+				let prefix = match dir with
+					| Some p -> Filename.concat p
+					| None -> identity
+				in
+				let paths = Array.to_list files |> ignore_hidden |> List.map prefix in
+				paths |> List.filter (Util.isdir)
+			with Sys_error _ -> [] in
+		subdirs |> List.iter (fun path -> print_endline (Filename.concat path ""));
+		Lwt.return_unit
 
 end
 
@@ -219,10 +276,12 @@ struct
 		let options = OptParser.make ~usage: (
 			"Usage: gup [action] [OPTIONS] [target [...]]\n\n" ^
 				"actions: (if present, the action must be the first argument)\n\n" ^
-				"  --always     Mark this target as always-dirty\n" ^
-				"  --ifcreate   Rebuild the current target if the given file(s) are created\n" ^
-				"  --contents   Checksum the contents of stdin\n" ^
-				"  --clean      Clean any gup-built targets\n" ^
+				"  --always       Mark this target as always-dirty\n" ^
+				"  --ifcreate     Rebuild the current target if the given file(s) are created\n" ^
+				"  --contents     Checksum the contents of stdin\n" ^
+				"  --clean        Clean any gup-built targets\n" ^
+				"  --targets/-t   List buildable targets in a directory\n" ^
+				"  --features     List the features of this gup version\n" ^
 				"  (use gup <action> --help) for further details") () in
 
 		add options ~short_name:'u' ~long_names:["update";"ifchange"] ~help:"Only rebuild stale targets" update;
@@ -258,6 +317,24 @@ struct
 	let always () =
 		let options = OptParser.make ~usage: "Usage: gup --always" () in
 		action := Actions.mark_always;
+		options
+	;;
+
+	let list_targets () =
+		let options = OptParser.make ~usage: "Usage: gup --targets [directory]" () in
+		action := Actions.list_targets;
+		options
+	;;
+
+	let complete_args () =
+		let options = OptParser.make ~usage: "Usage: gup --complete-command idx [args]" () in
+		action := Actions.complete_args;
+		options
+	;;
+
+	let list_features () =
+		let options = OptParser.make ~usage: "Usage: gup --features" () in
+		action := Actions.list_features;
 		options
 	;;
 end
@@ -298,7 +375,10 @@ let main () =
 		| Some "--clean" -> Options.clean ()
 		| Some "--ifcreate" -> Options.ifcreate ()
 		| Some "--contents" -> Options.contents ()
+		| Some "--targets" | Some "-t" -> Options.list_targets ()
+		| Some "--complete-command" -> Options.complete_args ()
 		| Some "--always" -> Options.always ()
+		| Some "--features" -> Options.list_features ()
 		| _ -> firstarg := 1; Options.main ()
 		in
 

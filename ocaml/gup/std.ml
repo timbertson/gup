@@ -57,5 +57,5 @@ end
 
 module List = struct
 	include Batteries.List
-	let headOpt l = try Some (List.hd l) with Not_found -> None
+	let headOpt l = try Some (List.hd l) with Failure _ -> None
 end
