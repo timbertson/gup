@@ -122,7 +122,7 @@ let suite = "Gupfile" >:::
 			let rules = new match_rules (
 					rules |> List.map (fun r -> new match_rule r)
 			) in
-			rules#definite_targets_in dir (lazy (Array.of_list files))
+			rules#definite_targets_in dir (Array.of_list files)
 				|> List.of_enum
 		in
 

@@ -16,7 +16,13 @@ native: main.native phony
 	cp main.native bin/gup
 
 test: unit-test-pre integration-test-pre phony
+	$(MAKE) unit-test
+	$(MAKE) integration-test
+
+unit-test: unit-test-pre phony
 	../run_tests.py -u
+
+integration-test: integration-test-pre phony
 	../run_tests.py -i
 
 test.byte: test/test.byte phony ;
