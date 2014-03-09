@@ -27,6 +27,9 @@ struct
 			| None -> Error.raise_safe "%s was used outside of a gup target" action
 			| Some p -> p
 
+	let expect_no args =
+		if List.length args > 0 then Error.raise_safe "no arguments expected"
+
 	let _init_path () =
 		(* ensure `gup` is present on $PATH *)
 		let progname = Array.get Sys.argv 0 in
@@ -117,7 +120,7 @@ struct
 		(new State.target_state parent_target)#add_checksum checksum
 
 	let mark_always args =
-		if List.length args > 0 then Error.raise_safe "no arguments expected";
+		expect_no args;
 		let parent_target = _assert_parent_target "--always" in
 		(new State.target_state parent_target)#mark_always_rebuild
 	
@@ -204,6 +207,15 @@ struct
 		);
 		Lwt.return_unit
 
+	let list_features args =
+		expect_no args;
+		let features = [
+			"version " ^ Version.version;
+			"list-targets";
+		] in
+		List.iter print_endline features;
+		Lwt.return_unit
+
 end
 
 module Options =
@@ -232,10 +244,12 @@ struct
 		let options = OptParser.make ~usage: (
 			"Usage: gup [action] [OPTIONS] [target [...]]\n\n" ^
 				"actions: (if present, the action must be the first argument)\n\n" ^
-				"  --always     Mark this target as always-dirty\n" ^
-				"  --ifcreate   Rebuild the current target if the given file(s) are created\n" ^
-				"  --contents   Checksum the contents of stdin\n" ^
-				"  --clean      Clean any gup-built targets\n" ^
+				"  --always       Mark this target as always-dirty\n" ^
+				"  --ifcreate     Rebuild the current target if the given file(s) are created\n" ^
+				"  --contents     Checksum the contents of stdin\n" ^
+				"  --clean        Clean any gup-built targets\n" ^
+				"  --targets/-t   List buildable targets in a directory\n" ^
+				"  --features     List the features of this gup version\n" ^
 				"  (use gup <action> --help) for further details") () in
 
 		add options ~short_name:'u' ~long_names:["update";"ifchange"] ~help:"Only rebuild stale targets" update;
@@ -279,6 +293,12 @@ struct
 		action := Actions.list_targets;
 		options
 	;;
+
+	let list_festures () =
+		let options = OptParser.make ~usage: "Usage: gup --features" () in
+		action := Actions.list_features;
+		options
+	;;
 end
 
 let _init_logging verbosity =
@@ -319,6 +339,7 @@ let main () =
 		| Some "--contents" -> Options.contents ()
 		| Some "--targets" | Some "-t" -> Options.list_targets ()
 		| Some "--always" -> Options.always ()
+		| Some "--features" -> Options.list_festures ()
 		| _ -> firstarg := 1; Options.main ()
 		in
 

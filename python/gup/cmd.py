@@ -12,6 +12,7 @@ from .log import PLAIN, getLogger, TRACE_LVL
 from .var import INDENT, set_verbosity, DEFAULT_VERBOSITY, set_trace
 from .parallel import setup_jobserver
 from .task import Task, TaskRunner
+from .version import VERSION
 
 _log = getLogger(__name__)
 
@@ -29,7 +30,7 @@ def _init_logging(verbosity):
 	
 	if 'GUP_IN_TESTS' in os.environ:
 		lvl = TRACE_LVL
-		fmt = fmt = '%(color)s' + INDENT + '%(bold)s%(message)s' + PLAIN
+		fmt = fmt = '# %(color)s' + INDENT + '%(bold)s%(message)s' + PLAIN
 
 	# persist for child processes
 	set_verbosity(verbosity)
@@ -98,6 +99,9 @@ def _main(argv):
 		elif cmd == '--ifcreate':
 			p = optparse.OptionParser('Usage: gup --ifcreate [file [...]]')
 			action = _mark_ifcreate
+		elif cmd == '--features':
+			p = optparse.OptionParser('Usage: gup --features')
+			action = _list_features
 	
 	if action is None:
 		# default parser
@@ -157,6 +161,13 @@ def _mark_ifcreate(opts, files):
 		if os.path.lexists(filename):
 			raise SafeError("File already exists: %s" % (filename,))
 		parent_state.add_dependency(FileDependency.relative_to_target(parent_target, mtime=None, checksum=None, path = filename))
+
+def _list_features(opts, args):
+	assert len(args) == 0, "no arguments expected"
+	for feature in [
+		'version ' + VERSION,
+	]:
+		print(feature)
 
 def _mark_contents(opts, targets):
 	parent_target = _assert_parent_target('--contents')

@@ -25,15 +25,20 @@ test/test.byte: test.mlpack main.byte
 main.byte: gup.mlpack
 main.native: gup.mlpack
 
-%.byte: phony
+PREBUILD: phony version
+version: phony gup/version.ml
+
+%.byte: PREBUILD
 	${OCAMLBUILD} -use-ocamlfind $@
 
-%.native: phony
+%.native: PREBUILD
 	${OCAMLBUILD} -use-ocamlfind $@
 
-%.cmo: phony
+%.cmo: PREBUILD
 	${OCAMLBUILD} -use-ocamlfind $@
 
+gup/version.ml: ../VERSION
+	echo "let version = \"$$(cat ../VERSION)\"" > $@
 
 clean: phony
 	rm -rf _build *.mlpack
