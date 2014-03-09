@@ -194,7 +194,7 @@ class TestCase(mocktest.TestCase):
 	def completionTargets(self, dir=None):
 		args = ['--targets']
 		if dir is not None: args.append(dir)
-		return self._build(args)
+		return sorted(self._build(args))
 
 	def assertRebuilds(self, target, fn, built=False):
 		if not built: self.build_u(target)
