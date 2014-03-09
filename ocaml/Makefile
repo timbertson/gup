@@ -46,6 +46,13 @@ version: phony gup/version.ml
 gup/version.ml: ../VERSION
 	echo "let version = \"$$(cat ../VERSION)\"" > $@
 
+install: phony native
+	[ -n "${DISTDIR}" ]
+	mkdir -p "${DISTDIR}/bin"
+	cp main.native "${DISTDIR}/bin/gup"
+	mkdir -p "${DISTDIR}/share/fish/completions"
+	cp -a ../share "${DISTDIR}/"
+
 clean: phony
 	rm -rf _build *.mlpack
 

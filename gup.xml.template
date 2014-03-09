@@ -677,10 +677,30 @@ cat $files &gt; "$1"</code></pre>
 	</rich-description>
 	<group>
 		<command name="run" path="python/bin/gup">
-			<environment insert="bin" name="PATH" mode="prepend"/>
 			<runner interface="http://repo.roscidus.com/python/python">
 				<version before="3"/>
 			</runner>
+		</command>
+		<implementation version="{version}" released="{date}">
+			<manifest-digest/>
+			<archive href="{archive}"/>
+		</implementation>
+	</group>
+	<group arch="*-src" compile:dup-src="true">
+		<!-- ocaml version -->
+		<command name="compile">
+			<runner interface="http://repo.roscidus.com/devel/make">
+				<arg>install</arg>
+				<arg>-C</arg>
+				<arg>${BUILDDIR}/ocaml</arg>
+				<arg>DISTDIR=${DISTDIR}</arg>
+			</runner>
+			<compile:implementation>
+				<environment insert="bin" name="PATH" mode="prepend"/>
+				<environment insert="share/fish/completions" name="FISH_COMPLETE_PATH" mode="prepend"/>
+				<environment insert="share/fish/completions" name="fish_complete_path" mode="prepend"/>
+				<command name="run" path="bin/gup"/>
+			</compile:implementation>
 		</command>
 		<implementation version="{version}" released="{date}">
 			<manifest-digest/>
