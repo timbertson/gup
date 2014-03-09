@@ -192,11 +192,7 @@ struct
 		;
 		Lwt.return_unit
 
-	let list_targets dirs =
-		if List.length dirs > 1 then
-			raise (Invalid_argument "Too many arguments")
-		;
-		let base = List.headOpt dirs in
+	let _list_targets base =
 		let basedir = (Option.default "." base) in
 		let add_prefix = begin match base with
 			| Some base -> fun file -> Filename.concat base file
@@ -204,7 +200,14 @@ struct
 		end in
 		Gupfile.buildable_files_in basedir |> Enum.iter (fun f ->
 			print_endline (add_prefix f)
-		);
+		)
+
+	let list_targets dirs =
+		if List.length dirs > 1 then
+			raise (Invalid_argument "Too many arguments")
+		;
+		let base = List.headOpt dirs in
+		_list_targets base;
 		Lwt.return_unit
 
 	let list_features args =
@@ -212,8 +215,37 @@ struct
 		let features = [
 			"version " ^ Version.version;
 			"list-targets";
+			"command-completion";
 		] in
 		List.iter print_endline features;
+		Lwt.return_unit
+
+	let complete_args args =
+		let dir = List.headOpt args in
+
+		let get_dir arg =
+			try
+				let (dir, _) = String.rsplit arg Filename.dir_sep in
+				Some dir
+			with Not_found -> None
+		in
+
+		let dir = Option.bind dir get_dir in
+		_list_targets dir;
+
+		(* also add dirs, since they _may_ contain targets *)
+		let root = Option.default "." dir in
+		let subdirs =
+			try
+				let files = Sys.readdir root in
+				let prefix = match dir with
+					| Some p -> Filename.concat p
+					| None -> identity
+				in
+				let paths = Array.to_list files |> ignore_hidden |> List.map prefix in
+				paths |> List.filter (Util.isdir)
+			with Sys_error _ -> [] in
+		subdirs |> List.iter (fun path -> print_endline (Filename.concat path ""));
 		Lwt.return_unit
 
 end
@@ -294,7 +326,13 @@ struct
 		options
 	;;
 
-	let list_festures () =
+	let complete_args () =
+		let options = OptParser.make ~usage: "Usage: gup --complete-command idx [args]" () in
+		action := Actions.complete_args;
+		options
+	;;
+
+	let list_features () =
 		let options = OptParser.make ~usage: "Usage: gup --features" () in
 		action := Actions.list_features;
 		options
@@ -338,8 +376,9 @@ let main () =
 		| Some "--ifcreate" -> Options.ifcreate ()
 		| Some "--contents" -> Options.contents ()
 		| Some "--targets" | Some "-t" -> Options.list_targets ()
+		| Some "--complete-command" -> Options.complete_args ()
 		| Some "--always" -> Options.always ()
-		| Some "--features" -> Options.list_festures ()
+		| Some "--features" -> Options.list_features ()
 		| _ -> firstarg := 1; Options.main ()
 		in
 
