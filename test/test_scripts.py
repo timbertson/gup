@@ -5,7 +5,7 @@ class TestScripts(TestCase):
 	def test_interpreter(self):
 		self.write('gup/all.gup', '#!./build abc\n# ...')
 		self.write('gup/build', '#!/bin/bash\nset -eu\n' + '(echo "target: $4"; echo "arg: $1") > "$3"')
-		os.chmod(self.path('gup/build'), 0755)
+		os.chmod(self.path('gup/build'), 0o755)
 
 		self.build('all')
 
@@ -116,4 +116,4 @@ class TestScripts(TestCase):
 		self.write('hello.gup', BASH + 'echo -e "#!/bin/bash\necho ok" > "$1"; chmod a+x "$1"')
 		self.build('hello')
 		out = subprocess.check_output(self.path('hello'))
-		self.assertEquals(out.strip(), 'ok')
+		self.assertEquals(out.strip().decode('ascii'), 'ok')

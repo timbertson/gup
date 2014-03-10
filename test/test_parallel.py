@@ -24,10 +24,9 @@ if not IS_WINDOWS:
 
 			self.assertEquals(self.read('counter'), '2')
 			elapsed_time = (datetime.now() - initial_time).total_seconds()
-			log.warn("elapsed time: %r" % (elapsed_time,))
 			# since build sleeps for 1 second, rebuilding it for each
 			# dep would take 6+ seconds
-			self.assertTrue(elapsed_time < 2)
+			assert elapsed_time < 2, "elapsed time > 2s (%s)" % elapsed_time
 
 		def test_nested_tasks_are_executed_in_parallel(self):
 			steps = ['step1', 'step2', 'step3', 'step4', 'step5', 'step6']
@@ -41,4 +40,4 @@ if not IS_WINDOWS:
 			log.warn("elapsed time: %r" % (elapsed_time,))
 			# since build sleeps for 1 second, rebuilding it for each
 			# dep would take 6+ seconds
-			self.assertTrue(elapsed_time < 2)
+			assert elapsed_time < 2, "elapsed time > 2s (%s)" % elapsed_time

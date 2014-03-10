@@ -27,7 +27,7 @@
 				<version before="3"/>
 				<executable-in-path name="python"/>
 			</requires>
-			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml"/>
+			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml" command="run-py2"/>
 			<arg>--with-doctest</arg>
 		</command>
 
@@ -36,7 +36,7 @@
 				<version not-before="3"/>
 				<executable-in-path name="python"/>
 			</requires>
-			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml"/>
+			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml" command="run-py3"/>
 			<arg>--with-doctest</arg>
 		</command>
 

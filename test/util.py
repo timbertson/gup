@@ -67,7 +67,7 @@ def _build(exe, args, cwd):
 		line = proc.stdout.readline()
 		if not line:
 				break
-		line = line.rstrip()
+		line = line.decode('utf-8').rstrip()
 		if not line.startswith('#'): lines.append(line)
 		unbuildable_msg = "Don't know how to build"
 		unbuildable_idx = line.find(unbuildable_msg)
