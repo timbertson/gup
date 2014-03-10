@@ -15,6 +15,12 @@ integration-test: integration-test-pre phony
 
 test: unit-test integration-test
 
+test-py3:
+	env TEST_COMMAND=test-py3 $(MAKE) test
+
+test-py2:
+	env TEST_COMMAND=test-py2 $(MAKE) test
+
 bin/gup: $(SOURCES)
 	mkdir -p tmp bin
 	python ./build/combine_modules.py gup tmp/gup.py

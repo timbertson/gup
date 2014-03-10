@@ -3,7 +3,8 @@ env:
   global:
     - ocaml_ppa=avsm/ocaml41+opam10
   matrix:
-    - subdir=python task=test
+    - subdir=python task=test-py2
+    - subdir=python task=test-py3
     - subdir=ocaml task=test
     - task=permutation-test
 notifications:

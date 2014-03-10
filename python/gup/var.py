@@ -4,6 +4,8 @@ import time
 
 IS_WINDOWS = sys.platform.startswith('win')
 
+PY3 = sys.version_info >= (3,0)
+
 INDENT = os.environ.get('GUP_INDENT', '')
 os.environ['GUP_INDENT'] = INDENT + '  '
 

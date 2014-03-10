@@ -677,9 +677,7 @@ cat $files &gt; "$1"</code></pre>
 	</rich-description>
 	<group>
 		<command name="run" path="python/bin/gup">
-			<runner interface="http://repo.roscidus.com/python/python">
-				<version before="3"/>
-			</runner>
+			<runner interface="http://repo.roscidus.com/python/python"/>
 		</command>
 		<implementation version="{version}" released="{date}">
 			<manifest-digest/>

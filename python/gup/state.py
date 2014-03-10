@@ -330,7 +330,7 @@ class Checksum(Dependency):
 	def from_files(cls, filenames):
 		sh = None
 		for filename in filenames:
-			with open(filename) as f:
+			with open(filename, 'rb') as f:
 				sh = cls._add_file(sh, f)
 		return cls(sh.hexdigest())
 

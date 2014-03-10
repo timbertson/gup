@@ -13,12 +13,29 @@
 
 	<group>
 		<environment insert="python" name="PYTHONPATH" mode="prepend"/>
-		<requires interface="http://repo.roscidus.com/python/python">
-			<version before="3"/>
-		</requires>
+		<requires interface="http://repo.roscidus.com/python/python"/>
 		<requires interface="http://gfxmonk.net/dist/0install/python-which.xml"/>
+		<requires interface="http://gfxmonk.net/dist/0install/mocktest.xml"/>
+
 		<command name="test">
-			<requires interface="http://gfxmonk.net/dist/0install/mocktest.xml"/>
+			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml"/>
+			<arg>--with-doctest</arg>
+		</command>
+
+		<command name="test-py2">
+			<requires interface="http://repo.roscidus.com/python/python">
+				<version before="3"/>
+				<executable-in-path name="python"/>
+			</requires>
+			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml"/>
+			<arg>--with-doctest</arg>
+		</command>
+
+		<command name="test-py3">
+			<requires interface="http://repo.roscidus.com/python/python">
+				<version not-before="3"/>
+				<executable-in-path name="python"/>
+			</requires>
 			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml"/>
 			<arg>--with-doctest</arg>
 		</command>
@@ -26,7 +43,6 @@
 		<!-- minimal test commands run without nosetests plugins,
 		     which don't often work so well on windows -->
 		<command name="test-min">
-			<requires interface="http://gfxmonk.net/dist/0install/mocktest.xml"/>
 			<runner interface="http://gfxmonk.net/dist/0install/nosetests-runner.xml" command="core"/>
 		</command>
 

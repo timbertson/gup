@@ -160,7 +160,7 @@ class Target(object):
 	
 	def _run_process(self, args, cwd, env):
 		try:
-			proc = subprocess.Popen(args, cwd = cwd, env = env)
+			proc = subprocess.Popen(args, cwd = cwd, env = env, close_fds=False)
 		except OSError as e:
 			if e.errno == errno.ENOENT:
 				raise SafeError("Executable not found: %s" % (args[0],))

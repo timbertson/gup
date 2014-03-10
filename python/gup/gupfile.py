@@ -6,8 +6,11 @@ import itertools
 
 from .log import getLogger
 from .error import SafeError
-from .var import INDENT
+from .var import INDENT, PY3
 _log = getLogger(__name__)
+
+if PY3:
+	xrange = range
 
 def _default_gup_files(filename):
 	l = filename.split('.')

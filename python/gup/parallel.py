@@ -70,14 +70,14 @@ else:
 		_debug('release(%d)' % n)
 		_mytokens += n
 		if _mytokens > 1:
-			os.write(_fds[1], 't' * (_mytokens-1))
+			os.write(_fds[1], b't' * (_mytokens-1))
 			_mytokens = 1
 
 
 	def _release_mine():
 		global _mytokens
 		assert(_mytokens >= 1)
-		os.write(_fds[1], 't')
+		os.write(_fds[1], b't')
 		_mytokens -= 1
 
 
@@ -101,7 +101,7 @@ else:
 		# compatible with GNU Make, and they can't handle it.
 		r,w,x = select.select([fd], [], [], 0)
 		if not r:
-			return ''  # try again
+			return b''  # try again
 		# ok, the socket is readable - but some other process might get there
 		# first.  We have to set an alarm() in case our read() gets stuck.
 		oldh = signal.signal(signal.SIGALRM, _timeout)
@@ -109,10 +109,10 @@ else:
 			signal.alarm(1)  # emergency fallback
 			try:
 				b = os.read(_fds[0], 1)
-			except OSError, e:
+			except OSError as e:
 				if e.errno in (errno.EAGAIN, errno.EINTR):
 					# interrupted or it was nonblocking
-					return ''  # try again
+					return b''  # try again
 				else:
 					raise
 		finally:
@@ -149,7 +149,7 @@ else:
 			try:
 				fcntl.fcntl(a, fcntl.F_GETFL)
 				fcntl.fcntl(b, fcntl.F_GETFL)
-			except IOError, e:
+			except IOError as e:
 				if e.errno == errno.EBADF:
 					_log.debug("--jobserver-fds error (flags=%r, a=%r, b=%r)", flags, a, b, exc_info=True)
 					raise ValueError('broken --jobserver-fds from make; prefix your Makefile rule with a "+"')
@@ -168,7 +168,7 @@ else:
 
 
 	def wait(want_token):
-		rfds = _waitfds.keys()
+		rfds = list(_waitfds.keys())
 		if _fds and want_token:
 			rfds.append(_fds[0])
 		assert(rfds)
@@ -245,7 +245,7 @@ else:
 		_debug("wait_all: empty list")
 		_get_token('self')	# get my token back
 		if _toplevel:
-			bb = ''
+			bb = b''
 			while 1:
 				b = _try_read(_fds[0], 8192)
 				bb += b
@@ -357,7 +357,7 @@ else:
 		def __init__(self, name):
 			self.owned = False
 			self.name  = name
-			self.lockfile = os.open(self.name, os.O_RDWR | os.O_CREAT, 0666)
+			self.lockfile = os.open(self.name, os.O_RDWR | os.O_CREAT, 0o666)
 			_close_on_exec(self.lockfile, True)
 			self.shared = fcntl.LOCK_SH
 			self.exclusive = fcntl.LOCK_EX
@@ -377,7 +377,7 @@ else:
 			assert(self.owned != kind)
 			try:
 				fcntl.lockf(self.lockfile, kind|fcntl.LOCK_NB, 0, 0)
-			except IOError, e:
+			except IOError as e:
 				if e.errno in (errno.EAGAIN, errno.EACCES):
 					_log.trace("%s lock failed", self.name)
 					pass  # someone else has it locked

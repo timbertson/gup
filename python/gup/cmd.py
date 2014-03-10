@@ -9,7 +9,7 @@ from .util import *
 from .state import TargetState, AlwaysRebuild, Checksum, FileDependency, META_DIR
 from .gupfile import Builder
 from .log import PLAIN, getLogger, TRACE_LVL
-from .var import INDENT, set_verbosity, DEFAULT_VERBOSITY, set_trace
+from .var import INDENT, set_verbosity, DEFAULT_VERBOSITY, set_trace, PY3
 from .parallel import setup_jobserver
 from .task import Task, TaskRunner
 from .version import VERSION
@@ -173,7 +173,7 @@ def _mark_contents(opts, targets):
 	parent_target = _assert_parent_target('--contents')
 	if len(targets) == 0:
 		assert not sys.stdin.isatty()
-		checksum = Checksum.from_stream(sys.stdin)
+		checksum = Checksum.from_stream(sys.stdin.buffer if PY3 else sys.stdin)
 	else:
 		checksum = Checksum.from_files(targets)
 	TargetState(parent_target).add_dependency(checksum)
@@ -257,7 +257,7 @@ def main():
 	except KeyboardInterrupt:
 		sys.exit(1)
 	except SafeError as e:
-		if e.message is not None:
+		if len(e.args) > 0:
 			_log.error("%s" % (str(e),))
 		sys.exit(1)
 

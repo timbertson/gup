@@ -60,12 +60,14 @@ from within a build script. So you may wish to place it in
 its own directory to avoid accidentally adding other scripts
 to `$PATH`.
 
-### Python dependency
+### Python version
 
-Gup currently requires python 2.x. I have tested it on 2.7,
-I don't know how it fares in versions greater or less than this.
-Patches welcome if you find something broken on your python
-version.
+Gup works under both python 2 and 3, so it should work with
+whatever revent python is on your $PATH.
+
+I don't routinely test under old python versions, so if you
+need to run gup in anything below 2.7 or 3.3 and you find
+something broken, patches welcome.
 
 ### Using it via `make`
 
