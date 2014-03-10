@@ -33,16 +33,31 @@ intimate knowledge of build internals to maintain correct dependencies.
 
 # How do I install it?
 
-A repository-local installation is the most foolproof at the moment.
+For [ZeroInstall][] users, you can just run it:
+
+    $ 0install run http://gfxmonk.net/dist/0install/gup.xml
+
+That's handy for use in build scripts (as there's no setup step),
+but for interactive use you're not going to type that each time.
+To make a local alias so you can just run it as `gup`,
+you should run (once):
+
+    $ 0install add gup http://gfxmonk.net/dist/0install/gup.xml
+
+For repositories where you don't want to make everyone set
+up `gup` as above, you can just commit the `gup` python script
+to your project's repository:
 
  - From a git checkout:
 
-        make bin
-        cp bin/* &lt;your-project-workspace&gt;/tools
+    `make python`
+    cp python/bin/* [your-project-workspace]/tools
 
  - From a released tarball:
 
-        cp bin/* &lt;your-project-workspace&gt;/tools
+    cp python/bin/* [your-project-workspace]/tools
+
+Then, you can run it as `./tools/gup`.
 
 **Note**: When run from a relative or absolute path, `gup`
 will bootstrap itself by adding the directory containing
@@ -51,12 +66,14 @@ from within a build script. So you may wish to place it in
 its own directory to avoid accidentally adding other scripts
 to `$PATH`.
 
-### Python dependency
+### Python version
 
-Gup currently requires python 2.x. I have tested it on 2.7,
-I don't know how it fares in versions greater or less than this.
-Patches welcome if you find something broken on your python
-version.
+Gup works under both python 2 and 3, so it should work with
+whatever revent python is on your $PATH.
+
+I don't routinely test under old python versions, so if you
+need to run gup in anything below 2.7 or 3.3 and you find
+something broken, patches welcome.
 
 ### Using it via `make`
 
@@ -392,6 +409,16 @@ accident.
 
 Not yet, sorry. `gup` is still very new.
 
+# Where can I discuss stuff?
+
+If it's a straighforward bug or feature request, it can probably go straight
+on the [github issues page][issues].
+
+For all other discussion, there's a [mailing list][gup-users].
+
+[issues]: https://github.com/gfxmonk/gup/issues
+[gup-users]: https://groups.google.com/forum/#!forum/gup-users
+
 # What platforms does it work on?
 
 I don't know, yet. It's very early days. It's currently written in python,
@@ -420,17 +447,6 @@ On that note - please raise any issues you find or improvements you can think
 of as a github issue. If something is broken, I'd much rather know about it
 now than later :)
 
-# Development dependencies
-
- - [0install](http://0install.net)
- - PyChecker (optional; you can disable this by exporting `$SKIP_PYCHECKER=1`)
-
-The `gup` build process itself uses `make`, but you can use the included `./make`
-or `./make.bat` if you don't already have make installed.
-
-To run the automated tests, you will also need some standard GNU utilities,
-including `bash`, `find`, `cat`, etc. On Windows, MSYS provides these.
-
 # Why the name `gup`?
 
 It's short, easy to type, and it contains `up` (as in update).
@@ -438,6 +454,51 @@ It's short, easy to type, and it contains `up` (as in update).
 I pronounce it with a hard "g", rhyming with "cup". You can think of
 it as "gee-up" or "get up" or even "get thyself upwards" if you like,
 but you should just say "gup" if you have cause to say it out loud.
+
+# Hacking on `gup`:
+
+The python code (under `python/` and `test/`) is currently the supported version
+of `gup`.
+
+There is an experimental ocaml implementation (under `ocaml/`), which I intend to be
+100% interchangeable with the python version. The purpose of the ocaml version is
+twofold: It should be quite a bit faster than python, and I wanted to learn OCaml.
+The ocaml version is less easily portable than the python version though, and probably
+doesn't even compile on non-linux systems yet.
+
+I don't require contributors to make changes to both codebases (i.e fixing a bug
+in _just_ the python code is fine with me). It would of course be convenient
+if you do update the python &amp; ocaml code simultaneously when submitting a change,
+but I know that's a lot to ask, so I will assume responsibility of
+keeping the codebases in sync as necessary.
+
+If you do add tests or fix bugs, please include tests. These are written in
+python, and are run over both the python &amp; ocaml versions. Doing this (aside
+from generally being a good idea) will help avoid disparity between the
+two versions.
+
+### Build dependencies:
+
+ - [0install][ZeroInstall]
+
+For `python/`:
+
+ - PyChecker (optional; you can disable this by exporting `$SKIP_PYCHECKER=1`)
+
+For `ocaml/`, the best bet is to look at the before_install script in `.travis.yml`
+and follow those instructions. I plan on formalizing this in the future, and
+hopefully removing the requirement for a custom fork of `lwt`.
+
+### Building
+
+The `gup` build process itself uses `make`, but you can use the included `./make`
+or `./make.bat` if you don't already have make installed.
+
+Most operations work from the appropriate directory - e.g running `make bin`, `make unit-test`,
+`make integration-test` in either the `ocaml/` or `python/` directories will do the right thing.
+
+To run the automated tests, you will also need some standard GNU utilities,
+including `bash`, `find`, `cat`, etc. On Windows, MSYS provides these.
 
 # Licence
 
@@ -448,238 +509,23 @@ Gup is distributed under th LGPL - see the LICENCE file.
 `jwack.py` and `lock.py` are adapted from the [redo][] project, which is LGPL
 and is Copyright Avery Pennarun
 
-All other source code is Copyright Tim Cuthbertson, 2013.
+`zeroinstall_utils.ml` is adapted from the [ZeroInstall][] project, which is LGPL
+and is copyright Thomas Leonard.
+
+All other source code is Copyright Tim Cuthbertson, 2013-2014.
 
 [redo]: https://github.com/apenwarr/redo
+[ZeroInstall]: http://0install.net/
 	</description>
-	<rich-description>
-	</rich-description>
 	<feed-for interface="http://gfxmonk.net/dist/0install/gup.xml"/>
-	<rich-description xmlns="http://gfxmonk.net/dist/0install">
-		<div xmlns="http://www.w3.org/1999/xhtml">
-			<h1 id="what-is-gup">What is gup?</h1>
-			<p>Gup is a general purpose, recursive, top down software build system. It doesn't care what language or framework your project uses. It has almost no syntax. It doesn't even care what language you write your <em>build</em> rules in, which is a fairly novel concept for a build system. It freely allows nesting of components and projects, and doesn't care where you build things from (similar to a recursive <code>make</code> setup, but without the downsides).</p>
-			<p>It's very similar to <a href="https://github.com/apenwarr/redo">redo</a>, which was designed by Daniel J. Bernstein and implemented by Avery Pennarun. So I can't take much credit for inventing it, it's really a refinement of an already-great idea.</p>
-			<p>Gup doesn't require you to specify your dependencies up-front, just an executable script which will build a target. This can be written in any language that supports shebang-style scripts (files beginning with <code>#!/path/to-interpreter</code>), and you can freely mix projects or components with build scripts written in different languages.</p>
-			<p>In each build script script, you declare your dependencies as you need them, simply by telling gup to make sure they're up to date. This allows you to keep "the place where you use a file" and "the place where you declare a dependency on a file" colocated, and even to create abstractions that handle these details for you. This makes it much easier to create correct dependency information compared to systems like <code>make</code> which rely on discipline and intimate knowledge of build internals to maintain correct dependencies.</p>
-			<h1 id="how-do-i-install-it">How do I install it?</h1>
-			<p>A repository-local installation is the most foolproof at the moment.</p>
-			<ul>
-				<li>
-					<p>From a git checkout:</p>
-					<pre><code>make bin
-cp bin/* &lt;your-project-workspace&gt;/tools</code></pre>
-				</li>
-				<li>
-					<p>From a released tarball:</p>
-					<pre><code>cp bin/* &lt;your-project-workspace&gt;/tools</code></pre>
-				</li>
-			</ul>
-			<p><strong>Note</strong>: When run from a relative or absolute path, <code>gup</code> will bootstrap itself by adding the directory containing it to <code>$PATH</code>, so that executing <code>gup</code> will do the right thing from within a build script. So you may wish to place it in its own directory to avoid accidentally adding other scripts to <code>$PATH</code>.</p>
-			<h3 id="python-dependency">Python dependency</h3>
-			<p>Gup currently requires python 2.x. I have tested it on 2.7, I don't know how it fares in versions greater or less than this. Patches welcome if you find something broken on your python version.</p>
-			<h3 id="using-it-via-make">Using it via <code>make</code></h3>
-			<p>For convenience, you may wish to provide a <code>Makefile</code> that simply delegates to <code>gup</code>. You can find an example <code>Makefile</code> in the <code>resources/</code> directory.</p>
-			<p>Other methods coming soon.</p>
-			<h1 id="how-does-it-build-stuff">How does it build stuff?</h1>
-			<p>A trivial example would be:</p>
-			<p>
-				<code>target.gup:</code>
-			</p>
-			<pre><code>#!/bin/bash
-gup -u source
-cat source &gt; "$1"
-echo "## Built by gup" &gt;&gt; "$1"</code></pre>
-			<p>This will build the file called <code>target</code> in the current directory, copying the contents of the file called <code>source</code> and adding a fairly useless footer comment. Because it called <code>gup -u source</code>, gup knows that it should be rebuilt whenever <code>source</code> is modified.</p>
-			<p>(<strong>Note:</strong> <code>gup target</code> will cause target to rebuilt regardless of its state. To rebuild a target only when it's out of date, use <code>gup -u target</code>)</p>
-			<p>Obviously, that small example doesn't tell you everything you need to know, but hopefully it gives you a basic idea of how <code>gup</code> works. Here are the full details:</p>
-			<h3 id="the-search-path">The search path</h3>
-			<p>When you run <code>gup build/foo</code> from <code>/home/tim/proj</code>, gup will look for <em>direct</em> build scripts, in this order:</p>
-			<ul>
-				<li>build/foo.gup</li>
-				<li>build/gup/foo.gup</li>
-				<li>gup/build/foo.gup</li>
-				<li>../gup/proj/build/foo.gup</li>
-				<li>../../gup/tim/proj/build/foo.gup</li>
-				<li>../../../gup/home/tim/proj/build/foo.gup</li>
-			</ul>
-			<p>Obviously, it's getting unlikely that you would keep a root /gup folder, but gup doesn't really know where your project might end, so it just keeps searching up to the root of your filesystem for consistency (e.g you may have projects nested inside other projects, you wouldn't want it to stop at the root of the innermost project, because then it would change behaviour based on where it was called from).</p>
-			<p>Notice that this search pattern means you can choose whether to keep your build scripts co-located with targets, or whether you keep them in a "shadow" directory structure under gup/ somewhere. Having .gup files next to targets can be convenient for small projects, but larger projects will usually want to use a gup/ folder structure. Also, a gup/ structure can contain build scripts for targets in directories that don't (yet) exist, which can be very useful.</p>
-			<p>After <code>gup</code> has exhausted the search for direct build scripts, it will start looking for indirect build scripts, which are always named <code>Gupfile</code>. A Gupfile has the syntax:</p>
-			<pre><code>BUILDSCRIPT:
-  TARGET
-  TARGET2
-  TARGET3</code></pre>
-			<p>That is, a non-indented line names a build script - any file path (relative to the directory containing this Gupfile). Each following indented line is a target pattern, which may include the <code>*</code> wildcard to match anything except a "/", and <code>**</code> to match anything including "/". A target pattern beginning with <code>!</code> inverts the match.</p>
-			<p>The search for Gupfiles follows a similar pattern as the search for direct build scripts, but if it fails to find a match for "foo", it'll start to look in higher directories for a Gupfile that knows how to build "build/foo".</p>
-			<p>using pattern "foo":</p>
-			<pre><code>- build/Gupfile
-- build/gup/Gupfile
-- gup/build/Gupfile
-- ../gup/proj/build/Gupfile
-- (...)</code></pre>
-			<p>using pattern "build/foo":</p>
-			<pre><code>- Gupfile
-- gup/Gupfile
-- ../../gup/tim/proj/foo.gup
-- ../../../gup/home/tim/proj/foo.gup</code></pre>
-			<p>using pattern "proj/build/foo":</p>
-			<pre><code>- ../Gupfile
-- ../gup/Gupfile
-- ../../gup/tim/proj/foo.gup
-- ../../../gup/home/tim/proj/foo.gup</code></pre>
-			<p>etc.</p>
-			<p>This search behaviour may seem a little hard to follow, but it's fairly intuitive once you actually start using it. It's also worth noting that if you create a "more specific" build script for a target which has already been built, <code>gup</code> will know that the target needs to be rebuilt using the new build script, just like it rebuilds a target when the build script is modified.</p>
-			<h3 id="running-build-scripts">Running build scripts</h3>
-			<p>Once <code>gup</code> has found the script to build a given target, it runs it as a script. It will interpret shebang lines so that you don't actually have to make your script executable, but you can also use an actual executable (with no shebang line) if you need to. Relative script paths in the shebang line are supported, and (unlike the default UNIX behaviour) are resolved relative to the directory containing the script, rather than the current working directory.</p>
-			<p>Every build script gets executed with two arguments:</p>
-			<ul>
-				<li><code>$1</code> - the (absolute) path to a temporary file created for this target</li>
-				<li><code>$2</code> - the (relative) path to the target, from $CWD</li>
-			</ul>
-			<p>The built file should be saved to the file named in <code>$1</code>, rather than the file being built. This prevents writing incorrect or partial results (e.g if some of the file is written but then the task fails, or if the build is cancelled in the middle of writing a file).</p>
-			<p>When a build script is run, its working directory (<code>$CWD</code>) is determined by:</p>
-			<ol style="list-style-type: decimal">
-				<li>
-					<p>For a direct build script, the working directory is the directory containing the target file. Note that if a target <code>a/b/c</code> is built by <code>gup/a/b/c.gup</code>, then the <code>$CWD</code> will be a/b, <em>not</em> gup/a/b. If you want the location of the executing script, use <code>$0</code>.</p>
-				</li>
-				<li>
-					<p>For a file named by a <code>Gupfile</code>, the working directory is set to the path which makes $2 (the relative path to the target) match what was specified in the Gupfile. Some examples:</p>
-					<p>src/Gupfile contents:</p>
-					<pre><code> default.gup:
-   tmp/*
- obj/default.o.gup:
-   *.o</code></pre>
-					<p>Then:</p>
-					<ul>
-						<li><code>gup src/tmp/foo</code> would run <code>src/default.gup</code> from <code>src/</code>, with <code>$2</code> set to <code>tmp/foo</code>.</li>
-						<li><code>gup src/obj/foo.o</code> would run <code>src/obj/default.gup</code> from <code>src/obj</code>, with <code>$2</code> set to <code>foo.o</code></li>
-					</ul>
-					<p>But if the same files were nested under <code>gup/</code> (e.g <code>gup/src/Gupfile</code>, <code>gup/src/default.gup</code>, etc, then the paths would remain the same - the <code>gup/</code> path containing the actual script being executed would be accessible only via <code>$0</code>.</p>
-				</li>
-			</ol>
-			<p>Again, these rules may seem complex to read, but the actual behaviour is fairly intuitive - rules get run from the target tree (not inside any <code>/gup/</code> path), and from a directory depth consistent with the location of the build script.</p>
-			<h3 id="sample-shadow-directory-structure">Sample "shadow" directory structure</h3>
-			<p>The ability to keep build scripts in a separate <code>gup/</code> directory is useful for cleanliness, but also for defining targets whose destination doesn't actually exist yet. For example, you might have:</p>
-			<pre><code>src/
-  foo.c
-  bar.c
-gup/
-  build/
-    Gupfile
-    build-c
-    build-foo
-    windows/
-      OPTS
-      install.gup
-    osx/
-      OPTS
-      install.gup
-    linux/
-      OPTS
-      install.gup</code></pre>
-			<p>Where the Gupfile contains rules like:</p>
-			<pre><code>build-c:
-  */*.o
-
-build-foo:
-  */foo</code></pre>
-			<p>When building <code>build/windows/foo</code>, it would run the script <code>gup/build/build-foo</code> from the directory <code>build/</code> and "$2" (the target path) set to windows/foo, from which it could determine which OPTS file to use. When <code>gup</code> finds a build script for a path that doesn't yet exist (<code>build/windows/</code> in this case), it will create this directory just prior to running the build script - so your script can always assume the base directory for the target it's building will exist.</p>
-			<p>This also allows you to keep your source and built files separate - your <code>clean</code> task can be as simple as <code>rm -rf build/</code>.</p>
-			<h1 id="where-do-i-list-a-targets-dependencies">Where do I list a target's dependencies?</h1>
-			<p>You don't, at least not up-front like you do in <code>make</code>.</p>
-			<p>As part of a build script, you should tell gup to make sure any file you depend on is up to date. This includes both generated files and source files. For a simple build script that just concatenates all files in <code>src/</code>, you might write:</p>
-			<p>
-				<code>all.gup:</code>
-			</p>
-			<pre><code>#!/bin/bash
-set -eu
-
-files="$(find src -type f)"
-gup -u $files
-cat $files &gt; "$1"</code></pre>
-			<p>When gup first builds <code>all</code>, it doesn't exist - so clearly it needs to be built. As the script runs, <code>gup</code> gets told to update all the files in src, so it remembers that <code>all</code> depends on each of these files. The next time you ask to build <code>all</code>, it knows that it only needs rebuilding if any of the files passed to <code>gup -u</code> changed.</p>
-			<p>You don't have to specify all your dependencies in one place, though - you can call <code>gup -u</code> from any place in your script - all calls make while building your target are appended to the dependency information of the target being built. This is done by setting environment variables when invoking running build scripts, so it's completely parallel-safe.</p>
-			<p>Also, <code>gup</code> will by default include a dependency on the build script used to generate a target. If you change the build script (or add a new build script with a higher precedence for a given target), that target will be rebuilt.</p>
-			<h3 id="checksum-tasks">Checksum tasks</h3>
-			<p>In the above example, there's a bug. If I add a new file to <code>src/</code>, gup doesn't know that <code>all</code> should be rebuilt, because it called <code>gup -u</code> on the files that existed at the time it was last built.</p>
-			<p>The solution for this is to use a checksum task, like so:</p>
-			<p>
-				<code>inputs.gup:</code>
-			</p>
-			<pre><code>#!/bin/bash
-set -eu
-
-find src -type f &gt; "$1"
-gup --always
-gup --contents "$1"</code></pre>
-			<p>
-				<code>all.gup:</code>
-			</p>
-			<pre><code>#!/bin/bash
-set -eu
-
-gup -u inputs
-files="$(cat inputs)"
-gup -u $files
-cat $files &gt; "$1"</code></pre>
-			<p>The <code>inputs</code> task will <em>always</em> be re-run (at most once per <code>gup</code> invocation), but after it runs, it will only be considered out of date (and cause <code>all</code> to be rebuilt) if the contents of the file passed to <code>gup --contents</code> changed since the last time it was built - in this case, if the number or names of files in <code>src/</code> changes.</p>
-			<p>You can also pass contents to <code>gup --contents</code> via stdin, for pure "stamp" tasks where the output is not actually used for anything.</p>
-			<h3 id="other-features">Other features</h3>
-			<p><code>gup</code> can build targets in parallel - just pass in the maximum number of concurrent tasks after <code>-j</code> or <code>--jobs</code>. The jobserver code (courtesy of <a href="https://github.com/apenwarr/redo">redo</a>) is compatible with GNU make's jobserver, so <code>gup</code> should work in parallel when invoked by a parallel <code>make</code> build, and vice versa.</p>
-			<h1 id="using-bash">Using bash</h1>
-			<p>Please don't! At least, not for anything complex.</p>
-			<p>The examples in this readme all use <code>bash</code> as an interpreter, because bash is a lowest common denominator that most people know and understand. The author <strong>strongly recommends</strong> against using bash for any build scripts that aren't trivial. Most people have a preferred scripting language that is safer than bash - use it! I tend to use python, but ruby and perl are other common choices. Really, almost anything is better than bash.</p>
-			<h1 id="relationship-to-redo">Relationship to <code>redo</code></h1>
-			<p><code>gup</code> is based heavily on the <a href="https://github.com/apenwarr/redo">redo</a> build system. Most of the core ideas come from <code>redo</code>, since I used (and enjoyed) <code>redo</code> for quite some time. But as I encountered a number of bugs that were hard to fix while staying within the design of <code>redo</code>, I decided I could make a more reliable system by changing some of the details.</p>
-			<p>If you're familiar with <code>redo</code>, here are the main (intentional) differences:</p>
-			<ul>
-				<li><code>gup</code> will rebuild targets if the stored metadata goes missing or is incorrect, rather than silently(*) assuming they never need to be built again.</li>
-			</ul>
-			<p>(*) <code>redo</code> does print a warning, but that's too easily missed in automated build processes, and requires manual intervention to fix the problem.</p>
-			<ul>
-				<li><code>gup</code> uses Gupfiles to specify exactly what should be built by each generic build script, rather than segregating targets only by their file extension or resorting to a <code>default.do</code> that tries to build every nonexistent file.</li>
-			</ul>
-			<p>This will sometimes mean more work for you, but allows gup to be completely confident about what is buildable, without ever having to guess based on the current state of your working copy.</p>
-			<ul>
-				<li><code>gup</code> allows you to keep your source tree clean, by using a "shadow" gup/ directory - no need to scatter build and output files amongst your source code.</li>
-			</ul>
-			<p>As a side effect of the above differences, gup never thinks that a target is a source when it's actually a target, or vice versa. It <em>does</em> mean than an existing (source) file could be overwritten by an improperly written <code>Gupfile</code> if you accidentally tell <code>gup</code> it was a target (and your build script actually produces a result). This is true of many build systems though, and if you keep a clean separation between source and generated files (e.g by placing all generated files under <code>build/</code>), it's reasonably hard to do the wrong thing by accident.</p>
-			<h1 id="got-any-examples">Got any examples?</h1>
-			<p>Not yet, sorry. <code>gup</code> is still very new.</p>
-			<h1 id="what-platforms-does-it-work-on">What platforms does it work on?</h1>
-			<p>I don't know, yet. It's very early days. It's currently written in python, although that may change. It's been tested on Linux and OSX, and works fine on both.</p>
-			<h1 id="how-buggy-is-it">How buggy is it?</h1>
-			<p>It's pretty new, so chances are there are bugs. Please report any you find to the github issues page.</p>
-			<p>Similarly, if you think anything is confusing in this documentation, please suggest improvements. I already exactly how <code>gup</code> works, so I may be explaining it badly.</p>
-			<h1 id="how-stable-is-the-design">How stable is the design?</h1>
-			<p>It's not. While the design decisions seem unlikely to change, no plan survives contact with actual users.</p>
-			<p>So any details of how <code>gup</code> works may still change in the future. I'll do what I can to make these changes backwards compatible (or at least easy to migrate), but I can make no promises.</p>
-			<p>On that note - please raise any issues you find or improvements you can think of as a github issue. If something is broken, I'd much rather know about it now than later :)</p>
-			<h1 id="development-dependencies">Development dependencies</h1>
-			<ul>
-				<li>
-					<a href="http://0install.net">0install</a>
-				</li>
-				<li>PyChecker (optional; you can disable this by exporting <code>$SKIP_PYCHECKER=1</code>)</li>
-			</ul>
-			<p>The <code>gup</code> build process itself uses <code>make</code>, but you can use the included <code>./make</code> or <code>./make.bat</code> if you don't already have make installed.</p>
-			<p>To run the automated tests, you will also need some standard GNU utilities, including <code>bash</code>, <code>find</code>, <code>cat</code>, etc. On Windows, MSYS provides these.</p>
-			<h1 id="why-the-name-gup">Why the name <code>gup</code>?</h1>
-			<p>It's short, easy to type, and it contains <code>up</code> (as in update).</p>
-			<p>I pronounce it with a hard "g", rhyming with "cup". You can think of it as "gee-up" or "get up" or even "get thyself upwards" if you like, but you should just say "gup" if you have cause to say it out loud.</p>
-			<h1 id="licence">Licence</h1>
-			<p>Gup is distributed under th LGPL - see the LICENCE file.</p>
-			<h3 id="copyrights">Copyrights</h3>
-			<p><code>jwack.py</code> and <code>lock.py</code> are adapted from the <a href="https://github.com/apenwarr/redo">redo</a> project, which is LGPL and is Copyright Avery Pennarun</p>
-			<p>All other source code is Copyright Tim Cuthbertson, 2013.</p>
-		</div>
-	</rich-description>
 	<group>
 		<command name="run" path="python/bin/gup">
 			<runner interface="http://repo.roscidus.com/python/python"/>
 		</command>
-		<implementation version="{version}" released="{date}">
+		<command name="run-python" path="python/bin/gup">
+			<runner interface="http://repo.roscidus.com/python/python"/>
+		</command>
+		<implementation id="python-{version}" version="{version}">
 			<manifest-digest/>
 			<archive href="{archive}"/>
 		</implementation>
@@ -687,20 +533,29 @@ cat $files &gt; "$1"</code></pre>
 	<group arch="*-src" compile:dup-src="true">
 		<!-- ocaml version -->
 		<command name="compile">
-			<runner interface="http://repo.roscidus.com/devel/make">
-				<arg>install</arg>
-				<arg>-C</arg>
-				<arg>${BUILDDIR}/ocaml</arg>
-				<arg>DISTDIR=${DISTDIR}</arg>
+			<requires interface="http://repo.roscidus.com/devel/make">
+				<executable-in-path name="MAKE"/>
+			</requires>
+			<requires interface="http://gfxmonk.net/dist/0install/rainbow.xml">
+				<executable-in-path name="rainbow"/>
+			</requires>
+			<runner interface="http://repo.roscidus.com/utils/bash">
+				<arg>-euxc</arg>
+				<arg>
+					cd "$BUILDDIR"
+					chmod -R u+rw .
+					make -C ocaml install DISTDIR="$DISTDIR"
+				</arg>
 			</runner>
 			<compile:implementation>
-				<environment insert="bin" name="PATH" mode="prepend"/>
-				<environment insert="share/fish/completions" name="FISH_COMPLETE_PATH" mode="prepend"/>
-				<environment insert="share/fish/completions" name="fish_complete_path" mode="prepend"/>
+				<environment insert="bin" mode="prepend" name="PATH"/>
+				<environment insert="share/fish/completions" mode="prepend" name="FISH_COMPLETE_PATH"/>
+				<environment insert="share/fish/completions" mode="prepend" name="fish_complete_path"/>
 				<command name="run" path="bin/gup"/>
+				<command name="run-ocaml" path="bin/gup"/>
 			</compile:implementation>
 		</command>
-		<implementation version="{version}" released="{date}">
+		<implementation id="ocaml-{version}" version="{version}">
 			<manifest-digest/>
 			<archive href="{archive}"/>
 		</implementation>

@@ -45,11 +45,11 @@ to your project's repository:
  - From a git checkout:
 
     `make python`
-    cp python/bin/* <your-project-workspace>/tools
+    cp python/bin/* [your-project-workspace]/tools
 
  - From a released tarball:
 
-    cp python/bin/* <your-project-workspace>/tools
+    cp python/bin/* [your-project-workspace]/tools
 
 Then, you can run it as `./tools/gup`.
 
@@ -506,7 +506,7 @@ and is Copyright Avery Pennarun
 `zeroinstall_utils.ml` is adapted from the [ZeroInstall][] project, which is LGPL
 and is copyright Thomas Leonard.
 
-All other source code is Copyright Tim Cuthbertson, 2013.
+All other source code is Copyright Tim Cuthbertson, 2013-2014.
 
 [redo]: https://github.com/apenwarr/redo
 [ZeroInstall]: http://0install.net/

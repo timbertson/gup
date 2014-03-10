@@ -1,4 +1,9 @@
-bin
+python
+ocaml
 LICENSE
 README.md
 VERSION
+share
+--exclude=ocaml/_build/*
+--exclude=*.native
+--exclude=*.byte
