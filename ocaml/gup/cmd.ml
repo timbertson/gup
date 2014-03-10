@@ -63,6 +63,7 @@ struct
 
 		let jobs = Opt.get jobs in
 		assert (jobs > 0 && jobs < 1000);
+		let posargs = match posargs with [] -> ["all"] | args -> args in
 		Parallel.Jobserver.setup jobs (fun () ->
 			let parent_target = _get_parent_target () in
 			let build_target (path:string) : unit Lwt.t =

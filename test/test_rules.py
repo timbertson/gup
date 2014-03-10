@@ -35,6 +35,11 @@ class TestBasicRules(TestCase):
 		self.build("output.txt")
 		self.assertRaises(Unbuildable, lambda: self.build("source.txt"))
 		self.assertEqual(self.read("source.txt"), self.source_contents)
+	
+	def test_runs_all_target_by_default(self):
+		self.write('all.gup', echo_to_target('1'))
+		self.build()
+		self.assertEqual(self.read('all'), '1')
 
 class TestGupdirectory(TestCase):
 	def test_gupdir_is_search_target(self):
