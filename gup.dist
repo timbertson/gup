@@ -4,6 +4,7 @@ LICENSE
 README.md
 VERSION
 share
---exclude=ocaml/_build/*
+--exclude=ocaml/_build
+--exclude=ocaml/bin
 --exclude=*.native
 --exclude=*.byte
