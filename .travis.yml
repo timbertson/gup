@@ -32,6 +32,9 @@ before_install:
         # ./python or ./
         sudo apt-get install -qq pychecker
       fi
+      if [ "$task" = "test-py3" ]; then
+        sudo apt-get install -qq python3
+      fi
 
       # not required, just useful for colour-coding of test results
       0install run \

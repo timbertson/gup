@@ -4,7 +4,7 @@ SOURCES+=gup/version.py
 bin: phony bin/gup
 all: bin
 
-unit-test-pre: phony
+unit-test-pre: phony $(SOURCES)
 integration-test-pre: phony bin
 
 unit-test: unit-test-pre phony
