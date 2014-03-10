@@ -4,3 +4,7 @@ scratch/
 test/tmp
 .noseids
 /tmp/
+
+# generated version modules
+python/gup/version.py
+ocaml/gup/version.ml
