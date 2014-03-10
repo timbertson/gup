@@ -5,6 +5,10 @@ if not IS_WINDOWS:
 	# we disable parallel builds on windows, so
 	# these tests won't pass
 
+	time_for_two_tasks = 2
+	# travis-ci often executes under load, so give it a couple more seconds
+	if os.environ.get('CI', None): time_for_two_tasks = 4
+
 	class TestParallelBuilds(TestCase):
 		def setUp(self):
 			super(TestParallelBuilds, self).setUp()
@@ -26,7 +30,7 @@ if not IS_WINDOWS:
 			elapsed_time = (datetime.now() - initial_time).total_seconds()
 			# since build sleeps for 1 second, rebuilding it for each
 			# dep would take 6+ seconds
-			assert elapsed_time < 2, "elapsed time > 2s (%s)" % elapsed_time
+			assert elapsed_time < time_for_two_tasks, "elapsed time > %ss (%s)" % (time_for_two_tasks, elapsed_time)
 
 		def test_nested_tasks_are_executed_in_parallel(self):
 			steps = ['step1', 'step2', 'step3', 'step4', 'step5', 'step6']
@@ -40,4 +44,4 @@ if not IS_WINDOWS:
 			log.warn("elapsed time: %r" % (elapsed_time,))
 			# since build sleeps for 1 second, rebuilding it for each
 			# dep would take 6+ seconds
-			assert elapsed_time < 2, "elapsed time > 2s (%s)" % elapsed_time
+			assert elapsed_time < time_for_two_tasks, "elapsed time > %ss (%s)" % (time_for_two_tasks, elapsed_time)
