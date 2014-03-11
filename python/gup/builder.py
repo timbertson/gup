@@ -137,7 +137,8 @@ class Target(object):
 				raise SafeError("%s is not executable and has no shebang line" % (exe_path,))
 
 			new_mtime = get_mtime(self.path)
-			if mtime != new_mtime:
+			target_changed = mtime != new_mtime
+			if target_changed:
 				_log.trace("old_mtime=%r, new_mtime=%r" % (mtime, new_mtime))
 				if not os.path.isdir(self.path):
 					# directories often need to be created directly
@@ -148,6 +149,9 @@ class Target(object):
 						_log.trace("calling rmtree() on previous %s", self.path)
 						shutil.rmtree(self.path)
 					rename(output_file, self.path)
+				else:
+					if (not target_changed) and os.path.exists(self.path) and not os.path.isdir(self.path):
+						os.remove(self.path)
 				MOVED = True
 			else:
 				_log.trace("builder exited with status %s" % (ret,))

@@ -175,26 +175,34 @@ class target (buildscript:Gupfile.buildscript) =
 							end
 						in
 						lwt new_mtime = Util.get_mtime self#path in
-						if neq (Option.compare ~cmp:Big_int.compare) mtime new_mtime then (
+						let target_changed = neq (Option.compare ~cmp:Big_int.compare) mtime new_mtime in
+						if target_changed then (
 							let p = Option.print Big_int.print in
 							log#trace "old_mtime=%a, new_mtime=%a" p mtime p new_mtime;
 							if not (Sys.is_directory self#path) then (
 								(* directories often need to be created directly *)
 								log#warn "%s modified %s directly" exe_path self#path
-							)
+							);
 						);
 
 						match ret with
 							| Unix.WEXITED 0 -> begin
-								if Util.lexists output_file then (
+								lwt () = if Util.lexists output_file then (
 									if (try Sys.is_directory self#path with Sys_error _ -> false) then (
 										log#trace "calling rmtree() on previous %s" self#path;
 										Util.rmtree self#path
 									);
 									log#trace "renaming %s -> %s" output_file self#path;
-									Unix.rename output_file self#path
-								) else
+									Lwt_unix.rename output_file self#path
+								) else (
 									log#trace "output file %s did not get created" output_file;
+									if (not target_changed) then (
+										lwt isfile = Util.isfile self#path in
+										if isfile
+											then Lwt_unix.unlink self#path
+											else Lwt.return_unit
+									) else Lwt.return_unit
+								) in
 								moved := true;
 								Lwt.return true
 							end

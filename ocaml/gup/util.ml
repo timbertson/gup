@@ -12,6 +12,12 @@ let get_mtime (path:string) : Big_int.t option Lwt.t =
 	in
 	Lwt.return @@ Option.map (fun st -> int_time (st.Lwt_unix.st_mtime)) stats
 
+let isfile path =
+	try_lwt
+		lwt stat = Lwt_unix.lstat path in
+		Lwt.return (stat.Unix.st_kind <> Unix.S_DIR)
+	with Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return false
+
 let lexists (path:string) : bool =
 	try
 		let (_:Unix.stats) = Unix.lstat path in

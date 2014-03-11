@@ -190,6 +190,9 @@ class TestCase(mocktest.TestCase):
 		self.mkdirp(os.path.dirname(path))
 		with open(path, 'a'):
 			os.utime(path, None)
+
+	def listdir(self, dir='.'):
+		return sorted(filter(lambda f: not f.startswith('.'), os.listdir(self.path(dir))))
 	
 	def completionTargets(self, dir=None):
 		args = ['--targets']

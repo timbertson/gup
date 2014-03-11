@@ -81,7 +81,24 @@ class TestScripts(TestCase):
 		self.write('dir.gup', BASH + 'mkdir "$1"; echo hello > "$1"/file; exit 1')
 		self.assertRaises(SafeError, lambda: self.build('dir'))
 		self.assertEquals(self._output_files(), [])
-	
+
+	def test_deletes_file_target_if_build_succeeds_but_generates_no_output(self):
+		# we can't delete dirs, as their contents may have changed without
+		# affecting the mtime
+		self.write('file.gup', BASH + 'exit 0')
+		self.write('dir.gup', BASH + 'exit 0')
+		self.touch('dir/contents')
+		self.touch('file')
+		self.assertEquals(self.listdir(), ['dir','dir.gup','file','file.gup'])
+		self.build('file', 'dir')
+		self.assertEquals(self.listdir(), ['dir', 'dir.gup','file.gup'])
+
+	def test_keeps_previous_output_file_if_it_has_been_modified(self):
+		self.write('file.gup', BASH + 'touch "$2"; exit 0')
+		self.touch('file')
+		self.build('file')
+		self.assertEquals(self.listdir(), ['file','file.gup'])
+
 	def test_rebuild_symlink_to_directory(self):
 		self.mkdirp('dir')
 		self.touch('dir/1')
