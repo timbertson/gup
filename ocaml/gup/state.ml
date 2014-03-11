@@ -21,6 +21,7 @@ type dirty_args = {
 }
 
 exception Version_mismatch of string
+exception Invalid_dependency_file
 
 (* lwt wrappers for with_file_in and with_file_out *)
 let with_file_in path fn =
@@ -358,7 +359,7 @@ and dependency_builder target_path (input:Lwt_io.input_channel) = object (self)
 				) else None
 			) in
 			match version_number with
-				| None -> Error.raise_safe "Invalid dependency file"
+				| None -> raise Invalid_dependency_file
 				| Some v ->
 					if v <> format_version then
 						raise @@ Version_mismatch ("can't read format version: " ^ (string_of_int v))
@@ -404,9 +405,17 @@ and target_state (target_path:string) =
 							(new dependency_builder target_path f)#build >>= (fun d -> Lwt.return (Some d))
 						)
 					)
-				with Version_mismatch _ -> (
-					log#debug "dep file is a previous version: %s" deps_path;
-					Lwt.return None)
+				with
+					| Version_mismatch _ -> (
+						log#warn "Ignoring stored dependencies from incompatible version: %s" deps_path;
+						Lwt.return None)
+					| Invalid_dependency_file -> (
+						log#warn "Ignoring invalid stored dependencies: %s" deps_path;
+						Lwt.return None)
+					| e -> (
+						log#warn "Error loading %s: %s (assuming dirty)"
+							deps_path (Printexc.to_string e);
+						Lwt.return None)
 			) else
 				Lwt.return None
 

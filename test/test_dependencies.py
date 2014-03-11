@@ -272,9 +272,21 @@ class TestChecksums(TestCase):
 			self.assertEqual(times2[target], times[target], "expected target %s not to be rebuilt" % target)
 
 class TestVersion(TestCase):
+	def write_deps(self, lines):
+		self.write('.gup/target.deps', '\n'.join(lines))
+
 	def write_old_deps(self):
-		self.write('.gup/target.deps', '\n'.join(['version: 0', 'some_old_key: xyz']))
+		self.write_deps(['version: 0', 'some_old_key: xyz'])
 
 	def test_overwrites_and_rebuilds_if_deps_are_a_different_version(self):
 		self.write('target.gup', echo_to_target('hello'))
 		self.assertRebuilds('target', self.write_old_deps)
+
+	def test_overwrites_and_rebuilds_if_deps_are_invalid(self):
+		self.write('target.gup', echo_to_target('hello'))
+		self.assertRebuilds('target', lambda: self.write_deps(['not_even_valid']))
+		from gup import state
+		self.assertRebuilds('target', lambda: self.write_deps([
+			'version: %s' % state.Dependencies.FORMAT_VERSION,
+			'something_else: 123'
+		]))
