@@ -544,7 +544,7 @@ All other source code is Copyright Tim Cuthbertson, 2013-2014.
 				<arg>
 					cd "$BUILDDIR"
 					chmod -R u+rw .
-					make -C ocaml install DISTDIR="$DISTDIR"
+					make -C ocaml clean install DISTDIR="$DISTDIR"
 				</arg>
 			</runner>
 			<compile:implementation>

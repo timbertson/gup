@@ -54,7 +54,7 @@ install: phony native
 	cp -a ../share "${DISTDIR}/"
 
 clean: phony
-	rm -rf _build *.mlpack
+	rm -rf _build *.mlpack *.byte *.native
 
 %.mlpack: phony
 	@ls -1 "$$(basename "$@" ".mlpack")"/ | ${PIEP} 'p.endswith(".ml") | p[:-3] | p[0].upper() + p[1:]' > $@
