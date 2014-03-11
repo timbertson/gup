@@ -395,6 +395,10 @@ let main () =
 				log#error "Don't know how to build %s" path;
 				exit 1
 		)
+		| Builder.Target_failed path -> (
+				log#error "Target failed: %s" path;
+				exit 1
+		)
 		| Error.Safe_exception (msg, ctx) -> (
 				(* TODO: context?*)
 				log#error "%s" msg;
