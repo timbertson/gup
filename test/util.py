@@ -20,7 +20,6 @@ log = logging.getLogger('TEST')
 
 os.environ['OCAMLRUNPARAM'] = 'b' # make ocaml print backtraces
 
-TEMP = os.path.join(os.path.dirname(__file__), 'tmp')
 GUP_EXES = os.environ.get('GUP_EXE', 'gup').split(os.pathsep)
 LAME_MTIME = sys.platform == 'darwin'
 IS_WINDOWS = sys.platform == 'win32'
@@ -84,11 +83,10 @@ class TestCase(mocktest.TestCase):
 	def setUp(self):
 		log.error("START")
 		super(TestCase, self).setUp()
-		mkdirp(TEMP)
 		self.invocation_count = 0
 		if self.exes is None:
 			self.exes = initial_exes
-		self.ROOT = tempfile.mkdtemp(dir=TEMP)
+		self.ROOT = tempfile.mkdtemp(prefix='gup-test-')
 		log.debug('root: %s', self.ROOT)
 		# self._last_build_time = None
 	
@@ -110,6 +108,7 @@ class TestCase(mocktest.TestCase):
 		self.exes = None
 
 	def tearDown(self):
+		self._teardown();
 		super(TestCase, self).tearDown()
 
 		## permutations
