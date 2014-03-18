@@ -69,7 +69,7 @@ class TargetState(object):
 						rv = Dependencies(self.path, f)
 				except VersionMismatch as e:
 					_log.debug("Ignoring stored dependencies from incompatible version: %s", deps_path)
-				except StandardError as e:
+				except Exception as e:
 					_log.debug("Error loading %s: %s (assuming dirty)", deps_path, e)
 		_log.trace("Loaded serialized state: %r" % (rv,))
 		return rv
