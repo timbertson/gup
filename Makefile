@@ -46,4 +46,8 @@ update-windows: phony
 	git fetch
 	git checkout origin/windows
 
+0compile: gup-local.xml phony
+	if [ ! -e 0compile ]; then 0compile setup gup-local.xml 0compile; fi
+	cd 0compile && 0compile build --clean
+
 .PHONY: phony
