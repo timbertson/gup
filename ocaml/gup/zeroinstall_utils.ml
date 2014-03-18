@@ -49,16 +49,19 @@ let safe_to_string = function
 
 let () = Printexc.register_printer safe_to_string
 
-let try_lstat path =
+let _try_stat stat path =
   try
-    Some (Unix.lstat path)
+    Some (stat path)
   with Unix.Unix_error (errno, _, _) as ex ->
     if errno = Unix.ENOENT then None
     else raise ex
 
+let try_lstat = _try_stat Unix.lstat
+let try_stat = _try_stat Unix.stat
+
 let makedirs ?(mode=0o777) path =
   let rec loop path =
-    match try_lstat path with
+    match try_stat path with
     | Some info ->
         if info.Unix.st_kind = Unix.S_DIR then ()
         else raise_safe "Not a directory: %s" path

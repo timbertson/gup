@@ -20,6 +20,13 @@ class TestScripts(TestCase):
 		self.build('c', 'd', cwd='a/b')
 		self.assertEquals(self.read('a/b/c'), os.path.join('b', 'c'))
 		self.assertEquals(self.read('a/b/d'), 'nested: ' + os.path.join('..', 'b', 'd'))
+
+	def test_creates_nonexisting_destinations_within_symlinks(self):
+		self.mkdirp('dir')
+		os.symlink('dir', self.path('a'))
+
+		self.write("gup/a/b/c.gup", echo_to_target('$2'))
+		self.build_assert('a/b/c', 'c')
 	
 	def test_cwd_is_relative_to_target(self):
 		self.write('gup/all.gup', BASH + 'mkdir -p foo; cd foo; gup -u bar')
