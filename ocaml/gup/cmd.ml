@@ -62,8 +62,11 @@ struct
 		let update = Opt.get update in
 		_init_path ();
 
-		let jobs = Opt.get jobs in
-		assert (jobs > 0 && jobs < 1000);
+		let jobs = match Opt.get jobs with
+			| 0 -> None
+			| n when n > 0 && n < 1000 -> Some n
+			| _ -> assert false
+		in
 		let posargs = match posargs with [] -> ["all"] | args -> args in
 		Parallel.Jobserver.setup jobs (fun () ->
 			let parent_target = _get_parent_target () in
@@ -265,7 +268,7 @@ module Options =
 struct
 	open OptParse
 	let update = StdOpt.store_true ()
-	let jobs = StdOpt.int_option ~default:1 ()
+	let jobs = StdOpt.int_option ~default:0 ()
 	let trace = StdOpt.store_true ()
 	let verbosity = ref Var.default_verbosity
 	let quiet = StdOpt.decr_option   ~dest:verbosity ()

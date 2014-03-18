@@ -2,7 +2,7 @@ open Batteries
 open Std
 open Lwt
 
-let log = Logging.get_logger "gup.state"
+let log = Logging.get_logger "gup.par"
 module ExtUnix = ExtUnix.Specific
 
 type lock_mode =
@@ -31,77 +31,102 @@ type lock_state =
 
 exception Not_locked
 
+(* a reentrant lock file *)
+class lock_file path =
+	let lock_path = path ^ ".lock" in
+	let current_lock = ref None in
 
-let do_lockf path fd flag =
-	try_lwt
-		Lwt_unix.lockf fd flag 0
-	with Unix.Unix_error (errno, _,_) ->
-		Error.raise_safe "Unable to lock file %s: %s" path (Unix.error_message errno)
+	let do_lockf path fd flag =
+		try_lwt
+			Lwt_unix.lockf fd flag 0
+		with Unix.Unix_error (errno, _,_) ->
+			Error.raise_safe "Unable to lock file %s: %s" path (Unix.error_message errno)
+	in
 
-let lock_file mode path =
-	lwt fd = Lwt_unix.openfile path [Unix.O_RDWR; Unix.O_CREAT; Unix.O_CLOEXEC] 0o664 in
-	lwt () = do_lockf path fd (lock_flag mode) in
-	log#trace "--Lock[%s] %a" path print_lock_mode mode;
-	Lwt.return (mode, fd, path)
-	
-let release_lock current =
-	lwt () = match current with
-		| (_, fd, desc) ->
-				log#trace "Unlock[%s]" desc;
-				Lwt_unix.close fd
-	in Lwt.return_unit
+	let lock_file mode path =
+		lwt fd = Lwt_unix.openfile path [Unix.O_RDWR; Unix.O_CREAT; Unix.O_CLOEXEC] 0o664 in
+		lwt () = do_lockf path fd (lock_flag mode) in
+		log#trace "--Lock[%s] %a" path print_lock_mode mode;
+		Lwt.return (mode, fd, path)
+	in
+		
+	let release_lock current =
+		lwt () = match current with
+			| (_, fd, desc) ->
+					log#trace "Unlock[%s]" desc;
+					Lwt_unix.close fd
+		in Lwt.return_unit
+	in
 
-let with_lock mode path f =
-	lwt lock = lock_file mode path in
-	try_lwt
-		f ()
-	finally
-		release_lock lock
+	let with_lock mode path f =
+		lwt lock = lock_file mode path in
+		try_lwt
+			f ()
+		finally
+			release_lock lock
+	in
 
-module Jobserver = struct
-	let _fds : (Lwt_unix.file_descr * Lwt_unix.file_descr) option ref = ref None
-	let read_end tup = Option.get !tup |> Tuple.Tuple2.first
-	let write_end tup = Option.get !tup |> Tuple.Tuple2.second
+object (self)
+	method use : 'a. lock_mode -> (string -> 'a Lwt.t) -> 'a Lwt.t = fun mode f ->
+		match !current_lock with
 
-	let _have_token = Lwt_condition.create ()
-	let token = 't'
+			(* acquire initial lock *)
+			| None -> with_lock mode lock_path (fun () ->
+					current_lock := Some mode;
+					let rv = f path in
+					current_lock := None;
+					rv
+				)
 
-	(* MAKEFLAGS to set on children *)
-	let _makeflags : string option ref = ref None
+			(* already locked, perform action immediately *)
+			| Some WriteLock -> f path
+
+			(* other transitions not yet needed *)
+			| _ -> assert false
+end
+
+type fds = (Lwt_unix.file_descr * Lwt_unix.file_descr) option ref
+
+let _lwt_descriptors (r,w) = (
+	Lwt_unix.of_unix_file_descr ~blocking:true ~set_flags:false r,
+	Lwt_unix.of_unix_file_descr ~blocking:true ~set_flags:false w
+)
+
+class fd_jobserver (read_end, write_end) toplevel =
+	let _have_token = Lwt_condition.create () in
+	let token = 't' in
 
 	(* initial token held by this process *)
-	let _mytoken = ref (Some ())
-
-	let makeflags_var = "MAKEFLAGS"
-
-	let repeat_tokens len = String.make len token
+	let _mytoken = ref (Some ()) in
+	let repeat_tokens len = String.make len token in
 
 	(* for debugging only *)
-	let _free_tokens = ref 0
+	let _free_tokens = ref 0 in
 
 	let _write_tokens n =
 		let buf = repeat_tokens n in
-		lwt written = Lwt_unix.write (write_end _fds) buf 0 n in
-	assert (written = n);
+		lwt written = Lwt_unix.write write_end buf 0 n in
+		assert (written = n);
 		Lwt.return_unit
+	in
 
 	let _read_token () =
 		let buf = " " in
 		let success = ref false in
-		let fd = read_end _fds in
 		while_lwt not !success do
 			(* XXX does this really return without writing sometimes? *)
-			lwt n = Lwt_unix.read fd buf 0 1 in
+			lwt n = Lwt_unix.read read_end buf 0 1 in
 			let succ = n > 0 in
 			success := succ;
 			if not succ
-			then Lwt_unix.wait_read fd
+			then Lwt_unix.wait_read read_end
 			else Lwt.return_unit
 		done
+	in
 
 	let _release n =
 		log#trace "release(%d)" n;
-		let free_tokens = match !_mytoken with
+		let n = match !_mytoken with
 		| Some _ -> n
 		| None ->
 				(* keep one for myself *)
@@ -109,103 +134,12 @@ module Jobserver = struct
 				Lwt_condition.signal _have_token ();
 				n - 1
 		in
-		if free_tokens > 0 then (
-			_free_tokens := !_free_tokens + free_tokens;
+		if n > 0 then (
+			_free_tokens := !_free_tokens + n;
 			log#trace "free tokens: %d" !_free_tokens;
-			_write_tokens free_tokens
+			_write_tokens n
 		) else Lwt.return_unit
-
-	let _release_mine () =
-		match !_mytoken with
-			| None -> assert false
-			| Some _ -> _write_tokens 1
-	
-	let extract_fds flags =
-		let flags_re = Str.regexp "--jobserver-fds=\\([0-9]+\\),\\([0-9]+\\)" in
-		try
-			ignore @@ Str.search_forward flags_re flags 0;
-			Some (
-				Int.of_string (Str.matched_group 1 flags),
-				Int.of_string (Str.matched_group 2 flags)
-			)
-		with Not_found -> None
-
-	let extend_env e =
-		!_makeflags
-		|> Option.map (fun flags -> EnvironmentMap.add makeflags_var flags e)
-		|> Option.default e
-
-	let setup maxjobs fn =
-		(* run the job server *)
-		let _toplevel = ref 0 in
-		lwt () = match !_fds with
-			| Some _ -> Lwt.return_unit
-			| None -> (
-				log#trace "setup_jobserver(%d)" maxjobs;
-				let maxjobs = ref maxjobs in
-				let flags = Var.get_or makeflags_var "" in
-				let fd_ints = extract_fds flags in
-				let fd_pair = Option.bind fd_ints (fun (a,b) ->
-					let a = ExtUnix.file_descr_of_int a
-					and b = ExtUnix.file_descr_of_int b
-					in
-					(* check validity of fds given in $MAKEFLAGS *)
-					let valid fd = ExtUnix.is_open_descr fd in
-					if valid a && valid b then (
-						log#trace "using fds %a"
-							(Tuple.Tuple2.print Int.print Int.print) (Option.get fd_ints);
-						Some (a,b)
-					) else (
-						log#warn (
-							"broken --jobserver-fds in $MAKEFLAGS;" ^^
-							"prefix your Makefile rule with +\n" ^^
-							"Assuming --jobs=1");
-						maxjobs := 1;
-						ExtUnix.unsetenv makeflags_var;
-						None
-					)
-				) in
-
-				let convert_fds (r,w) = (
-					Lwt_unix.of_unix_file_descr ~blocking:true ~set_flags:false r,
-					Lwt_unix.of_unix_file_descr ~blocking:true ~set_flags:false w
-				) in
-
-				match fd_pair with
-				| Some pair -> (
-						_fds := Some (convert_fds pair);
-						Lwt.return_unit
-					)
-				| None -> (
-					let maxjobs = !maxjobs in
-					assert (maxjobs > 0);
-					(* need to start a new server *)
-					log#trace "new jobserver! %d" maxjobs;
-					_toplevel := maxjobs;
-					let pair = Unix.pipe () in
-					_fds := Some (convert_fds pair);
-					lwt () = _release (maxjobs-1) in
-					let (a,b) = pair in
-					let new_flags = Printf.sprintf
-						"--jobserver-fds=%d,%d -j"
-						(ExtUnix.int_of_file_descr a)
-						(ExtUnix.int_of_file_descr b)
-					in
-					let modified_flags = (Var.get makeflags_var)
-						|> Option.map (fun existing -> existing ^ " " ^ new_flags)
-					in
-					_makeflags := Some (Option.default new_flags modified_flags);
-					Lwt.return_unit
-				)
-			)
-		in
-		try_lwt
-			fn ()
-		finally (
-			(* release my token into the wild *)
-			lwt () = Lwt_option.may _release_mine !_mytoken in
-			Lwt.return_unit
-		)
+	in
 
 	let _get_token () =
 		(* Get (and consume) a single token *)
@@ -229,11 +163,170 @@ module Jobserver = struct
 				] in
 				log#trace "got a token";
 				Lwt.return_unit
-	
-	let run_job fn =
+	in
+
+	let () = Option.may (fun tokens -> Lwt_main.run (_release (tokens - 1))) toplevel in
+
+object (self)
+	method finish = Lwt.return_unit
+
+	method run_job : 'a. (unit -> 'a Lwt.t) -> 'a Lwt.t = fun fn ->
 		lwt () = _get_token () in
 		try_lwt
 			fn ()
 		finally
 			_release 1
+end
+
+class named_jobserver path toplevel =
+	let fds =
+		log#trace "opening jobserver at %s" path;
+		let perm = 0o000 in (* ignored, since we don't use O_CREAT *)
+		let r = Unix.openfile path [Unix.O_RDONLY ; Unix.O_NONBLOCK ; Unix.O_CLOEXEC] perm in
+		let w = Unix.openfile path [Unix.O_WRONLY; Unix.O_CLOEXEC] perm in
+		Unix.clear_nonblock r;
+		(_lwt_descriptors (r,w))
+	in
+
+	let server = new fd_jobserver fds toplevel in
+
+object (self)
+	method finish =
+		lwt () = server#finish in
+		let (r, w) = fds in
+		lwt (_:unit list) = Lwt_list.map_p Lwt_unix.close [r;w] in
+
+		(* delete jobserver file if we are the toplevel *)
+		lwt () = Lwt_option.may (fun _ -> Lwt_unix.unlink path) toplevel in
+		Lwt.return_unit
+
+	method run_job : 'a. (unit -> 'a Lwt.t) -> 'a Lwt.t = fun fn ->
+		server#run_job fn
+end
+
+class serial_jobserver =
+	let lock = Lwt_mutex.create () in
+object (self)
+	method run_job : 'a. (unit -> 'a Lwt.t) -> 'a Lwt.t = fun fn ->
+		Lwt_mutex.with_lock lock fn
+
+	method finish = Lwt.return_unit
+end
+
+module Jobserver = struct
+	let _inherited_vars = ref []
+	let _impl = ref (new serial_jobserver)
+
+	let makeflags_var = "MAKEFLAGS"
+	let jobserver_var = "GUP_JOBSERVER"
+	let not_required = "0"
+
+	let _discover_jobserver () = (
+		(* open GUP_JOBSERVER if present *)
+		let inherit_named_jobserver path = new named_jobserver path None in
+		let server = Var.get jobserver_var |> Option.map inherit_named_jobserver in
+		begin match server with
+			| None -> (
+				(* try extracting from MAKEFLAGS, if present *)
+				let flags = Var.get_or makeflags_var "" in
+				let flags_re = Str.regexp "--jobserver-fds=\\([0-9]+\\),\\([0-9]+\\)" in
+				let fd_ints = (
+					try
+						ignore @@ Str.search_forward flags_re flags 0;
+						Some (
+							Int.of_string (Str.matched_group 1 flags),
+							Int.of_string (Str.matched_group 2 flags)
+						)
+					with Not_found -> None
+				) in
+
+				Option.bind fd_ints (fun (r,w) ->
+					let r = ExtUnix.file_descr_of_int r
+					and w = ExtUnix.file_descr_of_int w
+					in
+					(* check validity of fds given in $MAKEFLAGS *)
+					let valid fd = ExtUnix.is_open_descr fd in
+					if valid r && valid w then (
+						log#trace "using fds %a"
+							(Tuple.Tuple2.print Int.print Int.print) (Option.get fd_ints);
+
+						Some (new fd_jobserver (_lwt_descriptors (r,w)) None)
+					) else (
+						log#warn (
+							"broken --jobserver-fds in $MAKEFLAGS;" ^^
+							"prefix your Makefile rule with '+'\n" ^^
+							"or pass --jobs flag to gup directly to ignore make's jobserver\n" ^^
+							"Assuming --jobs=1");
+						ExtUnix.unsetenv makeflags_var;
+						None
+					)
+				)
+			)
+			| server -> server
+		end
+	)
+
+	let _create_named_pipe maxjobs:string = (
+		log#trace "setup_jobserver(%d)" maxjobs;
+		assert (maxjobs > 0);
+		(* need to start a new server *)
+		log#trace "new jobserver! %d" maxjobs;
+
+		let filename = Filename.concat
+			(Filename.get_temp_dir_name ())
+			("gup-job-" ^ (string_of_int @@ Unix.getpid ())) in
+		let create = fun () ->
+			Unix.mkfifo filename 0o600
+		in
+		(* if pipe already exists it must be old, so remove it *)
+		begin try create ()
+		with Unix.Unix_error (Unix.EEXIST, _, _) -> (
+			log#warn "removing stale jobserver file: %s" filename;
+			Unix.unlink filename;
+			create ()
+		) end;
+		log#trace "created jobserver at %s" filename;
+		filename
+	)
+
+	let extend_env env =
+		!_inherited_vars |> List.fold_left (fun env (key, value) ->
+			EnvironmentMap.add key value env
+		) env
+
+	let setup maxjobs fn = (
+		(* run the job server *)
+		let inherited = ref None in
+
+		if (Var.get jobserver_var) <> (Some not_required) then (
+			if Option.is_none maxjobs then begin
+				(* no --jobs param given, check for a running jobserver *)
+				inherited := _discover_jobserver ()
+			end;
+
+			begin match !inherited with
+				| Some server -> _impl := server
+				| None -> (
+					(* no jobserver set, start our own *)
+					let maxjobs = Option.default 1 maxjobs in
+					if maxjobs = 1 then (
+						log#debug "no need for a jobserver (--jobs=1)";
+						_inherited_vars := (jobserver_var, not_required) :: !_inherited_vars;
+					) else (
+						let path = _create_named_pipe maxjobs in
+						_inherited_vars := (jobserver_var, path) :: !_inherited_vars;
+						_impl := new named_jobserver path (Some maxjobs)
+					)
+				)
+			end
+		);
+
+		try_lwt
+			fn ()
+		finally (
+			!_impl#finish
+		)
+	)
+
+	let run_job fn = !_impl#run_job fn
 end

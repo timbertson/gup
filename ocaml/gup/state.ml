@@ -371,36 +371,37 @@ and dependency_builder target_path (input:Lwt_io.input_channel) = object (self)
 	end
 
 and target_state (target_path:string) =
+	let meta_path ext =
+		let base = Filename.dirname target_path in
+		let target = Filename.basename target_path in
+		let meta_dir = Filename.concat base meta_dir_name in
+		Filename.concat meta_dir (target ^ "." ^ ext)
+	in
+
+	let ensure_meta_path ext =
+		let p = meta_path ext in
+		Util.makedirs (Filename.dirname p);
+		p
+	in
+
+	let lock_for_ext ext = new Parallel.lock_file (ensure_meta_path ext) in
+	let deps_lock = lazy (lock_for_ext deps_ext) in
+	let new_deps_lock = lazy (lock_for_ext new_deps_ext) in
 
 	object (self)
-		method private ensure_meta_path ext =
-			let p = self#meta_path ext in
-			Util.makedirs (Filename.dirname p);
-			p
-
-		method meta_path ext =
-			let base = Filename.dirname target_path in
-			let target = Filename.basename target_path in
-			let meta_dir = Filename.concat base meta_dir_name in
-			Filename.concat meta_dir (target ^ "." ^ ext)
+		method meta_path ext = meta_path ext
 
 		method path = target_path
 		
 		method repr =
 			"TargetState(" ^ target_path ^ ")"
 
-		method private locked_meta_path : 'a. Parallel.lock_mode -> string -> (string -> 'a Lwt.t) -> 'a Lwt.t
-		= fun mode ext f ->
-			let path = self#meta_path ext in
-			let lock_path = self#ensure_meta_path (ext^".lock") in
-			Parallel.with_lock mode lock_path (fun () -> f path)
-
 		method private parse_dependencies : dependencies option Lwt.t =
 			log#trace "parse_deps %s" self#path;
 			let deps_path = self#meta_path deps_ext in
 			if Util.lexists deps_path then (
 				try_lwt
-					self#locked_meta_path Parallel.ReadLock deps_ext (fun deps_path ->
+					(Lazy.force deps_lock)#use Parallel.ReadLock (fun deps_path ->
 						with_file_in deps_path (fun f ->
 							(new dependency_builder target_path f)#build >>= (fun d -> Lwt.return (Some d))
 						)
@@ -426,7 +427,7 @@ and target_state (target_path:string) =
 
 		method private add_dependency dep : unit Lwt.t =
 			(* log#debug "add dep: %s -> %s" self#path dep *)
-			self#locked_meta_path Parallel.WriteLock new_deps_ext (fun out_filename ->
+			(Lazy.force new_deps_lock)#use Parallel.WriteLock (fun out_filename ->
 				with_file_out ~flags:[Unix.O_APPEND] out_filename
 					(fun output -> write_dependency output dep)
 			)
@@ -466,7 +467,7 @@ and target_state (target_path:string) =
 						(Util.relpath ~from: (Filename.dirname self#path) exe)
 					in
 
-					let temp = self#ensure_meta_path "deps2" in
+					let temp = ensure_meta_path new_deps_ext in
 					with_file_out temp (fun file ->
 						Lwt_io.write_line file (version_marker ^ (string_of_int format_version)) >>
 						(* TODO: make Dependencies module to store init stuff *)
@@ -495,7 +496,7 @@ and target_state (target_path:string) =
 
 			lwt built =
 				Jobserver.run_job (fun () ->
-					self#locked_meta_path Parallel.WriteLock deps_ext build
+					(Lazy.force deps_lock)#use Parallel.WriteLock build
 				)
 			in
 			return built
