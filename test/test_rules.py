@@ -84,6 +84,22 @@ class TestGupdirectory(TestCase):
 		self.assertRaises(Unbuildable, lambda: self.build('a/foo.c'))
 		self.build_assert('a/b/foo.c', os.path.join('b','foo.c') + ', called from a')
 
+class TestBuildableCheck(TestCase):
+	def test_indicates_buildable_file(self):
+		self.write('Gupfile', 'builder:\n\ta')
+		self.touch('builder')
+		self.touch('b.gup')
+		self.build('--buildable', 'a')
+		self.build('--buildable', 'b')
+
+	def test_returns_1_when_file_is_not_buildable(self):
+		self.assertRaises(SafeError, lambda: self.build('--buildable', 'target'), message='gup failed with status 1')
+
+	def test_returns_2_when_there_was_an_error(self):
+		self.write('Gupfile', 'builder:\n\ta')
+		# gupfile matched, but builder not found
+		self.assertRaises(SafeError, lambda: self.build('--buildable', 'a'), message='gup failed with status 2')
+
 class TestDirectoryTargets(TestCase):
 	def test_trailing_slashes_are_ignored_in_target_name(self):
 		self.write('dir.gup', BASH + 'mkdir -p $1; echo ok > $1/hello')

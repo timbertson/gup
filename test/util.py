@@ -60,7 +60,7 @@ def _build(exe, args, cwd):
 	proc = subprocess.Popen([exe] + list(args), cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
 
 	child_log = logging.getLogger('out')
-	err = SafeError('gup failed')
+	err = None
 	lines = []
 	while True:
 		line = proc.stdout.readline()
@@ -73,7 +73,11 @@ def _build(exe, args, cwd):
 		if unbuildable_idx != -1:
 			err = Unbuildable(line[unbuildable_idx + len(unbuildable_msg) + 1:])
 		child_log.info(line)
-	if not proc.wait() == 0:
+
+	returncode = proc.wait()
+	if returncode != 0:
+		if err is None:
+			err = SafeError('gup failed with status %d' % returncode)
 		raise err
 	return lines
 

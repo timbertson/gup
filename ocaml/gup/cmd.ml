@@ -3,6 +3,7 @@ open Std
 open Extlib
 
 let log = Logging.get_logger "gup.cmd"
+let exit_error () = exit 2
 
 module Actions =
 struct
@@ -211,6 +212,15 @@ struct
 		_list_targets base;
 		Lwt.return_unit
 
+	let test_buildable args =
+		begin match args with
+			| [target] ->
+					let builder = Gupfile.find_buildscript target in
+					exit (if (Option.is_some builder) then 0 else 1)
+			| _ -> raise (Invalid_argument "Exactly one argument expected")
+		end ;
+		Lwt.return_unit
+
 	let list_features args =
 		expect_no args;
 		let features = [
@@ -282,6 +292,7 @@ struct
 				"  --contents     Checksum the contents of stdin\n" ^
 				"  --clean        Clean any gup-built targets\n" ^
 				"  --targets/-t   List buildable targets in a directory\n" ^
+				"  --buildable    Check whether the given file is buildable\n" ^
 				"  --features     List the features of this gup version\n" ^
 				"  (use gup <action> --help) for further details") () in
 
@@ -324,6 +335,12 @@ struct
 	let list_targets () =
 		let options = OptParser.make ~usage: "Usage: gup --targets [directory]" () in
 		action := Actions.list_targets;
+		options
+	;;
+
+	let test_buildable () =
+		let options = OptParser.make ~usage: "Usage: gup --buildable <target>" () in
+		action := Actions.test_buildable;
 		options
 	;;
 
@@ -379,6 +396,7 @@ let main () =
 		| Some "--targets" | Some "-t" -> Options.list_targets ()
 		| Some "--complete-command" -> Options.complete_args ()
 		| Some "--always" -> Options.always ()
+		| Some "--buildable" -> Options.test_buildable ()
 		| Some "--features" -> Options.list_features ()
 		| _ -> firstarg := 1; Options.main ()
 		in
@@ -393,15 +411,15 @@ let main () =
 	) with
 		| Error.Unbuildable path -> (
 				log#error "Don't know how to build %s" path;
-				exit 1
+				exit_error ()
 		)
 		| Builder.Target_failed path -> (
 				log#error "Target failed: %s" path;
-				exit 1
+				exit_error ()
 		)
 		| Error.Safe_exception (msg, ctx) -> (
 				(* TODO: context?*)
 				log#error "%s" msg;
-				exit 1
+				exit_error ()
 		)
 ;;

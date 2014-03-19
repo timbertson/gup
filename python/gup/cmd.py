@@ -99,6 +99,9 @@ def _main(argv):
 		elif cmd == '--ifcreate':
 			p = optparse.OptionParser('Usage: gup --ifcreate [file [...]]')
 			action = _mark_ifcreate
+		elif cmd == '--buildable':
+			p = optparse.OptionParser('Usage: gup --buildable')
+			action = _test_buildable
 		elif cmd == '--features':
 			p = optparse.OptionParser('Usage: gup --features')
 			action = _list_features
@@ -161,6 +164,12 @@ def _mark_ifcreate(opts, files):
 		if os.path.lexists(filename):
 			raise SafeError("File already exists: %s" % (filename,))
 		parent_state.add_dependency(FileDependency.relative_to_target(parent_target, mtime=None, checksum=None, path = filename))
+
+def _test_buildable(opts, args):
+	assert len(args) == 1, "exactly one argument expected"
+	target = args[0]
+	if Builder.for_target(target) is None:
+		sys.exit(1)
 
 def _list_features(opts, args):
 	assert len(args) == 0, "no arguments expected"
@@ -251,15 +260,18 @@ def _build(opts, targets):
 	# wait for all tasks to complete
 	runner.run()
 
+def _exit_error():
+	sys.exit(2)
+
 def main():
 	try:
 		_main(sys.argv[1:])
 	except KeyboardInterrupt:
-		sys.exit(1)
+		sys.exit(2)
 	except SafeError as e:
 		if len(e.args) > 0:
 			_log.error("%s" % (str(e),))
-		sys.exit(1)
+		sys.exit(2)
 
 if __name__ == '__main__':
 	main()
