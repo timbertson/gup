@@ -1,1 +1,1 @@
-python "%~dp0\.\gup" %*
+@python "%~dp0\.\gup" %*

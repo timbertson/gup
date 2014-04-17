@@ -1,5 +1,10 @@
-SOURCES:=../VERSION Makefile $(shell find gup build -type f -name "*.py")
-SOURCES+=gup/version.py
+ifeq ($(OS),Windows_NT)
+	# just used for dependency tracking - always rebuild on windows
+	SOURCES:=phony
+else
+	SOURCES:=../VERSION Makefile $(shell find gup build -type f -name "*.py")
+	SOURCES+=gup/version.py
+endif
 
 bin: phony bin/gup
 all: bin

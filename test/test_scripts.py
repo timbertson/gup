@@ -21,6 +21,7 @@ class TestScripts(TestCase):
 		self.assertEquals(self.read('a/b/c'), os.path.join('b', 'c'))
 		self.assertEquals(self.read('a/b/d'), 'nested: ' + os.path.join('..', 'b', 'd'))
 
+	@unittest.skipIf(IS_WINDOWS, 'symlinks')
 	def test_creates_nonexisting_destinations_within_symlinks(self):
 		self.mkdirp('dir')
 		os.symlink('dir', self.path('a'))
@@ -106,6 +107,7 @@ class TestScripts(TestCase):
 		self.build('file')
 		self.assertEquals(self.listdir(), ['file','file.gup'])
 
+	@unittest.skipIf(IS_WINDOWS, 'symlinks')
 	def test_rebuild_symlink_to_directory(self):
 		self.mkdirp('dir')
 		self.touch('dir/1')
@@ -124,6 +126,7 @@ class TestScripts(TestCase):
 		self.assertTrue(os.path.exists(self.path('dir/1')))
 		self.assertTrue(os.path.exists(self.path('dir/2')))
 
+	@unittest.skipIf(IS_WINDOWS, 'symlinks')
 	def test_moves_broken_symlink_if_build_succeeds(self):
 		self.write('link.gup', BASH + 'ln -s NOT_HERE "$1"')
 		self.build('link')

@@ -28,7 +28,7 @@ try:
 		subprocess.check_call(['make', '-C', root, 'gup-test-local.xml'])
 		subprocess.check_call([
 			'0install', 'run', '--command=' + os.environ.get('TEST_COMMAND', 'test'),
-			os.path.join(root, 'gup-test-local.xml')] + args)
+			os.path.join(root, 'gup-test-local.xml')] + ['-w', test_dir] + args)
 
 	subprocess.check_call(['make', '%s-test-pre' % action_name])
 
@@ -44,7 +44,7 @@ try:
 		else:
 			exe = os.path.join(cwd, 'bin', 'gup')
 		os.environ['GUP_EXE'] = exe
-		run_nose(['-w', test_dir] + args)
+		run_nose(args)
 	else:
 		assert action == UNIT
 		add_to_env('PATH', os.path.join(root, 'test/bin'))
