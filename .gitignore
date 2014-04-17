@@ -4,6 +4,7 @@ scratch/
 test/tmp
 .noseids
 /tmp/
+/0compile
 
 # generated version modules
 python/gup/version.py
