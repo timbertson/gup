@@ -32,10 +32,17 @@ def try_remove(path):
 	try:
 		os.remove(path)
 	except OSError as e:
-		if e.errno == errno.EISDIR:
+		if e.errno == errno.ENOENT:
+			pass
+		elif e.errno == errno.EISDIR or (
+			# Windows gives EACCES when you try to unlink a directory,
+			# because ERROR_DIRECTORY_NOT_SUPPORTED ("An operation is
+			# not supported on a directory") might accidentally be useful.
+			IS_WINDOWS and e.errno == errno.EACCES and os.path.isdir(path)
+		):
 			shutil.rmtree(path)
-			return
-		if e.errno != errno.ENOENT: raise
+		else:
+			raise
 
 try:
 	samefile = os.path.samefile
