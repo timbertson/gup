@@ -1,5 +1,6 @@
 import os, sys
 import logging
+from .var import IS_WINDOWS
 
 # By default, no output colouring.
 RED    = ""
@@ -11,6 +12,7 @@ PLAIN  = ""
 _want_color = os.environ.get('GUP_COLOR', 'auto')
 if _want_color == '1' or (
 			_want_color == 'auto' and
+			not IS_WINDOWS and
 			sys.stderr.isatty() and
 			(os.environ.get('TERM') or 'dumb') != 'dumb'
 		):
