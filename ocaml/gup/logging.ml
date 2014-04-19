@@ -62,7 +62,7 @@ let trace_formatter name lvl =
 
 let test_formatter name lvl =
 	(
-		"# " ^ (color_for lvl) ^ indent ^ !bold,
+		"# " ^ (color_for lvl) ^ (string_of_level lvl) ^ " " ^ indent ^ !bold,
 		!plain
 	)
 

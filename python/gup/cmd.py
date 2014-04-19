@@ -30,7 +30,7 @@ def _init_logging(verbosity):
 	
 	if 'GUP_IN_TESTS' in os.environ:
 		lvl = TRACE_LVL
-		fmt = fmt = '# %(color)s' + INDENT + '%(bold)s%(message)s' + PLAIN
+		fmt = fmt = '# %(color)s%(levelname)-5s ' + INDENT + '%(bold)s%(message)s' + PLAIN
 
 	# persist for child processes
 	set_verbosity(verbosity)
