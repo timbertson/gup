@@ -11,6 +11,7 @@ import subprocess
 import logging
 import unittest
 import itertools
+from datetime import datetime, timedelta
 
 from gup.error import *
 from gup.log import TRACE_LVL
@@ -209,6 +210,15 @@ class TestCase(mocktest.TestCase):
 		self.build_u(target)
 		self.assertNotEqual(self.mtime(target), mtime, "target %s didn't get rebuilt" % (target,))
 	
+	def assertDuration(self, min, max, fn):
+		initial_time = datetime.now()
+		rv = fn()
+
+		elapsed_time = (datetime.now() - initial_time).total_seconds()
+		assert elapsed_time <= max, "elapsed time > %ss (%s)" % (max, elapsed_time)
+		assert elapsed_time >= min, "elapsed time < %ss (%s)" % (min, elapsed_time)
+		return rv
+
 	def assertNotRebuilds(self, target, fn, built=False):
 		if not built: self.build_u(target)
 		mtime = self.mtime(target)

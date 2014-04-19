@@ -114,7 +114,7 @@ class fd_jobserver (read_end, write_end) toplevel =
 		let buf = " " in
 		let success = ref false in
 		while_lwt not !success do
-			(* XXX does this really return without writing sometimes? *)
+			(* XXX does this really return without reading sometimes? *)
 			lwt n = Lwt_unix.read read_end buf 0 1 in
 			let succ = n > 0 in
 			success := succ;
@@ -168,7 +168,19 @@ class fd_jobserver (read_end, write_end) toplevel =
 	let () = Option.may (fun tokens -> Lwt_main.run (_release (tokens - 1))) toplevel in
 
 object (self)
-	method finish = Lwt.return_unit
+	method finish =
+		match toplevel with
+			| Some tokens ->
+				(* wait for outstanding tasks by comsuming the number of tokens we started with *)
+				let remaining = ref (tokens - 1) in
+				let buf = repeat_tokens !remaining in
+				while_lwt !remaining > 0 do
+					log#debug "waiting for %d free tokens to be returned" !remaining;
+					lwt n = Lwt_unix.read read_end buf 0 !remaining in
+					remaining := !remaining - n;
+					Lwt.return_unit
+				done
+			| None -> Lwt.return_unit
 
 	method run_job : 'a. (unit -> 'a Lwt.t) -> 'a Lwt.t = fun fn ->
 		lwt () = _get_token () in
@@ -266,15 +278,11 @@ module Jobserver = struct
 		end
 	)
 
-	let _create_named_pipe maxjobs:string = (
-		log#trace "setup_jobserver(%d)" maxjobs;
-		assert (maxjobs > 0);
-		(* need to start a new server *)
-		log#trace "new jobserver! %d" maxjobs;
-
+	let _create_named_pipe ():string = (
 		let filename = Filename.concat
 			(Filename.get_temp_dir_name ())
 			("gup-job-" ^ (string_of_int @@ Unix.getpid ())) in
+
 		let create = fun () ->
 			Unix.mkfifo filename 0o600
 		in
@@ -313,7 +321,11 @@ module Jobserver = struct
 						log#debug "no need for a jobserver (--jobs=1)";
 						_inherited_vars := (jobserver_var, not_required) :: !_inherited_vars;
 					) else (
-						let path = _create_named_pipe maxjobs in
+						assert (maxjobs > 0);
+						(* need to start a new server *)
+						log#trace "new jobserver! %d" maxjobs;
+
+						let path = _create_named_pipe () in
 						_inherited_vars := (jobserver_var, path) :: !_inherited_vars;
 						_impl := new named_jobserver path (Some maxjobs)
 					)

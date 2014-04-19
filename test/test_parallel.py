@@ -4,19 +4,9 @@ if __name__ == '__main__':
 	from util import *
 else:
 	from .util import *
-from datetime import datetime, timedelta
 
 GUP_JOBSERVER = 'GUP_JOBSERVER'
 MAKEFLAGS = 'MAKEFLAGS'
-
-def assertDuration(min, max, fn):
-	initial_time = datetime.now()
-	rv = fn()
-
-	elapsed_time = (datetime.now() - initial_time).total_seconds()
-	assert elapsed_time <= max, "elapsed time > %ss (%s)" % (max, elapsed_time)
-	assert elapsed_time >= min, "elapsed time < %ss (%s)" % (min, elapsed_time)
-	return rv
 
 def load_env(path):
 	env = {}
@@ -76,6 +66,8 @@ if not IS_WINDOWS:
 				gup --always
 				rm counter.pid
 			''' % sleep_time)
+			self.write('long.gup', BASH + 'sleep ' + str(sleep_time*2))
+			self.write('fail.gup', '#!false')
 
 		def test_executes_tasks_in_parallel(self):
 			steps = ['step1', 'step2', 'step3', 'step4', 'step5', 'step6']
@@ -85,13 +77,24 @@ if not IS_WINDOWS:
 				self.assertEquals(self.read('counter'), '2')
 
 			# counter takes 1s, each step takes 1s
-			assertDuration(min=2*sleep_time, max=3*sleep_time, fn=build)
+			self.assertDuration(min=2*sleep_time, max=3*sleep_time, fn=build)
+
+		def test_waits_for_all_jobs_to_complete_on_failure(self):
+			def build():
+				try:
+					self.build('-j3', 'long', 'fail', 'step1')
+				except SafeError as e:
+					# we expect the build to fail, but it should
+					# have completed `step1`
+					self.assertEquals(self.read('step1'), 'ok')
+
+			self.assertDuration(min=2*sleep_time, max=3*sleep_time, fn=build)
 
 		def test_limiting_number_of_concurrent_jobs(self):
 			steps = ['step1', 'step2', 'step3', 'step4', 'step5', 'step6']
 
 			# counter takes 1s, plus 3 pairs of 1s jobs (two at a time)
-			assertDuration(min=4*sleep_time, max=5*sleep_time, fn=lambda: self.build_u('-j2', *steps, last=True))
+			self.assertDuration(min=4*sleep_time, max=5*sleep_time, fn=lambda: self.build_u('-j2', *steps, last=True))
 
 			self.assertEquals(self.read('counter'), '2')
 
@@ -114,7 +117,7 @@ if not IS_WINDOWS:
 
 				self.assertEquals(self.read('counter'), '2')
 
-			assertDuration(min=2*sleep_time, max=3*sleep_time, fn=build)
+			self.assertDuration(min=2*sleep_time, max=3*sleep_time, fn=build)
 
 			env = load_env(self.path('step1.env'))
 			self.assertEqual(env.get(GUP_JOBSERVER), None)
@@ -128,7 +131,7 @@ if not IS_WINDOWS:
 				self.build_u('-j6', *steps, last=True)
 				self.assertEquals(self.read('counter'), '2')
 
-			assertDuration(min=2*sleep_time, max=3*sleep_time, fn=build)
+			self.assertDuration(min=2*sleep_time, max=3*sleep_time, fn=build)
 
 if __name__ == '__main__':
 	test = TestParallelBuilds()
