@@ -1,0 +1,27 @@
+## 0.3.0:
+
+- Replaced default jobserver implementation (anonymous pipe) with a named pipe,
+whose path is passed to children in $GUP_JOBSERVER.
+
+The previous make-compatible implementation has issues with many modern languages,
+which automatically close all open file descriptors on `exec` that the programmer
+doesn't explicitly declare as being shared. This is enforced in nodejs and go,
+and is likely to become the default behaviour in a future version of python.
+
+`gup` will still use a make-supplied jobserver if it's present (in $MAKEFLAGS),
+but you'll have to invoke `gup` from `make` for that to be the case.
+
+- Uncovered, added tests for and fixed a number of issues in gup's jobserver
+implementation:
+
+	- toplevel `gup` instance doesn't wait for children to finish if one fails
+
+	- ocaml implementation used an unbounded number of concurrent jobs, regardless
+	of what --jobs` is set to
+
+	- ocaml implementation fell afoul of `flock()`s insane behaviour: builds
+	lose their WriteLock before they even call the build script because to a
+	ReadLock on an unrelated file descriptor (for the same inode) is released.
+	This caused invalid (partially truncated) .deps files to be written in many
+	parallel builds.
+
