@@ -233,6 +233,17 @@ module Jobserver = struct
 	let jobserver_var = "GUP_JOBSERVER"
 	let not_required = "0"
 
+	let _extract_fds makeflags =
+		let flags_re = Str.regexp "--jobserver-fds=\\([0-9]+\\),\\([0-9]+\\)" in
+		try
+			ignore @@ Str.search_forward flags_re makeflags 0;
+			Some (
+				Int.of_string (Str.matched_group 1 makeflags),
+				Int.of_string (Str.matched_group 2 makeflags)
+			)
+		with Not_found -> None
+
+
 	let _discover_jobserver () = (
 		(* open GUP_JOBSERVER if present *)
 		let inherit_named_jobserver path = new named_jobserver path None in
@@ -240,17 +251,7 @@ module Jobserver = struct
 		begin match server with
 			| None -> (
 				(* try extracting from MAKEFLAGS, if present *)
-				let flags = Var.get_or makeflags_var "" in
-				let flags_re = Str.regexp "--jobserver-fds=\\([0-9]+\\),\\([0-9]+\\)" in
-				let fd_ints = (
-					try
-						ignore @@ Str.search_forward flags_re flags 0;
-						Some (
-							Int.of_string (Str.matched_group 1 flags),
-							Int.of_string (Str.matched_group 2 flags)
-						)
-					with Not_found -> None
-				) in
+				let fd_ints = Option.bind (Var.get makeflags_var) _extract_fds in
 
 				Option.bind fd_ints (fun (r,w) ->
 					let r = ExtUnix.file_descr_of_int r

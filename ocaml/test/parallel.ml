@@ -7,7 +7,7 @@ let print_opt_int_pair p =
 	Printf.sprintf2 "%a" (Option.print (Tuple.Tuple2.print Int.print Int.print)) p
 
 let assertFds expected str =
-	assert_equal ~printer: print_opt_int_pair expected (Jobserver.extract_fds str)
+	assert_equal ~printer: print_opt_int_pair expected (Jobserver._extract_fds str)
 
 let suite = "MAKEFLAGS" >:::
 [
