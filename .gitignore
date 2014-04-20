@@ -5,6 +5,7 @@ test/tmp
 .noseids
 /tmp/
 /0compile
+/windows-sync.gup
 
 # generated version modules
 python/gup/version.py
