@@ -46,12 +46,12 @@ def skipPermutations(fn):
 def has_feature(name):
 	return all([name in _build(exe, args=['--features'], cwd=None) for exe in GUP_EXES])
 
-def _build(exe, args, cwd, env=None):
+def _build(exe, args, cwd):
 	log.warn("\n\nRunning build with args: %r [cwd=%r]" % (list(args), cwd))
-	env = (env or os.environ).copy()
+	env = os.environ.copy()
 	for key in list(env.keys()):
 		# clear out any gup state
-		if key.startswith('GUP_'):
+		if key == 'MAKEFLAGS' or key.startswith('GUP_'):
 			del env[key]
 
 	env['GUP_IN_TESTS'] = '1'
