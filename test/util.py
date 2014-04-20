@@ -11,6 +11,7 @@ import subprocess
 import logging
 import unittest
 import itertools
+from datetime import datetime, timedelta
 
 from gup.error import *
 from gup.log import TRACE_LVL
@@ -45,9 +46,9 @@ def skipPermutations(fn):
 def has_feature(name):
 	return all([name in _build(exe, args=['--features'], cwd=None) for exe in GUP_EXES])
 
-def _build(exe, args, cwd):
+def _build(exe, args, cwd, env=None):
 	log.warn("\n\nRunning build with args: %r [cwd=%r]" % (list(args), cwd))
-	env = os.environ.copy()
+	env = (env or os.environ).copy()
 	for key in list(env.keys()):
 		# clear out any gup state
 		if key.startswith('GUP_'):
@@ -178,7 +179,7 @@ class TestCase(mocktest.TestCase):
 		return mtime
 
 	def build_u(self, *targets, **k):
-		self._build(['--update'] + list(targets), **k)
+		return self._build(['--update'] + list(targets), **k)
 	
 	def build_assert(self, target, contents):
 		self.build(target)
@@ -209,6 +210,15 @@ class TestCase(mocktest.TestCase):
 		self.build_u(target)
 		self.assertNotEqual(self.mtime(target), mtime, "target %s didn't get rebuilt" % (target,))
 	
+	def assertDuration(self, min, max, fn):
+		initial_time = datetime.now()
+		rv = fn()
+
+		elapsed_time = (datetime.now() - initial_time).total_seconds()
+		assert elapsed_time <= max, "elapsed time > %ss (%s)" % (max, elapsed_time)
+		assert elapsed_time >= min, "elapsed time < %ss (%s)" % (min, elapsed_time)
+		return rv
+
 	def assertNotRebuilds(self, target, fn, built=False):
 		if not built: self.build_u(target)
 		mtime = self.mtime(target)

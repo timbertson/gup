@@ -30,7 +30,7 @@ def _init_logging(verbosity):
 	
 	if 'GUP_IN_TESTS' in os.environ:
 		lvl = TRACE_LVL
-		fmt = fmt = '# %(color)s' + INDENT + '%(bold)s%(message)s' + PLAIN
+		fmt = fmt = '# %(color)s%(levelname)-5s ' + INDENT + '%(bold)s%(message)s' + PLAIN
 
 	# persist for child processes
 	set_verbosity(verbosity)
@@ -117,7 +117,7 @@ def _main(argv):
 			'  (use gup <action> --help) for further details')
 
 		p.add_option('-u', '--update', '--ifchange', dest='update', action='store_true', help='Only rebuild stale targets', default=False)
-		p.add_option('-j', '--jobs', type='int', default=1, help="Number of concurrent jobs to run")
+		p.add_option('-j', '--jobs', type='int', default=None, help="Number of concurrent jobs to run")
 		p.add_option('-x', '--trace', action='store_true', help='Trace build script invocations (also sets $GUP_XTRACE=1)')
 		p.add_option('-q', '--quiet', action='count', default=0, help='Decrease verbosity')
 		p.add_option('-v', '--verbose', action='count', default=DEFAULT_VERBOSITY, help='Increase verbosity')
@@ -240,7 +240,8 @@ def _build(opts, targets):
 	parent_target = _get_parent_target()
 
 	jobs = opts.jobs
-	assert jobs > 0 and jobs < 1000
+	if jobs is not None:
+		assert jobs > 0 and jobs < 1000
 	setup_jobserver(jobs)
 
 	runner = TaskRunner()

@@ -125,7 +125,7 @@ def main():
 			print("WARN: Skipping pychecker check ...", file=sys.stderr)
 			return
 		env['PYTHONPATH'] = basedir
-		args = ['pychecker', '--limit', '100', '--no-reimport', '--no-miximport', '--no-argsused', '--no-shadowbuiltin', '--no-classattr'] + mods
+		args = ['pychecker', '--limit', '100', '--no-reimport', '--no-miximport', '--no-argsused', '--no-shadowbuiltin', '--no-classattr', '--no-returnvalues'] + mods
 		print("Running: %r %r" % (args, env['PYTHONPATH']))
 		try:
 			subprocess.check_call(args, env=env, cwd=basedir)

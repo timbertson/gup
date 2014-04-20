@@ -54,14 +54,15 @@ let info_formatter name lvl =
 	)
 
 let trace_formatter name lvl =
+	let pid = Unix.getpid () in
 	(
-		Printf.sprintf "%s[%-11s|%5s] %s%s" (color_for lvl) name (string_of_level lvl) indent !bold,
+		Printf.sprintf "%s[%d %-11s|%5s] %s%s" (color_for lvl) pid name (string_of_level lvl) indent !bold,
 		!plain
 	)
 
 let test_formatter name lvl =
 	(
-		"# " ^ (color_for lvl) ^ indent ^ !bold,
+		"# " ^ (color_for lvl) ^ (string_of_level lvl) ^ " " ^ indent ^ !bold,
 		!plain
 	)
 
