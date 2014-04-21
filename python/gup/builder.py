@@ -11,7 +11,7 @@ from .error import *
 from .util import *
 from .state import TargetState
 from .log import getLogger
-from .var import ROOT_CWD, XTRACE
+from .var import ROOT_CWD, XTRACE, IS_WINDOWS
 from .parallel import extend_build_env
 _log = getLogger(__name__)
 
@@ -98,7 +98,8 @@ class Target(object):
 			if not _is_dirty(self.state):
 				_log.trace("no build needed")
 				return False
-		exe_path = self.builder.path
+		exe_path = os.path.abspath(self.builder.path)
+		exe_path_relative_to_cwd = os.path.relpath(exe_path,ROOT_CWD)
 
 		# dest may not exist, if a /gup/ directory is in use
 		basedir = self.builder.basedir
@@ -114,7 +115,7 @@ class Target(object):
 		output_file = os.path.abspath(self.state.meta_path('out'))
 		MOVED = False
 		try:
-			args = [os.path.abspath(exe_path), output_file, self.builder.target]
+			args = [exe_path, output_file, self.builder.target]
 			_log.info(target_relative_to_cwd)
 			mtime = get_mtime(self.path)
 
@@ -134,7 +135,7 @@ class Target(object):
 				ret = self._run_process(args, cwd = basedir, env = env)
 			except OSError:
 				if exe: raise # we only expect errors when we could deduce no executable
-				raise SafeError("%s is not executable and has no shebang line" % (exe_path,))
+				raise SafeError("%s is not executable and has no shebang line" % (exe_path_relative_to_cwd))
 
 			new_mtime = get_mtime(self.path)
 			target_changed = mtime != new_mtime
@@ -142,7 +143,7 @@ class Target(object):
 				_log.trace("old_mtime=%r, new_mtime=%r" % (mtime, new_mtime))
 				if not os.path.isdir(self.path):
 					# directories often need to be created directly
-					_log.warn("%s modified %s directly" % (exe_path, self.path))
+					_log.warn("%s modified %s directly" % (exe_path_relative_to_cwd, self.path))
 			if ret == 0:
 				if os.path.lexists(output_file):
 					if os.path.isdir(self.path) and not os.path.islink(self.path):
@@ -183,7 +184,36 @@ def _guess_executable(p):
 	if bin.startswith('.'):
 		# resolve relative paths relative to containing dir
 		bin = args[0] = os.path.join(os.path.dirname(p), args[0])
+	if IS_WINDOWS:
+		bin = _resolve_windows_binary(bin)
+
 	if os.path.isabs(bin) and not os.path.exists(bin):
 		raise SafeError("No such interpreter: %s" % (os.path.abspath(bin),))
+
+	args[0] = bin
 	return args
 
+def _resolve_windows_binary(name):
+	exts = os.environ.get('PATHEXT', '').split(os.pathsep)
+	def possible_file_extensions(path):
+		for ext in exts:
+			yield path + ext
+		yield path
+
+	def possible_paths():
+		if os.path.isabs(name):
+			for path in possible_file_extensions(name):
+				yield path
+		else:
+			for prefix in os.environ['PATH'].split(os.pathsep):
+				for path in possible_file_extensions(os.path.join(prefix, name)):
+					yield path
+	
+	for path in possible_paths():
+		if os.path.isfile(path) and os.access(path, os.X_OK):
+			return path
+
+	# If we found nothing, just return the original name.
+	# It's probably not going to work, but Windows does
+	# some nutty stuff with the registry.
+	return name

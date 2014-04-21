@@ -1,8 +1,7 @@
 from .util import *
-class TestScripts(TestCase):
-
+class TestInterpreter(TestCase):
 	@unittest.skipIf(IS_WINDOWS, 'posix')
-	def test_interpreter(self):
+	def test_interpreter_relaive_to_build_script(self):
 		self.write('gup/all.gup', '#!./build abc\n# ...')
 		self.write('gup/build', '#!/bin/bash\nset -eu\n' + '(echo "target: $4"; echo "arg: $1") > "$3"')
 		os.chmod(self.path('gup/build'), 0o755)
@@ -11,6 +10,28 @@ class TestScripts(TestCase):
 
 		self.assertEquals(self.read('all'), 'target: all\narg: abc')
 
+	def test_interpreter_resolution(self):
+		self.write('build/relative.gup', '#!../scripts/run')
+		self.write('build/pathed.gup', '#!my-build-script')
+
+		self.write('scripts/run', '#!/bin/bash\necho "BASH $1" > "$2"')
+		os.chmod(self.path('scripts/run'), 0o755)
+		self.write('scripts/run.cmd', 'echo CMD %1 > "%2"')
+
+		self.write('bin/my-build-script', '#!/bin/bash\necho "BASH $1" > "$2"')
+		os.chmod(self.path('bin/my-build-script'), 0o755)
+		self.write('bin/my-build-script.cmd', 'echo CMD %1 > "%2"')
+
+		env = os.environ.copy()
+		env['PATH'] = os.pathsep.join([self.path('bin'), env['PATH']])
+		interp = 'CMD' if IS_WINDOWS else 'BASH'
+
+		self.build('build/relative', 'build/pathed', env=env)
+
+		self.assertEquals(self.read('build/relative').lower(), ' '.join([interp, self.path(os.path.join('build', 'relative.gup'))]).lower())
+		self.assertEquals(self.read('build/pathed').lower(),   ' '.join([interp, self.path(os.path.join('build', 'pathed.gup'))]).lower())
+
+class TestScripts(TestCase):
 	def test_target_name_is_relative_to_gupfile_without_gup_dir(self):
 		mkdirp(self.path('a/b'))
 		self.write("gup/a/default.gup", echo_to_target('$2'))

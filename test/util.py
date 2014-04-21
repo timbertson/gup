@@ -46,9 +46,10 @@ def skipPermutations(fn):
 def has_feature(name):
 	return all([name in _build(exe, args=['--features'], cwd=None) for exe in GUP_EXES])
 
-def _build(exe, args, cwd):
+def _build(exe, args, cwd, env=None):
+	env = env or os.environ
 	log.warn("\n\nRunning build with args: %r [cwd=%r]" % (list(args), cwd))
-	env = os.environ.copy()
+	env = env.copy()
 	for key in list(env.keys()):
 		# clear out any gup state
 		if key == 'MAKEFLAGS' or key.startswith('GUP_'):
@@ -151,13 +152,13 @@ class TestCase(mocktest.TestCase):
 		finally:
 			os.chdir(initial)
 
-	def _build(self, args, cwd=None, last=False):
+	def _build(self, args, cwd=None, last=False, env=None):
 		self.invocation_count += 1
 		log.debug("invocation count = %r", self.invocation_count)
 
 		with self._root_cwd():
 			exe = next(self.exes)
-			lines = _build(exe, args=args, cwd=cwd)
+			lines = _build(exe, args=args, cwd=cwd, env=env)
 
 		if LAME_MTIME and not last:
 			# OSX has 1-second mtime resolution.
@@ -181,8 +182,8 @@ class TestCase(mocktest.TestCase):
 	def build_u(self, *targets, **k):
 		return self._build(['--update'] + list(targets), **k)
 	
-	def build_assert(self, target, contents):
-		self.build(target)
+	def build_assert(self, target, contents, **k):
+		self.build(target, **k)
 		self.assertEqual(self.read(target), contents)
 
 	def build_u_assert(self, target, contents):
