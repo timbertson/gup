@@ -119,7 +119,7 @@ class target (buildscript:Gupfile.buildscript) =
 		method build update : bool Lwt.t = self#_perform_build buildscript#path update
 
 		method private _perform_build (exe_path:string) (update: bool) : bool Lwt.t =
-			let exe_path = buildscript#path in
+			let exe_path = Util.abspath buildscript#path in
 			if not (Sys.file_exists exe_path) then
 				Error.raise_safe "Build script does not exist: %s" exe_path;
 
@@ -153,7 +153,7 @@ class target (buildscript:Gupfile.buildscript) =
 						let args = List.concat
 							[
 								_guess_executable exe_path;
-								[ Util.abspath exe_path; output_file; buildscript#target ]
+								[ exe_path; output_file; buildscript#target ]
 							]
 						in
 
@@ -181,7 +181,9 @@ class target (buildscript:Gupfile.buildscript) =
 							log#trace "old_mtime=%a, new_mtime=%a" p mtime p new_mtime;
 							if not (Sys.is_directory self#path) then (
 								(* directories often need to be created directly *)
-								log#warn "%s modified %s directly" exe_path self#path
+								log#warn "%s modified %s directly"
+									(Util.relpath ~from:Var.root_cwd exe_path)
+									self#path
 							);
 						);
 
