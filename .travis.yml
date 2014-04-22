@@ -32,7 +32,7 @@ before_install:
 
       if [ $subdir != ocaml ]; then
         # ./python or ./
-        sudo apt-get install -qq pychecker
+        sudo apt-get install -qq pychecker mono-gmcs
       fi
       if [ "$task" = "test-py3" ]; then
         sudo apt-get install -qq python3 python3-gi

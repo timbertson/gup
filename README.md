@@ -38,20 +38,29 @@ you should run (once):
 
     $ 0install add gup http://gfxmonk.net/dist/0install/gup.xml
 
+----
+
 For repositories where you don't want to make everyone set
 up `gup` as above, you can just commit the `gup` python script
 to your project's repository:
 
  - From a git checkout:
 
-    `make python`
-    cp python/bin/* [your-project-workspace]/tools
+        make python
+        cp python/bin/* [your-project-workspace]/tools
 
- - From a released tarball:
+ - From a [released tarball (download links are down the bottom)](http://gfxmonk.net/dist/0install/gup.xml):
 
-    cp python/bin/* [your-project-workspace]/tools
+        cp python/bin/* [your-project-workspace]/tools
 
 Then, you can run it as `./tools/gup`.
+
+**Windows users**:
+
+If you want Windows users (perhaps you are one) to be able to build
+you project, remember to include the `gup.exe` shim. This a portable
+`.exe` which just runs the python script named "gup" in whatever
+directory you place it, passing along all arguments.
 
 **Note**: When run from a relative or absolute path, `gup`
 will bootstrap itself by adding the directory containing
@@ -415,9 +424,14 @@ For all other discussion, there's a [mailing list][gup-users].
 
 # What platforms does it work on?
 
-I don't know, yet. It's very early days. It's currently written in python,
-although that may change. It's been tested on Linux and OSX, and works
-fine on both.
+The (fairly extensive) automated test suite passes on Linux, OSX and Windows.
+The tests are automatically run on Linux (python2 & python3) whenever I push
+new code, the other platforms only get tested whenever I worry that I might
+have broken something. If you notice any breakage, please let me know by
+opening a github issue (or just emailing me) and I'll do my best to fix it.
+
+The ocaml version is more or less experimental - I use it in daily life, but
+I have (as yet) made no attempt to test it on things that aren't linux.
 
 # How buggy is it?
 
@@ -478,6 +492,10 @@ two versions.
 For `python/`:
 
  - PyChecker (optional; you can disable this by exporting `$SKIP_PYCHECKER=1`)
+ - `gmcs` (provided by the `mono-core` package on RPM systems and `mono-gmcs` on
+   debian-based systems) to build the gup.exe shim. If you don't need Windows
+   support, you can skip building this. The shim is tiny and changes rarely,
+   so you should also be fine to use gup.exe from a release tarball.
 
 For `ocaml/`, the best bet is to look at the before_install script in `.travis.yml`
 and follow those instructions. I plan on formalizing this in the future, and

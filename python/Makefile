@@ -6,7 +6,7 @@ else
 	SOURCES+=gup/version.py
 endif
 
-bin: phony bin/gup
+bin: phony bin/gup bin/gup.exe
 all: bin
 
 unit-test-pre: phony $(SOURCES)
@@ -30,6 +30,9 @@ bin/gup: $(SOURCES)
 	mkdir -p tmp bin
 	python ./build/combine_modules.py gup tmp/gup.py
 	cp tmp/gup.py bin/gup
+
+bin/gup.exe: gup.cs
+	gmcs gup.cs -out:bin/gup.exe
 
 gup/version.py: ../VERSION
 	echo "VERSION = \"$$(cat ../VERSION)\"" > $@
