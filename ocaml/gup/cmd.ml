@@ -38,6 +38,10 @@ struct
 		let existing_path = Var.get_or "PATH" "" in
 		if String.exists progname Filename.dir_sep &&
 		   (Var.get_or "GUP_IN_PATH" "0") <> "1" then (
+
+			(* TODO: (Windows) we should always perform this branch on Windows, regardless of
+			 * whether Filename.dir_sep is in progname *)
+
 			(* gup may have been run as a relative / absolute script - check *)
 			(* whether our directory is in $PATH *)
 			let bin_path = Filename.dirname @@ Util.abspath (progname) in
@@ -45,7 +49,8 @@ struct
 			let already_in_path = List.enum path_entries |> Enum.exists (
 				fun entry ->
 					(not @@ String.is_empty entry) &&
-					Util.samefile bin_path (Util.abspath entry)) in
+					(Util.is_absolute entry) &&
+					Util.samefile bin_path entry) in
 			if already_in_path then
 				log#trace("found `gup` in $PATH")
 			else (

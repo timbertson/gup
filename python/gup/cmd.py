@@ -9,7 +9,7 @@ from .util import *
 from .state import TargetState, AlwaysRebuild, Checksum, FileDependency, META_DIR
 from .gupfile import Builder
 from .log import PLAIN, getLogger, TRACE_LVL
-from .var import INDENT, set_verbosity, DEFAULT_VERBOSITY, set_trace, PY3
+from .var import INDENT, set_verbosity, DEFAULT_VERBOSITY, set_trace, PY3, IS_WINDOWS
 from .parallel import setup_jobserver
 from .task import Task, TaskRunner
 from .version import VERSION
@@ -48,31 +48,40 @@ def _bin_init():
 	'''
 	progname = sys.argv[0]
 	_log.trace('run as: %s' % (progname,))
-	if os.path.sep in progname and os.environ.get('GUP_IN_PATH', '0') != '1':
-		# gup may have been run as a relative / absolute script - check
-		# whether our directory is in $PATH
-		here, filename = os.path.split(__file__)
-		if filename.startswith('cmd.py'):
-			# we're being run in-place
-			_log.trace("Run from gup/ package - assuming gup in $PATH")
-		else:
-			path_entries = os.environ.get('PATH', '').split(os.pathsep)
-			for entry in path_entries:
-				if not entry: continue
-				try:
-					if samefile(entry, here):
-						_log.trace('found `gup` in $PATH')
-						# ok, we're in path
-						break
-				except OSError: pass
-			else:
-				# not found
-				here = os.path.abspath(here)
-				_log.trace('`gup` not in $PATH - adding %s' % (here,))
-				os.environ['PATH'] = os.pathsep.join([here] + path_entries)
-
-		# don't bother checking next time
+	if os.environ.get('GUP_IN_PATH', '0') != '1':
+		# only do this check once
 		os.environ['GUP_IN_PATH'] = '1'
+
+		# XXX on non-Windows OSes, recursive invocations may not find `gup`
+		# if the toplevel was found via a "." entry on $PATH. Let's assume
+		# only Windows is dumb enough to do that.
+		if IS_WINDOWS or os.path.sep in progname:
+			# gup may have been run as a relative / absolute script - check
+			# whether our directory is in $PATH
+			here, filename = os.path.split(__file__)
+			if filename.startswith('cmd.py'):
+				# we're being run in-place
+				_log.trace("Run from gup/ package - assuming gup in $PATH")
+			else:
+				path_entries = os.environ.get('PATH', '').split(os.pathsep)
+				for entry in path_entries:
+					if not entry: continue
+
+					# If we're found via a relative entry (like ".") on
+					# $PATH, we can't rely on that:
+					if not os.path.isabs(entry): continue
+
+					try:
+						if samefile(entry, here):
+							_log.trace('found `gup` in $PATH')
+							# ok, we're in path
+							break
+					except OSError: pass
+				else:
+					# not found
+					here = os.path.abspath(here)
+					_log.trace('`gup` not in $PATH - adding %s' % (here,))
+					os.environ['PATH'] = os.pathsep.join([here] + path_entries)
 
 def _main(argv):
 	p = None
