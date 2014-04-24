@@ -200,6 +200,9 @@ class TestChecksums(TestCase):
 	def test_parent_of_checksum_is_rebult_if_checksum_contents_changes(self):
 		self.assertRebuilds('parent', lambda: self.write('input', 'ok2'))
 
+	def test_parent_of_checksum_is_rebult_if_checksum_state_is_missing(self):
+		self.assertRebuilds('parent', lambda: os.remove(self.path('.gup/cs.deps')))
+
 	@skipPermutations
 	def test_checksum_accepts_a_number_of_files_instead_of_stdin(self):
 		self.write('firstline', 'line1')

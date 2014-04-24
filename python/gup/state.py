@@ -274,7 +274,7 @@ class FileDependency(Dependency):
 			deps = state.deps()
 			checksum = deps and deps.checksum
 			if checksum != self.checksum:
-				_log.debug("DIRTY: %s (stored checksum is %s, current is %s)", self.path, self.checksum, deps.checksum)
+				_log.debug("DIRTY: %s (stored checksum is %s, current is %s)", self.path, self.checksum, checksum)
 				return True
 			if built:
 				return False
