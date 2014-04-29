@@ -307,7 +307,7 @@ to build `all`, it knows that it only needs rebuilding if any of the files
 passed to `gup -u` changed.
 
 You don't have to specify all your dependencies in one place, though - you can
-call `gup -u` from any place in your script - all calls make while building
+call `gup -u` from any place in your script - all calls made while building
 your target are appended to the dependency information of the target being
 built. This is done by setting environment variables when invoking running
 build scripts, so it's completely parallel-safe.
@@ -355,9 +355,13 @@ where the output is not actually used for anything.
 ### Other features
 
 `gup` can build targets in parallel - just pass in the maximum number of
-concurrent tasks after `-j` or `--jobs`. The jobserver code (courtesy of
-[redo][]) is compatible with GNU make's jobserver, so `gup` should work in
-parallel when invoked by a parallel `make` build, and vice versa.
+concurrent tasks after `-j` or `--jobs`.
+
+When `gup` is invoked from `make`, it automatically uses make's existing
+jobserver instead of creating its own. This only works if `make` is at the
+toplevel though - make's jobserver relies on open file descriptors being
+inherited on `exec()` (which is forbidden in some languages), so
+`gup` uses a more robust jobserver when it can.
 
 # Using bash
 
