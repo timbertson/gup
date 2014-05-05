@@ -33,6 +33,13 @@ class TestDependencies(TestCase):
 
 		self.build_u("dep")
 		self.assertEqual(self.mtime('dep'), mtime)
+
+	def test_tracks_dependencies_outside_working_tree(self):
+		import tempfile
+		with tempfile.NamedTemporaryFile() as dep:
+			self.write("target.gup", BASH + 'gup -u "%s"; touch "$1"' % dep.name)
+			self.assertNotRebuilds('target', lambda: None)
+			self.assertRebuilds('target', lambda: self.touch(dep.name))
 	
 	def test_trying_to_build_source_fails(self):
 		self.assertRaises(SafeError, lambda: self.build("dep"))

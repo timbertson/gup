@@ -189,7 +189,9 @@ and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:st
 				| None -> self#is_dirty_mtime full_path
 
 		method private full_path base =
-			Filename.concat base self#path
+			if Util.is_absolute self#path
+			then self#path
+			else Filename.concat base self#path
 	end
 
 and builder_dependency ~mtime ~checksum path =
