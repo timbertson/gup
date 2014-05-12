@@ -5,6 +5,8 @@ if __name__ == '__main__':
 else:
 	from .util import *
 
+import re
+
 GUP_JOBSERVER = 'GUP_JOBSERVER'
 MAKEFLAGS = 'MAKEFLAGS'
 
@@ -132,6 +134,46 @@ if not IS_WINDOWS:
 				self.assertEquals(self.read('counter'), '2')
 
 			self.assertDuration(min=2*sleep_time, max=3*sleep_time, fn=build)
+
+		def test_multiple_attempts_in_one_process_to_build_the_same_target(self):
+			os.symlink('./', self.path('link'))
+			self.write('target.gup', BASH + 'echo 1 >> "$2"')
+			self.build('--jobs=10', 'target', 'link/target')
+			self.assertEquals(self.read('target'), '1')
+
+	class TestLocking(TestCase):
+		def test_deps_file_is_write_locked_during_build(self):
+			self.write('target.gup', re.sub(r'^\t{4}', '', '''
+				#!python
+				from __future__ import print_function
+				import os,sys,fcntl,errno
+				dest = sys.argv[1]
+				print(dest)
+				dest_base = os.path.splitext(dest)[0]
+				deps_file = dest_base + '.deps'
+				deps_lock = deps_file + 'deps.lock'
+				newdeps_file = dest_base + '.deps2'
+				newdeps_file_lock = newdeps_file + '.lock'
+
+				print(repr(os.listdir(os.path.dirname(dest))))
+				for lockfile in [dest_base + '.deps.lock']:
+					assert os.path.exists(lockfile), "%s does not exist" % lockfile
+					with open(lockfile) as f:
+						fcntl.flock
+						try:
+							fcntl.lockf(f, fcntl.LOCK_SH|fcntl.LOCK_NB, 0, 0)
+						except IOError as e:
+							if e.errno in (errno.EACCES, errno.EAGAIN):
+								# good, we failed to get the lock
+								pass
+							else:
+								raise e
+						else:
+							raise AssertionError("no exception thrown when locking %s" % lockfile)
+	''', flags=re.M).strip())
+			self.build('target')
+
+
 
 if __name__ == '__main__':
 	test = TestParallelBuilds()

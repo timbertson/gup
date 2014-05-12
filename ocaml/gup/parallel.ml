@@ -5,84 +5,41 @@ open Lwt
 let log = Logging.get_logger "gup.par"
 module ExtUnix = ExtUnix.Specific
 
-type lock_mode =
-	| ReadLock
-	| WriteLock
+(* because lockf is pretty much insane,
+ * we must *never* close an FD that we might hold a lock
+ * on elsewhere in the same process.
+ *
+ * So as well as lockf() based locking, we have a
+ * process-wide register of locks (keyed by device_id,inode).
+ *
+ * To take a lock, you first need to hold the (exclusive)
+ * process-level lock for that file's identity
+ *
+ * TODO: only use this if we're actually using --jobs=n for n>1
+ *)
+module FileIdentity = struct
+	type device_id = | Device of int
+	type inode = | Inode of int
+	type t = (device_id * inode)
+	let _extract (Device dev, Inode ino) = (dev, ino)
+	let create stats = (Device stats.Unix.st_dev, Inode stats.Unix.st_ino)
+	let compare a b =
+		Tuple2.compare ~cmp1:Int.compare ~cmp2:Int.compare (_extract a) (_extract b)
+end
 
-let lock_flag mode = match mode with
-	| ReadLock -> Unix.F_RLOCK
-	| WriteLock -> Unix.F_LOCK
-
-let lock_flag_nb mode = match mode with
-	| ReadLock -> Unix.F_TRLOCK
-	| WriteLock -> Unix.F_TLOCK
-
-let print_lock_mode out mode = Printf.fprintf out "%s" (match mode with
-	| ReadLock -> "ReadLock"
-	| WriteLock -> "WriteLock"
-)
-
-type active_lock = (lock_mode * Lwt_unix.file_descr * string)
-
-type lock_state =
-	| Unlocked
-	| Locked of active_lock
-	| PendingLock of active_lock Lwt.t Lazy.t
-
-exception Not_locked
-
-(* a reentrant lock file *)
-class lock_file path =
-	let lock_path = path ^ ".lock" in
-	let current_lock = ref None in
-
-	let do_lockf path fd flag =
-		try_lwt
-			Lwt_unix.lockf fd flag 0
-		with Unix.Unix_error (errno, _,_) ->
-			Error.raise_safe "Unable to lock file %s: %s" path (Unix.error_message errno)
-	in
-
-	let lock_file mode path =
-		lwt fd = Lwt_unix.openfile path [Unix.O_RDWR; Unix.O_CREAT; Unix.O_CLOEXEC] 0o664 in
-		lwt () = do_lockf path fd (lock_flag mode) in
-		log#trace "--Lock[%s] %a" path print_lock_mode mode;
-		Lwt.return (mode, fd, path)
-	in
-		
-	let release_lock current =
-		lwt () = match current with
-			| (_, fd, desc) ->
-					log#trace "Unlock[%s]" desc;
-					Lwt_unix.close fd
-		in Lwt.return_unit
-	in
-
-	let with_lock mode path f =
-		lwt lock = lock_file mode path in
-		try_lwt
-			f ()
-		finally
-			release_lock lock
-	in
-
-object (self)
-	method use : 'a. lock_mode -> (string -> 'a Lwt.t) -> 'a Lwt.t = fun mode f ->
-		match !current_lock with
-
-			(* acquire initial lock *)
-			| None -> with_lock mode lock_path (fun () ->
-					current_lock := Some mode;
-					let rv = f path in
-					current_lock := None;
-					rv
-				)
-
-			(* already locked, perform action immediately *)
-			| Some WriteLock -> f path
-
-			(* other transitions not yet needed *)
-			| _ -> assert false
+module LockMap = struct
+	include Map.Make (FileIdentity)
+	let _map = ref empty
+	let with_lock id fn =
+		let lock =
+			try find id !_map
+			with Not_found -> (
+				let lock = Lwt_mutex.create () in
+				_map := add id lock !_map;
+				lock
+			)
+		in
+		Lwt_mutex.with_lock lock fn
 end
 
 type fds = (Lwt_unix.file_descr * Lwt_unix.file_descr) option ref
@@ -188,6 +145,11 @@ object (self)
 			fn ()
 		finally
 			_release 1
+
+	method with_process_mutex : 'a. Lwt_unix.file_descr -> (unit -> 'a Lwt.t) -> 'a Lwt.t =
+	fun fd fn ->
+		lwt stats = Lwt_unix.fstat fd in
+		LockMap.with_lock (FileIdentity.create stats) fn
 end
 
 class named_jobserver path toplevel =
@@ -214,6 +176,9 @@ object (self)
 
 	method run_job : 'a. (unit -> 'a Lwt.t) -> 'a Lwt.t = fun fn ->
 		server#run_job fn
+
+	method with_process_mutex : 'a. Lwt_unix.file_descr -> (unit -> 'a Lwt.t) -> 'a Lwt.t =
+	fun fd fn -> server#with_process_mutex fd fn
 end
 
 class serial_jobserver =
@@ -223,6 +188,8 @@ object (self)
 		Lwt_mutex.with_lock lock fn
 
 	method finish = Lwt.return_unit
+	method with_process_mutex : 'a. Lwt_unix.file_descr -> (unit -> 'a Lwt.t) -> 'a Lwt.t =
+	fun fd fn -> ignore fd; fn ()
 end
 
 module Jobserver = struct
@@ -342,4 +309,86 @@ module Jobserver = struct
 	)
 
 	let run_job fn = !_impl#run_job fn
+	let with_process_mutex fd fn = !_impl#with_process_mutex fd fn
 end
+
+
+(***
+ * Lock files
+ *)
+type lock_mode =
+	| ReadLock
+	| WriteLock
+
+let lock_flag mode = match mode with
+	| ReadLock -> Unix.F_RLOCK
+	| WriteLock -> Unix.F_LOCK
+
+let lock_flag_nb mode = match mode with
+	| ReadLock -> Unix.F_TRLOCK
+	| WriteLock -> Unix.F_TLOCK
+
+let print_lock_mode out mode = Printf.fprintf out "%s" (match mode with
+	| ReadLock -> "ReadLock"
+	| WriteLock -> "WriteLock"
+)
+
+type active_lock = (lock_mode * Lwt_unix.file_descr * string)
+
+type lock_state =
+	| Unlocked
+	| Locked of active_lock
+	| PendingLock of active_lock Lwt.t Lazy.t
+
+exception Not_locked
+
+
+(* a reentrant lock file *)
+class lock_file path =
+	let lock_path = path ^ ".lock" in
+	let current_lock = ref None in
+
+	let do_lockf path fd flag =
+		try_lwt
+			Lwt_unix.lockf fd flag 0
+		with Unix.Unix_error (errno, _,_) ->
+			Error.raise_safe "Unable to lock file %s: %s" path (Unix.error_message errno)
+	in
+
+	let with_lock mode path f =
+		(* lock file *)
+		lwt fd = Lwt_unix.openfile path [Unix.O_RDWR; Unix.O_CREAT; Unix.O_CLOEXEC] 0o664 in
+		
+		(* ensure only one instance process-wide ever locks the given inode *)
+		
+		Jobserver.with_process_mutex fd (fun () ->
+			lwt () = do_lockf path fd (lock_flag mode) in
+			log#trace "--Lock[%s] %a" path print_lock_mode mode;
+			try_lwt
+				f ()
+			finally (
+				log#trace "Unlock[%s]" path;
+				Lwt_unix.close fd
+			)
+		)
+	in
+
+object (self)
+	method use : 'a. lock_mode -> (string -> 'a Lwt.t) -> 'a Lwt.t = fun mode f ->
+		match !current_lock with
+
+			(* acquire initial lock *)
+			| None -> with_lock mode lock_path (fun () ->
+					current_lock := Some mode;
+					let rv = f path in
+					current_lock := None;
+					rv
+				)
+
+			(* already locked, perform action immediately *)
+			| Some WriteLock -> f path
+
+			(* other transitions not yet needed *)
+			| _ -> assert false
+end
+
