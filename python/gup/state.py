@@ -87,7 +87,15 @@ class TargetState(object):
 	
 	def perform_build(self, exe, do_build):
 		assert os.path.exists(exe)
+		def still_needs_build():
+			_log.trace("checking if %s still neeeds build after releasing lock" % self.path)
+			deps = self.deps()
+			return deps is None or (not deps.already_built())
+
 		with self._ensure_dep_lock().write():
+			if not still_needs_build():
+				return False
+
 			builder_dep = BuilderDependency(
 				path=os.path.relpath(exe, os.path.dirname(self.path)),
 				checksum=None,
