@@ -61,15 +61,20 @@ let try_stat = _try_stat Unix.stat
 
 let makedirs ?(mode=0o777) path =
   let rec loop path =
+    let assert_dir st =
+      if st.Unix.st_kind <> Unix.S_DIR then raise_safe "Not a directory: %s" path
+    in
     match try_stat path with
-    | Some info ->
-        if info.Unix.st_kind = Unix.S_DIR then ()
-        else raise_safe "Not a directory: %s" path
+    | Some info -> assert_dir info
     | None ->
         let parent = (Filename.dirname path) in
         assert (path <> parent);
         loop parent;
-        if not (Sys.file_exists path) then Unix.mkdir path mode
+        try
+          Unix.mkdir path mode
+        with Unix.Unix_error (Unix.EEXIST, _, _) -> (
+          assert_dir (Unix.stat path)
+        )
   in
   try loop path
   with Safe_exception _ as ex -> reraise_with_context ex "... creating directory %s" path
