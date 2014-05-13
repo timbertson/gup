@@ -172,10 +172,7 @@ class TestScripts(TestCase):
 		clobber_warning = '# WARNING bad.gup modified %s directly' % (os.path.join('.', 'bad'))
 
 		def warning(lines):
-			try:
-				return next(iter(filter(lambda line: line.startswith('# WARN'), lines)))
-			except StopIteration:
-				return None
+			return next(iter(filter(lambda line: line.startswith('# WARN'), lines)), None)
 
 		# initial build should have the warning
 		lines = self.build_u('bad', include_logging=True)
