@@ -128,7 +128,7 @@ class target (buildscript:Gupfile.buildscript) =
 				log#trace("no build needed");
 				Lwt.return false
 			) else (
-				state#perform_build exe_path (fun exe ->
+				state#perform_build exe_path (fun exe deps ->
 
 					let basedir = buildscript#basedir in
 					Util.makedirs basedir;
@@ -176,16 +176,20 @@ class target (buildscript:Gupfile.buildscript) =
 						in
 						lwt new_mtime = Util.get_mtime self#path in
 						let target_changed = neq (Option.compare ~cmp:Big_int.compare) mtime new_mtime in
-						if target_changed then (
+						lwt () = if target_changed then (
 							let p = Option.print Big_int.print in
 							log#trace "old_mtime=%a, new_mtime=%a" p mtime p new_mtime;
-							if not (Sys.is_directory self#path) then (
+							if (Sys.is_directory self#path) then Lwt.return_unit else (
 								(* directories often need to be created directly *)
-								log#warn "%s modified %s directly"
-									(Util.relpath ~from:Var.root_cwd exe_path)
-									self#path
-							);
-						);
+								let expect_clobber = match deps with None -> false | Some d -> d#clobbers in
+								if (not (update && expect_clobber)) then (
+									log#warn "%s modified %s directly"
+										(Util.relpath ~from:Var.root_cwd exe_path)
+										self#path
+								);
+								state#mark_clobbers
+							)
+						) else Lwt.return_unit in
 
 						match ret with
 							| Unix.WEXITED 0 -> begin

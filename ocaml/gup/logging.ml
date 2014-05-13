@@ -23,7 +23,7 @@ let ord lvl =
 let string_of_level lvl =
 	match lvl with
 	| Error -> "ERROR"
-	| Warn  -> "WARN"
+	| Warn  -> "WARNING"
 	| Info  -> "INFO"
 	| Debug -> "DEBUG"
 	| Trace -> "TRACE"

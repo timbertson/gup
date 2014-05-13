@@ -46,7 +46,7 @@ def skipPermutations(fn):
 def has_feature(name):
 	return all([name in _build(exe, args=['--features'], cwd=None) for exe in GUP_EXES])
 
-def _build(exe, args, cwd, env=None):
+def _build(exe, args, cwd, env=None, include_logging=False):
 	env = env or os.environ
 	log.warn("\n\nRunning build with args: %r [cwd=%r]" % (list(args), cwd))
 	env = env.copy()
@@ -69,7 +69,8 @@ def _build(exe, args, cwd, env=None):
 		if not line:
 				break
 		line = line.decode('utf-8').rstrip()
-		if not line.startswith('#'): lines.append(line)
+		if include_logging or not line.startswith('#'):
+			lines.append(line)
 		unbuildable_msg = "Don't know how to build"
 		unbuildable_idx = line.find(unbuildable_msg)
 		if unbuildable_idx != -1:
@@ -152,13 +153,13 @@ class TestCase(mocktest.TestCase):
 		finally:
 			os.chdir(initial)
 
-	def _build(self, args, cwd=None, last=False, env=None):
+	def _build(self, args, cwd=None, last=False, env=None, include_logging=False):
 		self.invocation_count += 1
 		log.debug("invocation count = %r", self.invocation_count)
 
 		with self._root_cwd():
 			exe = next(self.exes)
-			lines = _build(exe, args=args, cwd=cwd, env=env)
+			lines = _build(exe, args=args, cwd=cwd, env=env, include_logging=include_logging)
 
 		if LAME_MTIME and not last:
 			# OSX has 1-second mtime resolution.
@@ -172,7 +173,7 @@ class TestCase(mocktest.TestCase):
 		return lines
 
 	def build(self, *targets, **k):
-		self._build(targets, **k)
+		return self._build(targets, **k)
 
 	def mtime(self, p):
 		mtime = os.stat(os.path.join(self.ROOT, p)).st_mtime
@@ -204,12 +205,13 @@ class TestCase(mocktest.TestCase):
 		if dir is not None: args.append(dir)
 		return sorted(self._build(args))
 
-	def assertRebuilds(self, target, fn, built=False):
-		if not built: self.build_u(target)
+	def assertRebuilds(self, target, fn, built=False, **kw):
+		if not built: self.build_u(target, **kw)
 		mtime = self.mtime(target)
 		fn()
-		self.build_u(target)
+		rv = self.build_u(target, **kw)
 		self.assertNotEqual(self.mtime(target), mtime, "target %s didn't get rebuilt" % (target,))
+		return rv
 	
 	def assertDuration(self, min, max, fn):
 		initial_time = datetime.now()

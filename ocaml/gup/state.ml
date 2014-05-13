@@ -43,6 +43,7 @@ type dependency_type =
 	| Builder
 	| BuildTime
 	| AlwaysRebuild
+	| ClobbersTarget
 
 let log = Logging.get_logger "gup.state"
 let meta_dir_name = ".gup"
@@ -85,6 +86,7 @@ let current_run_id = new run_id Var.run_id
 type 'a intermediate_dependencies = {
 	checksum: string option ref;
 	run_id: run_id option ref;
+	clobbers: bool ref;
 	rules: 'a list ref;
 }
 
@@ -101,6 +103,7 @@ let string_of_dependency_type = function
 	| BuildTime -> "built"
 	| Builder -> "builder"
 	| AlwaysRebuild -> "always"
+	| ClobbersTarget -> "clobbers"
 
 
 let serializable_dependencies = [
@@ -110,6 +113,7 @@ let serializable_dependencies = [
 	{ tag = BuildTime; num_fields = 1; };
 	{ tag = Builder; num_fields = 3; };
 	{ tag = AlwaysRebuild; num_fields = 0; };
+	{ tag = ClobbersTarget; num_fields = 0; };
 ]
 
 let tag_assoc     = serializable_dependencies |> List.map (fun dep -> (dep.tag, dep))
@@ -255,6 +259,10 @@ and dependencies target_path (data:base_dependency intermediate_dependencies) =
 				(Option.print String.print) !(data.checksum)
 				(List.print print_obj) !(data.rules)
 
+		method checksum = !(data.checksum)
+
+		method clobbers = !(data.clobbers)
+
 		method is_dirty (buildscript: Gupfile.buildscript) (built:bool) : (target_state list) dirty_result Lwt.t =
 			if not (Util.lexists target_path) then (
 				log#debug "DIRTY: %s (target does not exist)" target_path;
@@ -292,8 +300,6 @@ and dependencies target_path (data:base_dependency intermediate_dependencies) =
 				in
 				collapse !(data.rules) []
 			)
-
-		method checksum = !(data.checksum)
 end
 
 and dependency_builder target_path (input:Lwt_io.input_channel) = object (self)
@@ -322,8 +328,9 @@ and dependency_builder target_path (input:Lwt_io.input_channel) = object (self)
 				let parse_cs cs = if cs = empty_field then None else Some cs in
 				let parse_mtime mtime = if mtime = empty_field then None else Some (Big_int.of_string mtime) in
 				match (typ.tag, fields) with
-					| (Checksum, [cs]) -> update_singleton rv.checksum (Some cs)
-					| (RunId, [r])     -> update_singleton rv.run_id (Some (new run_id r))
+					| (Checksum, [cs])      -> update_singleton rv.checksum (Some cs)
+					| (RunId, [r])          -> update_singleton rv.run_id (Some (new run_id r))
+					| (ClobbersTarget, [])  -> (rv.clobbers := true; None)
 					| (FileDependency, [mtime; cs; path]) ->
 							Some (new file_dependency
 								~mtime:(parse_mtime mtime)
@@ -350,6 +357,7 @@ and dependency_builder target_path (input:Lwt_io.input_channel) = object (self)
 			let rv = {
 				checksum = ref None;
 				run_id = ref None;
+				clobbers = ref false;
 				rules = ref [];
 			} in
 			lwt version_line = readline input in
@@ -434,6 +442,9 @@ and target_state (target_path:string) =
 					(fun output -> write_dependency output dep)
 			)
 
+		method mark_clobbers =
+			self#add_dependency (ClobbersTarget, [])
+
 		method add_file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) path =
 			let dep = (new file_dependency ~mtime:mtime ~checksum:checksum path) in
 			log#trace "Adding dependency %s -> %a" (Filename.basename target_path) print_obj dep;
@@ -450,18 +461,16 @@ and target_state (target_path:string) =
 			log#trace "perform_build %s" self#path;
 
 			(* TODO: quicker mtime-based check *)
-			let still_needs_build = (fun () ->
+			let still_needs_build = (fun deps ->
 				log#trace "Checking if %s still needs buld after releasing lock" self#path;
-				lwt deps = self#deps in
-				Lwt.return @@ match deps with
+				match deps with
 					| Some d -> not d#already_built
 					| None -> true
 			) in
 
 			let build = (fun deps_path ->
-				lwt wanted = still_needs_build () in
-
-				if wanted then (
+				lwt deps = self#deps in
+				if still_needs_build deps then (
 					lwt builder_mtime = Util.get_mtime exe in
 					let builder_dep = new builder_dependency
 						~mtime: builder_mtime
@@ -477,7 +486,7 @@ and target_state (target_path:string) =
 						write_dependency file (serializable current_run_id)
 					) >>
 					lwt built = try_lwt
-						block exe
+						block exe deps
 					with ex ->
 						Lwt_unix.unlink temp >>
 						raise_lwt ex

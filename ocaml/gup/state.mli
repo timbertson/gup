@@ -17,17 +17,19 @@ class target_state : string ->
 		method path : string
 
 		(* async methods *)
-		method perform_build : string -> (string -> bool Lwt.t) -> bool Lwt.t
+		method perform_build : string -> (string -> dependencies option -> bool Lwt.t) -> bool Lwt.t
 		method deps : dependencies option Lwt.t
 		method add_file_dependency : mtime:(Big_int.t option) -> checksum:(string option) -> string -> unit Lwt.t
 		method add_checksum : string -> unit Lwt.t
 		method mark_always_rebuild : unit Lwt.t
+		method mark_clobbers : unit Lwt.t
 	end
 
 and dependencies : string -> base_dependency intermediate_dependencies ->
 	object
 		method is_dirty : Gupfile.buildscript -> bool -> (target_state list) dirty_result Lwt.t
 		method checksum : string option
+		method clobbers : bool
 		method already_built : bool
 		method children : string list
 		method print : unit IO.output -> unit

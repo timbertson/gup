@@ -165,3 +165,27 @@ class TestScripts(TestCase):
 		self.build('hello')
 		out = subprocess.check_output(self.path('hello'))
 		self.assertEquals(out.strip().decode('ascii'), 'ok')
+	
+	def test_ignores_repeated_clobbers_on_update_build(self):
+		self.touch('input')
+		self.write('bad.gup', BASH + 'gup -u input; echo bad > "$2"')
+		clobber_warning = '# WARNING bad.gup modified %s directly' % (os.path.join('.', 'bad'))
+
+		def warning(lines):
+			try:
+				return next(iter(filter(lambda line: line.startswith('# WARN'), lines)))
+			except StopIteration:
+				return None
+
+		# initial build should have the warning
+		lines = self.build_u('bad', include_logging=True)
+		self.assertEquals(warning(lines), clobber_warning)
+
+		# doesn't notify on rebuild
+		lines = self.assertRebuilds('bad', lambda: self.touch('input'), built=True, include_logging=True)
+		self.assertEquals(warning(lines), None)
+
+		# does notify on explicit build
+		lines = self.build('bad', include_logging=True)
+		self.assertEquals(warning(lines), clobber_warning)
+

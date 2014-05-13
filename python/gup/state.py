@@ -85,15 +85,18 @@ class TargetState(object):
 			with open(self.meta_path('deps2'), 'a') as f:
 				dep.append_to(f)
 	
+	def mark_clobbers(self):
+		self.add_dependency(ClobbersTarget())
+	
 	def perform_build(self, exe, do_build):
 		assert os.path.exists(exe)
-		def still_needs_build():
+		def still_needs_build(deps):
 			_log.trace("checking if %s still neeeds build after releasing lock" % self.path)
-			deps = self.deps()
 			return deps is None or (not deps.already_built())
 
 		with self._ensure_dep_lock().write():
-			if not still_needs_build():
+			deps = self.deps()
+			if not still_needs_build(deps):
 				return False
 
 			builder_dep = BuilderDependency(
@@ -107,7 +110,7 @@ class TargetState(object):
 				Dependencies.init_file(f)
 				builder_dep.append_to(f)
 			try:
-				built = do_build()
+				built = do_build(deps)
 			except:
 				os.remove(temp)
 				raise
@@ -127,6 +130,7 @@ class Dependencies(object):
 		self.path = path
 		self.rules = []
 		self.checksum = None
+		self.clobbers = False
 		self.runid = None
 
 		if file is None:
@@ -149,6 +153,8 @@ class Dependencies(object):
 				elif isinstance(dep, RunId):
 					assert self.runid is None
 					self.runid = dep
+				elif isinstance(dep, ClobbersTarget):
+					self.clobbers = True
 				else:
 					self.rules.append(dep)
 	
@@ -203,6 +209,7 @@ class Dependency(object):
 				AlwaysRebuild,
 				Checksum,
 				RunId,
+				ClobbersTarget,
 				BuildTime]:
 			if line.startswith(candidate.tag):
 				cls = candidate
@@ -385,3 +392,8 @@ class RunId(Dependency):
 
 	def is_current(self):
 		return self.value == RUN_ID
+
+class ClobbersTarget(Dependency):
+	tag = 'clobbers:'
+	num_fields = 0
+	fields = []

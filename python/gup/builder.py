@@ -86,9 +86,9 @@ class Target(object):
 		return 'Target(%r)' % (self.path,)
 	
 	def build(self, update):
-		return self.state.perform_build(self.builder.path, lambda: self._perform_build(update))
+		return self.state.perform_build(self.builder.path, lambda deps: self._perform_build(update, deps))
 
-	def _perform_build(self, update):
+	def _perform_build(self, update, deps):
 		'''
 		Assumes locks are held (by state.perform_build)
 		'''
@@ -110,7 +110,6 @@ class Target(object):
 		extend_build_env(env)
 
 		target_relative_to_cwd = os.path.relpath(self.path, ROOT_CWD)
-
 
 		output_file = os.path.abspath(self.state.meta_path('out'))
 		MOVED = False
@@ -143,7 +142,10 @@ class Target(object):
 				_log.trace("old_mtime=%r, new_mtime=%r" % (mtime, new_mtime))
 				if not os.path.isdir(self.path):
 					# directories often need to be created directly
-					_log.warn("%s modified %s directly" % (exe_path_relative_to_cwd, self.path))
+					self.state.mark_clobbers()
+					expect_clobber = False if deps is None else deps.clobbers
+					if not (update and expect_clobber):
+						_log.warn("%s modified %s directly" % (exe_path_relative_to_cwd, self.path))
 			if ret == 0:
 				if os.path.lexists(output_file):
 					if os.path.isdir(self.path) and not os.path.islink(self.path):
