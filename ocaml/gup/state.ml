@@ -51,7 +51,7 @@ let deps_ext = "deps"
 let new_deps_ext = "deps2"
 
 let empty_field = "-"
-let format_version = 2
+let format_version = 3
 let version_marker = "version: "
 
 (* exceptionless helpers *)

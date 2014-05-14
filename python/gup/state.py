@@ -125,7 +125,7 @@ class TargetState(object):
 				return built
 
 class Dependencies(object):
-	FORMAT_VERSION = 2
+	FORMAT_VERSION = 3
 	def __init__(self, path, file):
 		self.path = path
 		self.rules = []
