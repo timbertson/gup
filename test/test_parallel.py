@@ -92,6 +92,13 @@ if not IS_WINDOWS:
 
 			self.assertDuration(min=2*sleep_time, max=3*sleep_time, fn=build)
 
+		def test_releases_all_tokens_if_multiple_jobs_fail_in_a_single_proces(self):
+			self.write('short_fail.gup', BASH + 'sleep ' + str(sleep_time) + '; exit 1')
+			self.write('long_fail.gup', BASH + 'sleep ' + str(2*sleep_time) + '; exit 1')
+			self.write('parent.gup', BASH + 'gup -u short_fail long_fail')
+			# self.assertRaises(SafeError, lambda: self.build('-j9', 'parent'))
+			self.assertRaises(SafeError, lambda: self.build('-j9', 'short_fail', 'long_fail'))
+
 		def test_limiting_number_of_concurrent_jobs(self):
 			steps = ['step1', 'step2', 'step3', 'step4', 'step5', 'step6']
 
