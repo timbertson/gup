@@ -103,7 +103,7 @@ struct
 					parent_state#add_file_dependency ~checksum:checksum ~mtime:mtime path
 				) |> Option.default Lwt.return_unit
 			in
-			List.map build_target posargs |> Lwt.pick
+			List.map build_target posargs |> Lwt.join
 		)
 	
 	let mark_ifcreate files =
