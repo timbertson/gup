@@ -10,6 +10,8 @@ type 'a dirty_result =
 	| Known of bool
 	| Unknown of 'a
 
+val cancel_all_future_builds : unit -> unit
+
 class target_state : string ->
 	object
 		method meta_path: string -> string

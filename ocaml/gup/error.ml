@@ -1,4 +1,5 @@
 exception Unbuildable of string
+exception BuildCancelled
 exception Safe_exception of (string * string list ref)
 
 (** Convenient way to create a new [Safe_exception] with no initial context. *)

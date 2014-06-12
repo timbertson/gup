@@ -20,6 +20,9 @@ type dirty_args = {
 	built:bool;
 }
 
+let builds_have_been_cancelled = ref false
+let cancel_all_future_builds () = builds_have_been_cancelled := true
+
 exception Version_mismatch of string
 exception Invalid_dependency_file
 
@@ -469,6 +472,7 @@ and target_state (target_path:string) =
 			) in
 
 			let build = (fun deps_path ->
+				if (!builds_have_been_cancelled) then raise Error.BuildCancelled;
 				lwt deps = self#deps in
 				if still_needs_build deps then (
 					lwt builder_mtime = Util.get_mtime exe in

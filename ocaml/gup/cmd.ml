@@ -76,32 +76,47 @@ struct
 		Parallel.Jobserver.setup jobs (fun () ->
 			let parent_target = _get_parent_target () in
 			let build_target (path:string) : unit Lwt.t =
-				Option.may (fun parent ->
-					if Util.samefile (Util.abspath path) parent then
-						raise (Invalid_argument ("Target "^path^" attempted to build itself"));
-				) parent_target;
+				try_lwt
+					Option.may (fun parent ->
+						if Util.samefile (Util.abspath path) parent then
+							raise (Invalid_argument ("Target "^path^" attempted to build itself"));
+					) parent_target;
 
-				let target : Builder.target option = (Builder.prepare_build path) in
-				lwt (_:bool) = begin match target with
-					| None ->
-						if update && (Util.lexists path) then (
-							_report_nobuild path;
-							Lwt.return false
-						) else
-							raise (Error.Unbuildable path)
-					| Some t -> t#build update
-				end in
-				(* add dependency to parent *)
-				parent_target |> Option.map (fun parent_path ->
-					lwt mtime = Util.get_mtime path
-					and checksum = target |> Lwt_option.bind (fun target ->
-						lwt deps = target#state#deps in
-						Lwt.return (Option.bind deps (fun deps -> deps#checksum))
-					) in
+					let target : Builder.target option = (Builder.prepare_build path) in
+					(* do't start a new build if one has already failed *)
+					lwt (_:bool) = begin match target with
+						| None ->
+							if update && (Util.lexists path) then (
+								_report_nobuild path;
+								Lwt.return false
+							) else
+								raise (Error.Unbuildable path)
+						| Some t -> t#build update
+					end in
+					(* add dependency to parent *)
+					parent_target |> Option.map (fun parent_path ->
+						lwt mtime = Util.get_mtime path
+						and checksum = target |> Lwt_option.bind (fun target ->
+							lwt deps = target#state#deps in
+							Lwt.return (Option.bind deps (fun deps -> deps#checksum))
+						) in
 
-					let parent_state = (new State.target_state parent_path) in
-					parent_state#add_file_dependency ~checksum:checksum ~mtime:mtime path
-				) |> Option.default Lwt.return_unit
+						let parent_state = (new State.target_state parent_path) in
+						parent_state#add_file_dependency ~checksum:checksum ~mtime:mtime path
+					) |> Option.default Lwt.return_unit
+				with
+					| Error.BuildCancelled -> Lwt.return_unit
+					| err -> (
+						begin match err with
+							| Builder.Target_failed path ->
+								log#error "Target failed: %s" path;
+							| _ -> ()
+						end;
+						(* once one build fails, we tell the `State` module to just raise BuildCancelled for all
+						* builds which have not yet started *)
+						State.cancel_all_future_builds ();
+						raise err
+					)
 			in
 			List.map build_target posargs |> Lwt.join
 		)
@@ -422,7 +437,6 @@ let main () =
 				exit_error ()
 		)
 		| Builder.Target_failed path -> (
-				log#error "Target failed: %s" path;
 				exit_error ()
 		)
 		| Error.Safe_exception (msg, ctx) -> (
