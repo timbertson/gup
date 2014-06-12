@@ -4,9 +4,6 @@ open Std
 let log = Logging.get_logger "gup.builder"
 
 exception Target_failed of string
-let assert_exists bin = if Util.is_absolute bin && not (Sys.file_exists bin) then
-	Error.raise_safe "No such interpreter: %s" bin;
-	bin
 
 let _prepare_build : 'c. (Gupfile.buildscript -> 'c) -> string -> 'c option = fun cons path ->
 	let buildscript = Gupfile.find_buildscript path in
@@ -25,12 +22,16 @@ let _guess_executable path =
 			in
 			let args = Str.split (Str.regexp "[ \t]+") line in
 			match args with
-				| bin_arg :: rest -> let bin = assert_exists (
-					if String.starts_with bin_arg "."
-						then Filename.concat (Filename.dirname path) bin_arg
-						else bin_arg
-					) in
-					bin :: rest
+				| bin :: rest ->
+					let bin = if String.starts_with bin "."
+						then Filename.concat (Filename.dirname path) bin
+						else bin
+					in
+					if Util.is_absolute bin && not (Sys.file_exists bin) then (
+						(* special-case: we ignore /path/to/<env> for compatibility with plain shell scripts on weird platforms *)
+						if Filename.basename bin = "env" then rest
+						else Error.raise_safe "No such interpreter: %s" bin;
+					) else bin :: rest
 				| [] -> []
 		) else []
 	)

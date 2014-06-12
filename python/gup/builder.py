@@ -190,6 +190,9 @@ def _guess_executable(p):
 		bin = _resolve_windows_binary(bin)
 
 	if os.path.isabs(bin) and not os.path.exists(bin):
+		if os.path.basename(bin) == 'env':
+			# special-cased for compatibility
+			return args[1:]
 		raise SafeError("No such interpreter: %s" % (os.path.abspath(bin),))
 
 	args[0] = bin

@@ -30,6 +30,16 @@ class TestInterpreter(TestCase):
 
 		self.assertEquals(self.read('build/relative').lower(), ' '.join([interp, self.path(os.path.join('build', 'relative.gup'))]).lower())
 		self.assertEquals(self.read('build/pathed').lower(),   ' '.join([interp, self.path(os.path.join('build', 'pathed.gup'))]).lower())
+	
+	def test_fallback_if_path_to_env_is_missing(self):
+		# For windows compatibility and other weird setups.
+		# Currently we special-case this to basename=='env', but
+		# this may be relaxed in the future if needed
+		self.write('env.gup', '#!/var/not/really/env bash\necho 1 > $1')
+		self.build_assert('env', '1')
+
+		self.write('not_env.gup', '#!/var/not/really/not-env bash\necho 1')
+		self.assertRaises(SafeError, lambda: self.build('not_env'))
 
 class TestScripts(TestCase):
 	def test_target_name_is_relative_to_gupfile_without_gup_dir(self):
