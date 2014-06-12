@@ -99,6 +99,13 @@ class TestBuildableCheck(TestCase):
 		self.write('Gupfile', 'builder:\n\ta')
 		# gupfile matched, but builder not found
 		self.assertRaises(SafeError, lambda: self.build('--buildable', 'a'), message='gup failed with status 2')
+	
+	def test_doesnt_build_second_target_if_first_fails(self):
+		self.write("a.gup", BASH + "echo a > $2; exit 1")
+		self.write("b.gup", BASH + "echo b > $2; exit 1")
+		self.assertRaises(SafeError, lambda: self.build("a","b"))
+		self.assertEqual(self.read("a"), "a")
+		self.assertFalse(self.exists("b"))
 
 class TestDirectoryTargets(TestCase):
 	def test_trailing_slashes_are_ignored_in_target_name(self):
