@@ -181,6 +181,10 @@ and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:st
 		method private is_dirty_mtime full_path =
 			(* pure mtime-based check *)
 			lwt current_mtime = Util.get_mtime full_path in
+			log#trace "%s: comparing stored mtime %a against current %a"
+				self#path
+				(Option.print Big_int.print) self#mtime
+				(Option.print Big_int.print) current_mtime;
 			Lwt.return @@ if not @@ eq (Option.compare ~cmp:Big_int.compare) current_mtime self#mtime then (
 				log#debug "DIRTY: %s (stored mtime is %a, current is %a)"
 					self#path
@@ -247,13 +251,14 @@ and build_time time =
 	end
 
 and dependencies target_path (data:base_dependency intermediate_dependencies) =
+	let base_path = Filename.dirname target_path in
 	object (self)
 		method already_built = match !(data.run_id) with
 			| None -> false
 			| Some r -> r#is_current
 
 		method children : string list = !(data.rules) |> List.filter_map (fun dep ->
-			dep#child
+			dep#child |> Option.map (Filename.concat base_path)
 		)
 
 		method print out =
@@ -271,7 +276,6 @@ and dependencies target_path (data:base_dependency intermediate_dependencies) =
 				log#debug "DIRTY: %s (target does not exist)" target_path;
 				return (Known true)
 			) else (
-				let base_path = Filename.dirname target_path in
 				let args = {
 					path = target_path;
 					base_path = base_path;
