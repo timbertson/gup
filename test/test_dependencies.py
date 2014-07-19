@@ -34,6 +34,14 @@ class TestDependencies(TestCase):
 		self.build_u("dep")
 		self.assertEqual(self.mtime('dep'), mtime)
 
+	def test_fully_pathed_dependencies(self):
+		self.write('input', '1')
+		self.write("counter.gup", BASH + 'gup -u $PWD/input; echo 1 > "$1"')
+		self.write("dep.gup", BASH + 'gup -u $PWD/counter; echo -n "COUNT: $(cat counter)" > "$1"')
+		
+		self.assertRebuilds('dep', lambda: self.touch('input'))
+		self.assertNotRebuilds('dep', lambda: None)
+
 	def test_tracks_dependencies_outside_working_tree(self):
 		import tempfile
 		with tempfile.NamedTemporaryFile() as dep:

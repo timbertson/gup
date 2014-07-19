@@ -199,10 +199,7 @@ and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:st
 				| Some checksum -> self#is_dirty_cs full_path checksum args
 				| None -> self#is_dirty_mtime full_path
 
-		method private full_path base =
-			if Util.is_absolute self#path
-			then self#path
-			else Filename.concat base self#path
+		method private full_path base = Util.join_if_relative ~base self#path
 	end
 
 and builder_dependency ~mtime ~checksum path =
@@ -258,7 +255,7 @@ and dependencies target_path (data:base_dependency intermediate_dependencies) =
 			| Some r -> r#is_current
 
 		method children : string list = !(data.rules) |> List.filter_map (fun dep ->
-			dep#child |> Option.map (Filename.concat base_path)
+			dep#child |> Option.map (Util.join_if_relative ~base:base_path)
 		)
 
 		method print out =

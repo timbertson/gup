@@ -18,6 +18,11 @@ let isfile path =
 		Lwt.return (stat.Unix.st_kind <> Unix.S_DIR)
 	with Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return false
 
+let join_if_relative ~base path =
+	if Filename.is_relative path
+		then Filename.concat base path
+		else path
+
 let lexists (path:string) : bool =
 	try
 		let (_:Unix.stats) = Unix.lstat path in
