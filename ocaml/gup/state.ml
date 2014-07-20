@@ -385,10 +385,10 @@ and dependency_builder target_path (input:Lwt_io.input_channel) = object (self)
 	end
 
 and target_state (target_path:string) =
+	let base_path = Filename.dirname target_path in
 	let meta_path ext =
-		let base = Filename.dirname target_path in
 		let target = Filename.basename target_path in
-		let meta_dir = Filename.concat base meta_dir_name in
+		let meta_dir = Filename.concat base_path meta_dir_name in
 		Filename.concat meta_dir (target ^ "." ^ ext)
 	in
 
@@ -450,6 +450,7 @@ and target_state (target_path:string) =
 			self#add_dependency (ClobbersTarget, [])
 
 		method add_file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) path =
+			let path = Util.relpath ~from:base_path path in
 			let dep = (new file_dependency ~mtime:mtime ~checksum:checksum path) in
 			log#trace "Adding dependency %s -> %a" (Filename.basename target_path) print_obj dep;
 			self#add_dependency (serializable dep)

@@ -41,6 +41,14 @@ class TestDependencies(TestCase):
 		
 		self.assertRebuilds('dep', lambda: self.touch('input'))
 		self.assertNotRebuilds('dep', lambda: None)
+	
+	def test_dependencies_use_correct_path_when_builder_is_not_in_same_dir_as_target(self):
+		self.write('src/input', '1')
+		self.write('build.sh', BASH + 'gup -u src/input; echo 1 > "$1"')
+		self.write('Gupfile', 'build.sh:\n\tbuild/*')
+
+		self.assertRebuilds('build/output', lambda: self.touch('src/input'))
+		self.assertNotRebuilds('build/output', lambda: None)
 
 	def test_tracks_dependencies_outside_working_tree(self):
 		import tempfile
