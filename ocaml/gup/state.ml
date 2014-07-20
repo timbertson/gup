@@ -259,9 +259,10 @@ and dependencies target_path (data:base_dependency intermediate_dependencies) =
 		)
 
 		method print out =
-			Printf.fprintf out "<#Dependencies(run=%a, cs=%a, rules=%a)>"
+			Printf.fprintf out "<#Dependencies(run=%a, cs=%a, clobbers=%b, rules=%a)>"
 				(Option.print print_obj) !(data.run_id)
 				(Option.print String.print) !(data.checksum)
+				!(data.clobbers)
 				(List.print print_obj) !(data.rules)
 
 		method checksum = !(data.checksum)
