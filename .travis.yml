@@ -25,7 +25,7 @@ before_install:
         eval "$(opam config env)"
 
         opam repo add gfxmonk_lwt "git://github.com/gfxmonk/lwt.git#opam"
-        opam install batteries fileutils sha extunix lwt
+        opam install batteries sha extunix lwt
       else
         sudo apt-get update -qq
       fi
