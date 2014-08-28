@@ -120,6 +120,24 @@ class TestScripts(TestCase):
 		self.write('dir.gup', BASH + 'mkdir "$1"; echo hello > "$1"/file; exit 1')
 		self.assertRaises(SafeError, lambda: self.build('dir'))
 		self.assertEquals(self._output_files(), [])
+	
+	def test_removes_output_path_before_building(self):
+		# we can't always ensure that this gets cleaned up from a previous run,
+		# so just make sure it's deleted before we try to build into it
+		self.mkdirp('.gup/dir.out')
+		self.write('dir.gup', BASH + '[ ! -e "$1" ]; mkdir "$1"; echo "$1" > "$1/path"')
+		self.build('dir')
+		with open(self.path('dir/path')) as p:
+			target_path = p.read().strip()
+
+		os.makedirs(target_path)
+		readonly_path = os.path.join(target_path, 'readonly_file')
+		with open(readonly_path, 'w') as f:
+			pass
+		os.chmod(readonly_path, 0o444)
+
+		# build will fail if $1 already exists
+		self.build('dir')
 
 	def test_deletes_file_target_if_build_succeeds_but_generates_no_output(self):
 		# we can't delete dirs, as their contents may have changed without

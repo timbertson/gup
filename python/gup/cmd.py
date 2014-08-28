@@ -197,7 +197,6 @@ def _mark_contents(opts, targets):
 	TargetState(parent_target).add_dependency(checksum)
 
 def _clean_targets(opts, dests):
-	import shutil
 	if opts.force is None:
 		raise SafeError("Either --force (-f) or --dry-run (-n) must be given")
 
@@ -219,7 +218,7 @@ def _clean_targets(opts, dests):
 				return
 			except OSError:
 				pass
-		shutil.rmtree(path)
+		rmtree(path)
 
 	if len(dests) == 0: dests = ['.']
 	for dest in dests:

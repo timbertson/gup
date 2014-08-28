@@ -525,7 +525,7 @@ Gup is distributed under th LGPL - see the LICENCE file.
 `jwack.py` and `lock.py` are adapted from the [redo][] project, which is LGPL
 and is Copyright Avery Pennarun
 
-`zeroinstall_utils.ml` is adapted from the [ZeroInstall][] project, which is LGPL
+`zeroinstall_utils.ml` and some of `util.py` is adapted from the [ZeroInstall][] project, which is LGPL
 and is copyright Thomas Leonard.
 
 All other source code is Copyright Tim Cuthbertson, 2013-2014.

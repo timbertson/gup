@@ -1,11 +1,10 @@
 import os
 import errno
 import logging
-import shutil
 from .log import getLogger
 from .var import IS_WINDOWS
 
-__all__ = ['mkdirp', 'get_mtime', 'try_remove', 'samefile', 'rename']
+__all__ = ['mkdirp', 'get_mtime', 'try_remove', 'samefile', 'rename', 'rmtree']
 
 def mkdirp(p):
 	try:
@@ -40,7 +39,7 @@ def try_remove(path):
 			# not supported on a directory") might accidentally be useful.
 			IS_WINDOWS and e.errno == errno.EACCES and os.path.isdir(path)
 		):
-			shutil.rmtree(path)
+			rmtree(path)
 		else:
 			raise
 
@@ -60,3 +59,26 @@ if IS_WINDOWS:
 		os.rename(src, dest)
 else:
 	rename = os.rename
+
+def rmtree(root):
+	"""Like shutil.rmtree, except that we also delete read-only items.
+	From ZeroInstall's support/__init__.py:
+	# Copyright (C) 2009, Thomas Leonard
+	# See the README file for details, or visit http://0install.net.
+	"""
+	import shutil
+	import platform
+	if os.path.isfile(root):
+		os.chmod(root, 0o700)
+		os.remove(root)
+	else:
+		if platform.system() == 'Windows':
+			for main, dirs, files in os.walk(root):
+				for i in files + dirs:
+					os.chmod(os.path.join(main, i), 0o700)
+			os.chmod(root, 0o700)
+		else:
+			for main, dirs, files in os.walk(root):
+				os.chmod(main, 0o700)
+		shutil.rmtree(root)
+

@@ -5,7 +5,6 @@ import os
 import sys
 import time
 import tempfile
-import shutil
 import contextlib
 import subprocess
 import logging
@@ -14,6 +13,7 @@ import itertools
 from datetime import datetime, timedelta
 
 from gup.error import *
+from gup.util import rmtree
 from gup.log import TRACE_LVL
 
 logging.basicConfig(level=TRACE_LVL)
@@ -111,7 +111,7 @@ class TestCase(mocktest.TestCase):
 			return f.read().strip()
 	
 	def _teardown(self):
-		shutil.rmtree(self.ROOT)
+		rmtree(self.ROOT)
 		self.exes = None
 
 	def tearDown(self):

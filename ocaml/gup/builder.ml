@@ -142,6 +142,7 @@ class target (buildscript:Gupfile.buildscript) =
 
 					let target_relative_to_cwd = Util.relpath ~from:Var.root_cwd self#path in
 					let output_file = Util.abspath (state#meta_path "out") in
+					Util.try_remove output_file;
 					let moved = ref false in
 					let cleanup () =
 						if not !moved then
@@ -196,7 +197,7 @@ class target (buildscript:Gupfile.buildscript) =
 							| Unix.WEXITED 0 -> begin
 								lwt () = if Util.lexists output_file then (
 									if (try Sys.is_directory self#path with Sys_error _ -> false) then (
-										log#trace "calling rmtree() on previous %s" self#path;
+										log#trace "removing previous %s" self#path;
 										Util.rmtree self#path
 									);
 									log#trace "renaming %s -> %s" output_file self#path;

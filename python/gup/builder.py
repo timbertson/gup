@@ -4,7 +4,6 @@ from os import path
 import errno
 import subprocess
 import logging
-import shutil
 
 from .gupfile import Builder
 from .error import *
@@ -112,6 +111,8 @@ class Target(object):
 		target_relative_to_cwd = os.path.relpath(self.path, ROOT_CWD)
 
 		output_file = os.path.abspath(self.state.meta_path('out'))
+		try_remove(output_file)
+
 		MOVED = False
 		try:
 			args = [exe_path, output_file, self.builder.target]
@@ -149,8 +150,8 @@ class Target(object):
 			if ret == 0:
 				if os.path.lexists(output_file):
 					if os.path.isdir(self.path) and not os.path.islink(self.path):
-						_log.trace("calling rmtree() on previous %s", self.path)
-						shutil.rmtree(self.path)
+						_log.trace("removing previous %s", self.path)
+						try_remove(self.path)
 					rename(output_file, self.path)
 				else:
 					if (not target_changed) and os.path.exists(self.path) and not os.path.isdir(self.path):
