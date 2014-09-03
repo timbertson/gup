@@ -204,6 +204,27 @@ class buildscript
 class build_candidate
 	(root:string)
 	(suffix:builder_suffix option) =
+
+	let suffix_depth = function
+		| Empty -> 0
+		| Suffix path ->
+				String.fold_left (fun count c ->
+					log#trace "compare %c to %s" c Filename.dir_sep;
+					if (String.make 1 c) = Filename.dir_sep
+					then succ count
+					else count
+				) 1 path
+	in
+
+	let rec goes_above depth path =
+		match Util.split_first path with
+			| (Util.ParentDir, rest) ->
+					if depth = 0
+					then true
+					else goes_above (depth - 1) rest
+			| _ -> false
+	in
+
 	object (self)
 		val root = Util.normpath root
 		method _base_parts include_gup : string list =
@@ -253,10 +274,21 @@ class build_candidate
 								let match_target = canonicalize_target_name target in
 								(List.enum rules) |> Enum.filter_map (fun (script, ruleset) ->
 									if ruleset#matches match_target then (
-										let base = Filename.concat target_base (Filename.dirname script) in
 										let script_path = Filename.concat (Filename.dirname path) script in
 										if not (Sys.file_exists script_path) then
 											Error.raise_safe "Build script not found: %s\n     %s(specified in %s)" script_path Var.indent path;
+
+										(* if `Gupfile` lives inside a gup/ dir but `script` does not,
+										 * we need to drop one `..` component to account for that *)
+										let script = match suffix with
+											| None -> script
+											| Some suffix ->
+												let script = Util.normpath script in
+												if goes_above (suffix_depth suffix) script
+													then snd (Util.split_first script)
+													else script
+										in
+										let base = Filename.concat target_base (Filename.dirname script) in
 										Some (new buildscript
 											script_path
 											(Util.relpath ~from:base (Filename.concat target_base target))

@@ -84,6 +84,18 @@ class TestGupdirectory(TestCase):
 		self.assertRaises(Unbuildable, lambda: self.build('a/foo.c'))
 		self.build_assert('a/b/foo.c', os.path.join('b','foo.c') + ', called from a')
 
+	def test_build_script_outside_gup_dir(self):
+		self.write("default.gup", echo_to_target('$2, called from "$(pwd)"'))
+		self.write("gup/default.gup", echo_to_target('$2, called from gup dir "$(pwd)"'))
+		self.write('gup/bin/Gupfile', '../../default.gup:\n\tfoo\n../default.gup:\n\tbar')
+		self.write('gup/tools/bin/Gupfile', '../../../default.gup:\n\t*')
+		self.write('gup/tools/Gupfile', 'bin/../../../default.gup:\n\t*')
+
+		self.build_assert('bin/foo', os.path.join('bin','foo') + ', called from ' + self.ROOT)
+		self.build_assert('bin/bar', os.path.join('bin','bar') + ', called from gup dir ' + self.ROOT)
+		self.build_assert('tools/bin/foo', os.path.join('tools', 'bin','foo') + ', called from ' + self.ROOT)
+		self.build_assert('tools/foo', os.path.join('tools', 'foo') + ', called from ' + self.ROOT)
+
 class TestBuildableCheck(TestCase):
 	def test_indicates_buildable_file(self):
 		self.write('Gupfile', 'builder:\n\ta')
