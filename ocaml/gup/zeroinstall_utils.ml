@@ -167,9 +167,11 @@ let abspath path =
 let walk root fn : unit =
   let rec _walk path =
     let contents = Sys.readdir path in
-    let (dirs, files) = List.partition (fun name -> Sys.is_directory (path +/ name)) (Array.to_list contents) in
+    let (dirs, files) = List.partition
+      (fun name -> Sys.is_directory (path +/ name))
+      (Array.to_list contents) in
     let dirs = fn path dirs files in
-    Batteries.List.enum dirs |> Batteries.Enum.iter (fun dir -> _walk dir)
+    dirs |> List.iter (fun dir -> _walk (path +/ dir))
   in
   _walk root
 

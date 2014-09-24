@@ -6,10 +6,16 @@ class TestClean(TestCase):
 		self.write('target.gup', echo_to_target('target contents'))
 		self.write('source', 'plain src')
 		self.write('source-that-was-target.gup', echo_to_target('ok'))
+		self.write('nested/dir/target.gup', echo_to_target('ok'))
 
 		self.write('target-without-metadata.gup', echo_to_target('ok'))
 
-		self.build_u('source-that-was-target', 'target-without-metadata', 'target')
+		self.build_u(
+			'source-that-was-target',
+			'target-without-metadata',
+			'target',
+			'nested/dir/target',
+		)
 		os.remove(self.path('source-that-was-target.gup'))
 		os.remove(self.path('.gup/target-without-metadata.deps'))
 
@@ -25,6 +31,10 @@ class TestClean(TestCase):
 
 	def test_fails_if_dry_run_or_force_are_not_given(self):
 		self.assertRaises(SafeError, lambda: self.build('--clean'))
+
+	def test_removes_from_nested_dir(self):
+		self.build('--clean', '-f')
+		self.assertFalse(self.exists('nested/dir/target'))
 
 	def test_removes_targets_and_metadata(self):
 		self.build('--clean', '-f')
