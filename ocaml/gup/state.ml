@@ -236,7 +236,7 @@ and build_time time =
 			Lwt.return @@ Known (
 				if neq Big_int.compare mtime time then (
 					let log_method = ref log#warn in
-					if Sys.is_directory path then
+					if Util.lisdir path then
 						(* dirs are modified externally for various reasons, not worth warning *)
 						log_method := log#debug
 					;

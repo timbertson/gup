@@ -4,7 +4,7 @@ import logging
 from .log import getLogger
 from .var import IS_WINDOWS
 
-__all__ = ['mkdirp', 'get_mtime', 'try_remove', 'samefile', 'rename', 'rmtree']
+__all__ = ['mkdirp', 'get_mtime', 'try_remove', 'samefile', 'rename', 'rmtree', 'lisdir']
 
 def mkdirp(p):
 	try:
@@ -59,6 +59,10 @@ if IS_WINDOWS:
 		os.rename(src, dest)
 else:
 	rename = os.rename
+
+def lisdir(p):
+	# NOTE: racey
+	return os.path.isdir(p) and not os.path.islink(p)
 
 def rmtree(root):
 	"""Like shutil.rmtree, except that we also delete read-only items.

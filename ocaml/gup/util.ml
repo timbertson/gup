@@ -67,3 +67,11 @@ let relpath ~from path =
 let isdir path =
 	try Sys.is_directory path
 	with Sys_error _ -> false
+
+let islink path =
+	try (Unix.lstat path).Unix.st_kind = Unix.S_LNK
+	with Unix.Unix_error (Unix.ENOENT, _, _) -> false
+
+let lisdir path =
+	try (Unix.lstat path).Unix.st_kind = Unix.S_DIR
+	with Unix.Unix_error (Unix.ENOENT, _, _) -> false

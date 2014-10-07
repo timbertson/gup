@@ -141,7 +141,7 @@ class Target(object):
 			target_changed = mtime != new_mtime
 			if target_changed:
 				_log.trace("old_mtime=%r, new_mtime=%r" % (mtime, new_mtime))
-				if not os.path.isdir(self.path):
+				if not lisdir(self.path):
 					# directories often need to be created directly
 					self.state.mark_clobbers()
 					expect_clobber = False if deps is None else deps.clobbers
@@ -149,13 +149,14 @@ class Target(object):
 						_log.warn("%s modified %s directly" % (exe_path_relative_to_cwd, self.path))
 			if ret == 0:
 				if os.path.lexists(output_file):
-					if os.path.isdir(self.path) and not os.path.islink(self.path):
+					if lisdir(self.path):
 						_log.trace("removing previous %s", self.path)
 						try_remove(self.path)
 					rename(output_file, self.path)
 				else:
-					if (not target_changed) and os.path.exists(self.path) and not os.path.isdir(self.path):
-						os.remove(self.path)
+					if (not target_changed) and (not os.path.islink(self.path)):
+						_log.trace("removing old %s", self.path)
+						try_remove(self.path)
 				MOVED = True
 			else:
 				_log.trace("builder exited with status %s" % (ret,))

@@ -83,7 +83,7 @@ class TestScripts(TestCase):
 		self.assertRaises(SafeError, lambda: self.build('foo'))
 
 	def test_directory_script_is_re_run_if_dependencies_change(self):
-		self.write('dir.gup', BASH + 'gup -u file; mkdir -p "$2"; cp file "$2/"')
+		self.write('dir.gup', BASH + 'gup -u file; mkdir -p "$2"; cp file "$2/"; touch "$2"')
 		self.write('file', 'filecontents')
 
 		self.build('dir')
@@ -139,22 +139,36 @@ class TestScripts(TestCase):
 		# build will fail if $1 already exists
 		self.build('dir')
 
-	def test_deletes_file_target_if_build_succeeds_but_generates_no_output(self):
-		# we can't delete dirs, as their contents may have changed without
-		# affecting the mtime
+	def test_deletes_target_if_build_succeeds_but_generates_no_output(self):
+		# XXX we can't delete links, as there's no way to `touch` them.
 		self.write('file.gup', BASH + 'exit 0')
 		self.write('dir.gup', BASH + 'exit 0')
+		self.write('link.gup', BASH + 'exit 0')
 		self.touch('dir/contents')
 		self.touch('file')
-		self.assertEquals(self.listdir(), ['dir','dir.gup','file','file.gup'])
-		self.build('file', 'dir')
-		self.assertEquals(self.listdir(), ['dir', 'dir.gup','file.gup'])
+		os.symlink('link_dest', self.path('link'))
+		self.assertEquals(self.listdir(), ['dir','dir.gup','file','file.gup', 'link', 'link.gup'])
+		self.build('file', 'dir', 'link')
+		self.assertEquals(self.listdir(), ['dir.gup','file.gup', 'link', 'link.gup'])
 
-	def test_keeps_previous_output_file_if_it_has_been_modified(self):
+	def test_keeps_modified_file(self):
 		self.write('file.gup', BASH + 'touch "$2"; exit 0')
-		self.touch('file')
+		self.build('file')
 		self.build('file')
 		self.assertEquals(self.listdir(), ['file','file.gup'])
+
+	def test_keeps_modified_dir(self):
+		self.write('dir.gup', BASH + 'if [ -e "$2" ]; then touch "$2"; else mkdir "$2"; fi; exit 0')
+		self.build('dir')
+		self.build('dir')
+		self.assertEquals(self.listdir(), ['dir', 'dir.gup'])
+
+	def test_keeps_modified_link(self):
+		self.touch('link_dest')
+		self.write('link.gup', BASH + 'if [ -e "$2" ]; then touch "$2"; else ln -s link_dest "$2"; fi; exit 0')
+		self.build('link')
+		self.build('link')
+		self.assertEquals(self.listdir(), ['link', 'link.gup', 'link_dest'])
 
 	@unittest.skipIf(IS_WINDOWS, 'symlinks')
 	def test_rebuild_symlink_to_directory(self):
@@ -185,6 +199,12 @@ class TestScripts(TestCase):
 	def test_cleans_up_broken_symlink_if_build_fails(self):
 		self.write('target.gup', BASH + 'ln -s NOT_HERE "$1"; exit 1')
 		self.assertRaises(SafeError, lambda: self.build('target'))
+		self.assertEquals(self._output_files(), [])
+
+	def test_leaves_broken_symlink_at_dest_if_build_succeeds(self):
+		self.write('link.gup', BASH + 'ln -s NOT_HERE "$2"')
+		self.build('link')
+		self.assertTrue(os.path.islink(self.path('link')))
 		self.assertEquals(self._output_files(), [])
 	
 	@unittest.skipIf(IS_WINDOWS, 'irrelevant on windows')

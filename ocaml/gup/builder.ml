@@ -181,7 +181,7 @@ class target (buildscript:Gupfile.buildscript) =
 						lwt () = if target_changed then (
 							let p = Option.print Big_int.print in
 							log#trace "old_mtime=%a, new_mtime=%a" p mtime p new_mtime;
-							if (Sys.is_directory self#path) then Lwt.return_unit else (
+							if (Util.lisdir self#path) then Lwt.return_unit else (
 								(* directories often need to be created directly *)
 								let expect_clobber = match deps with None -> false | Some d -> d#clobbers in
 								if (not (update && expect_clobber)) then (
@@ -196,7 +196,7 @@ class target (buildscript:Gupfile.buildscript) =
 						match ret with
 							| Unix.WEXITED 0 -> begin
 								lwt () = if Util.lexists output_file then (
-									if (try Sys.is_directory self#path with Sys_error _ -> false) then (
+									if (Util.lisdir self#path) then (
 										log#trace "removing previous %s" self#path;
 										Util.rmtree self#path
 									);
@@ -204,11 +204,11 @@ class target (buildscript:Gupfile.buildscript) =
 									Lwt_unix.rename output_file self#path
 								) else (
 									log#trace "output file %s did not get created" output_file;
-									if (not target_changed) then (
-										lwt isfile = Util.isfile self#path in
-										if isfile
-											then Lwt_unix.unlink self#path
-											else Lwt.return_unit
+									if (not target_changed) && (not (Util.islink self#path)) then (
+										log#trace "removing previous %s" self#path;
+										(* TODO make this an lwt.t *)
+										Util.try_remove self#path;
+										Lwt.return_unit
 									) else Lwt.return_unit
 								) in
 								moved := true;
