@@ -1,4 +1,5 @@
 ZEROLOCAL=0install run --not-before=0.2.4 http://gfxmonk.net/dist/0install/0local.xml
+PYTHON=python
 
 all: python ocaml
 
@@ -10,7 +11,7 @@ ocaml/%: phony
 	make -C ocaml "$$(basename "$@")"
 
 python/%: phony
-	make -C python "$$(basename "$@")"
+	make -C python "$$(basename "$@")" "PYTHON=${PYTHON}"
 
 local: gup-test-local.xml gup-local.xml
 gup-test-local.xml: gup-test.xml.template
@@ -29,7 +30,7 @@ unit-test: phony
 
 integration-test-pre: phony ocaml/integration-test-pre python/integration-test-pre
 permutation-test: phony integration-test-pre
-	python ./run_tests.py -i
+	${PYTHON} ./run_tests.py -i
 
 integration-test: phony
 	$(MAKE) ocaml/integration-test

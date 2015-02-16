@@ -117,7 +117,7 @@ def main():
 		output.write('\n'.join(main_section))
 
 	st = os.stat(output_path)
-	os.chmod(output_path, st.st_mode | 0111)
+	os.chmod(output_path, st.st_mode | 0o111)
 
 	env = os.environ.copy()
 	def check(mods, basedir):

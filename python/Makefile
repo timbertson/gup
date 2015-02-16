@@ -1,3 +1,4 @@
+PYTHON=python
 ifeq ($(OS),Windows_NT)
 	# just used for dependency tracking - always rebuild on windows
 	SOURCES:=phony
@@ -28,7 +29,7 @@ test-py2:
 
 bin/gup: $(SOURCES)
 	mkdir -p tmp bin
-	python ./build/combine_modules.py gup tmp/gup.py
+	${PYTHON} ./build/combine_modules.py gup tmp/gup.py
 	cp tmp/gup.py bin/gup
 
 bin/gup.exe: gup.cs
