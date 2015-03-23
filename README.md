@@ -72,7 +72,7 @@ to `$PATH`.
 ### Python version
 
 Gup works under both python 2 and 3, so it should work with
-whatever revent python is on your $PATH.
+whatever recent python is on your $PATH.
 
 I don't routinely test under old python versions, so if you
 need to run gup in anything below 2.7 or 3.3 and you find
@@ -309,8 +309,8 @@ passed to `gup -u` changed.
 You don't have to specify all your dependencies in one place, though - you can
 call `gup -u` from any place in your script - all calls made while building
 your target are appended to the dependency information of the target being
-built. This is done by setting environment variables when invoking running
-build scripts, so it's completely parallel-safe.
+built. This is done by setting environment variables when invoking build
+scripts, so it's completely parallel-safe.
 
 Also, `gup` will by default include a dependency on the build script used to
 generate a target. If you change the build script (or add a new build script
