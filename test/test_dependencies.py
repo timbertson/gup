@@ -98,11 +98,9 @@ class TestDependencies(TestCase):
 		self.assertEqual(self.read("counter"), "3")
 	
 	def test_transitive_target_dependencies_are_pathed_correctly(self):
-		'''
-		Written to cover a discovered bug in which everything built properly,
-		but re-building a/foo (which depended) on a/bar would check whether ./bar
-		needs rebuilding, not a/bar
-		'''
+		# Written to cover a discovered bug in which everything built properly,
+		# but re-building a/foo (which depended) on a/bar would check whether ./bar
+		# needs rebuilding, not a/bar
 		self.write("a/counter.gup", BASH + 'gup -u counter2; echo -n "$(expr "$(cat counter2)" + 1)" > $1')
 		self.write("a/counter2.gup", BASH + 'gup -u counter3; echo -n "$(expr "$(cat counter3)" + 1)" > $1')
 		self.write("dep.gup", BASH + 'gup -u a/counter; echo -n "COUNT: $(cat a/counter)" > "$1"')
