@@ -20,7 +20,7 @@ let isfile path =
 
 let join_if_relative ~base path =
 	if Filename.is_relative path
-		then Filename.concat base path
+		then Zeroinstall_utils.normpath (Filename.concat base path)
 		else path
 
 let lexists (path:string) : bool =

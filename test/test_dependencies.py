@@ -179,6 +179,15 @@ class TestDependencies(TestCase):
 
 		self.assertNotRebuilds('a', lambda: self.touch('b'))
 	
+	def test_dependencies_outside_symlink(self):
+		self.write('src/build/foo.gup', BASH + 'gup -u '+self.ROOT + '/input; touch $1')
+		os.symlink('src/build', self.path('build'))
+		self.touch('input')
+		self.build('build/foo')
+
+		self.assertRebuilds('build/foo', lambda: self.touch('input'))
+		self.assertNotRebuilds('build/foo', lambda: None)
+	
 class TestAlwaysRebuild(TestCase):
 	def test_always_rebuild(self):
 		self.write('all.gup', echo_to_target('ok') + '; gup --always')

@@ -24,6 +24,7 @@ test: phony
 	$(MAKE) unit-test
 	$(MAKE) integration-test
 
+unit-test-pre: phony
 unit-test: phony
 	$(MAKE) ocaml/unit-test
 	$(MAKE) python/unit-test
