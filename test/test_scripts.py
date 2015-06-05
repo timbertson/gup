@@ -83,7 +83,7 @@ class TestScripts(TestCase):
 		self.assertRaises(SafeError, lambda: self.build('foo'))
 
 	def test_directory_script_is_re_run_if_dependencies_change(self):
-		self.write('dir.gup', BASH + 'gup -u file; mkdir -p "$2"; cp file "$2/"; touch "$2"')
+		self.write('dir.gup', BASH + 'gup -u file; mkdir -p "$1"; cp file "$1/"; touch "$1"')
 		self.write('file', 'filecontents')
 
 		self.build('dir')
