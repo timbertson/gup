@@ -149,7 +149,9 @@ class Target(object):
 						_log.warn("%s modified %s directly" % (exe_path_relative_to_cwd, self.path))
 			if ret == 0:
 				if os.path.lexists(output_file):
-					if lisdir(self.path):
+					if os.path.lexists(self.path) and (
+						lisdir(self.path) or lisdir(output_file)
+					):
 						_log.trace("removing previous %s", self.path)
 						try_remove(self.path)
 					rename(output_file, self.path)

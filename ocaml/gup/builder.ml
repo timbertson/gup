@@ -196,7 +196,11 @@ class target (buildscript:Gupfile.buildscript) =
 						match ret with
 							| Unix.WEXITED 0 -> begin
 								lwt () = if Util.lexists output_file then (
-									if (Util.lisdir self#path) then (
+									(* If both old and new exist, and either is a directory,
+									 * remove the old dir before renaming *)
+									if (Util.lexists self#path &&
+										(Util.lisdir self#path || Util.lisdir output_file)
+									) then (
 										log#trace "removing previous %s" self#path;
 										Util.rmtree self#path
 									);

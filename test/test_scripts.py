@@ -94,17 +94,20 @@ class TestScripts(TestCase):
 		self.build_u('dir')
 		self.assertEquals(self.read('dir/file'), 'filecontents2')
 
-	def test_running_a_directory_build_script_can_replace_output_with_a_file(self):
-		self.write('dir.gup', BASH + 'mkdir "$2"; echo 1 > $2/file')
+	def test_directory_and_file_targets_can_replace_each_other(self):
+		self.write('dir.gup', BASH + 'mkdir "$1"; echo 1 > $1/file')
+		self.write('file.gup', echo_to_target('file'))
 
-		self.build('dir')
+		self.build('dir', 'file')
 		self.assertTrue(os.path.isdir(self.path('dir')))
+		self.assertTrue(os.path.isfile(self.path('file')))
 
 		self.write('dir.gup', echo_to_target('file_now'))
-		self.build_u('dir')
+		self.write('file.gup', BASH + 'mkdir "$1"; echo 1 > $1/file')
+		self.build_u('dir', 'file')
 
-		self.assertFalse(os.path.isdir(self.path('dir')))
-		self.assertEquals(self.read('dir'), 'file_now')
+		self.assertTrue(os.path.isfile(self.path('dir')))
+		self.assertTrue(os.path.isdir(self.path('file')))
 	
 	def _output_files(self):
 		meta_files = os.listdir(self.path('.gup'))
