@@ -128,11 +128,11 @@ class BuildCandidate(object):
 class Builder(object):
 	'''
 	The canonical builder for a target.
-	`path` is the path to the .gup file, even if this
+	`path` is the path to the build script, even if this
 	builder was obtained indirectly (via a Gupfile match)
 	'''
 	def __init__(self, script_path, target, basedir):
-		self.path = script_path
+		self.path = os.path.realpath(script_path)
 		self.target = target
 		self.basedir = basedir
 		self.target_path = os.path.join(self.basedir, self.target)

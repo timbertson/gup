@@ -53,12 +53,12 @@ class TargetState(object):
 
 	def deps(self):
 		rv = None
-		if not os.path.exists(self.meta_path('deps')):
-			# don't even bother trying to lock deps file
+		deps_path = self.meta_path('deps')
+		if not os.path.exists(deps_path):
+			_log.trace("Not loading missing deps at %s", deps_path)
 			return rv
 
 		with self._ensure_dep_lock().read():
-			deps_path = self.meta_path('deps')
 			try:
 				f = open(deps_path)
 			except IOError as e:
@@ -71,7 +71,7 @@ class TargetState(object):
 					_log.debug("Ignoring stored dependencies from incompatible version: %s", deps_path)
 				except Exception as e:
 					_log.debug("Error loading %s: %s (assuming dirty)", deps_path, e)
-		_log.trace("Loaded serialized state: %r" % (rv,))
+		_log.trace("Loaded serialized state from %s: %r" % (deps_path, rv,))
 		return rv
 
 	def create_lock(self):
@@ -91,7 +91,7 @@ class TargetState(object):
 	def perform_build(self, exe, do_build):
 		assert os.path.exists(exe)
 		def still_needs_build(deps):
-			_log.trace("checking if %s still neeeds build after releasing lock" % self.path)
+			_log.trace("checking if %s still needs build after releasing lock" % self.path)
 			return deps is None or (not deps.already_built())
 
 		with self._ensure_dep_lock().write():
@@ -99,9 +99,8 @@ class TargetState(object):
 			if not still_needs_build(deps):
 				return False
 
-			builder_dep = BuilderDependency(
-				path=os.path.relpath(exe, os.path.dirname(self.path)),
-				checksum=None,
+			builder_dep = BuilderDependency.relative_to_target(self.path,
+				path=exe,
 				mtime=get_mtime(exe))
 
 			_log.trace("created dep %s from builder %r" % (builder_dep, exe))
@@ -253,10 +252,22 @@ class FileDependency(Dependency):
 		self.mtime = mtime
 	
 	@classmethod
-	def relative_to_target(cls, target, mtime, checksum, path):
-		base = os.path.dirname(target)
-		relpath = os.path.relpath(path, base)
-		return cls(mtime=mtime, checksum=checksum, path=relpath)
+	def relative_to(cls, rel_root, mtime, path):
+		rel_path = os.path.relpath(path, rel_root)
+		rv = cls(mtime=mtime, checksum=None, path=rel_path)
+		return rv
+
+	@classmethod
+	def relative_to_target(cls, target, mtime, path):
+		return cls.relative_to(os.path.dirname(target), mtime=mtime, path=path)
+	
+	@classmethod
+	def of_target(cls, parent_target, target, mtime):
+		rv = cls.relative_to_target(parent_target, mtime=mtime, path=target.path)
+		deps = target.state.deps()
+		if deps and deps.checksum:
+			rv.checksum = deps.checksum
+		return rv
 	
 	@classmethod
 	def deserialize(cls, mtime, checksum, path):

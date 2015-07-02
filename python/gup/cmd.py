@@ -8,6 +8,7 @@ from .error import *
 from .util import *
 from .state import TargetState, AlwaysRebuild, Checksum, FileDependency, META_DIR
 from .gupfile import Builder
+from .builder import Target
 from .log import PLAIN, getLogger, TRACE_LVL
 from .var import INDENT, set_verbosity, DEFAULT_VERBOSITY, set_trace, PY3, IS_WINDOWS
 from .parallel import setup_jobserver
@@ -172,7 +173,7 @@ def _mark_ifcreate(opts, files):
 	for filename in files:
 		if os.path.lexists(filename):
 			raise SafeError("File already exists: %s" % (filename,))
-		parent_state.add_dependency(FileDependency.relative_to_target(parent_target, mtime=None, checksum=None, path = filename))
+		parent_state.add_dependency(FileDependency.relative_to_target(parent_target, mtime=None, path = filename))
 
 def _test_buildable(opts, args):
 	assert len(args) == 1, "exactly one argument expected"
@@ -257,14 +258,26 @@ def _build(opts, targets):
 		if os.path.abspath(target_path) == parent_target:
 			raise SafeError("Target `%s` attempted to build itself" % (target_path,))
 
-		task = Task(opts, parent_target, target_path)
-		target = task.prepare()
-		if target is not None:
-			# only add a task if it's a buildable target
-			runner.add(task)
-		else:
-			# otherwise, perform post-build actions (like updating parent dependencies)
-			task.complete()
+		next_task = Task(opts, parent_target, target_path)
+		while next_task is not None:
+			task = next_task
+			next_task = None
+
+			target = task.prepare()
+			if isinstance(target, Target):
+				# only add a task if it's a buildable target
+				runner.add(task)
+			else:
+				if isinstance(target, Task):
+					# indirect target, depends only on another task
+					next_task = target
+				else:
+					assert target is None, "Unknown task type: %s" % (type(target),)
+
+				# If target requires no build step,
+				# perform post-build actions immediately
+				# (like updating parent dependencies)
+				task.complete()
 
 	# wait for all tasks to complete
 	runner.run()

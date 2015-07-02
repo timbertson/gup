@@ -1,5 +1,6 @@
 from __future__ import print_function
 import os
+import errno
 from .builder import prepare_build
 from .log import getLogger
 from .util import get_mtime
@@ -20,15 +21,39 @@ class Task(object):
 		self.parent_target = parent_target
 	
 	def prepare(self):
+		'''
+		Returns:
+			- None (not buildable),
+			- Task (depends implicitly on another task; i.e. a symlink)
+			- Target (buildable)
+		'''
+
 		target_path = self.target_path
 		opts = self.opts
 
 		target = self.target = prepare_build(target_path)
 		if target is None:
+			target_dest = None
+			try:
+				target_dest = os.readlink(target_path)
+			except (OSError) as e:
+				if e.errno in (errno.ENOENT, errno.EINVAL):
+					# not a link
+					pass
+				else:
+					raise
+
+			if target_dest is not None:
+				# this target isn't buildable, but its target might be
+				if not os.path.isabs(target_dest):
+					target_dest = os.path.join(os.path.dirname(target_dest), target_dest)
+				dest = Task(self.opts, self.parent_target, target_dest)
+				return dest
+
 			if opts.update and os.path.lexists(target_path):
 				self.report_nobuild()
-				return None
-			raise Unbuildable(target_path)
+			else:
+				raise Unbuildable(target_path)
 		return target
 
 	def build(self):
@@ -43,13 +68,11 @@ class Task(object):
 			target_path = self.target_path
 			mtime = get_mtime(target_path)
 
-			checksum = None
 			if self.target:
-				deps = self.target.state.deps()
-				if deps:
-					checksum = deps.checksum
+				dep = FileDependency.of_target(self.parent_target, self.target, mtime=mtime)
+			else:
+				dep = FileDependency.relative_to_target(self.parent_target, mtime=mtime, path=self.target_path)
 
-			dep = FileDependency.relative_to_target(self.parent_target, mtime=mtime, path=target_path, checksum=checksum)
 			TargetState(self.parent_target).add_dependency(dep)
 	
 	def handle_result(self, rv):

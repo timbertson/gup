@@ -177,14 +177,78 @@ class TestDependencies(TestCase):
 
 		self.assertNotRebuilds('a', lambda: self.touch('b'))
 	
+class TestSymlinkDependencies(TestCase):
 	def test_dependencies_outside_symlink(self):
 		self.write('src/build/foo.gup', BASH + 'gup -u '+self.ROOT + '/input; touch $1')
-		os.symlink('src/build', self.path('build'))
+		self.symlink('src/build', 'build')
 		self.touch('input')
 		self.build('build/foo')
 
 		self.assertRebuilds('build/foo', lambda: self.touch('input'))
 		self.assertNotRebuilds('build/foo', lambda: None)
+
+	def test_builds_symlink_dest_if_symlink_is_not_itself_buildable(self):
+		self.write('dest.gup', BASH + 'touch $1')
+		self.symlink('dest', 'link')
+		self.build('link')
+
+		self.assertRebuilds('link', lambda: self.touch('dest.gup'), mtime_file='dest')
+
+	def test_builds_symlink_only_if_symlink_is_buildable(self):
+		self.write('dest.gup', BASH + 'echo "built by dest.gup" > $1')
+		self.write('dest', '(plain dest)')
+		self.write('link.gup', BASH + 'ln -s dest $1')
+		self.build_assert('link', '(plain dest)')
+		self.assertTrue(os.path.islink(self.path('link')), "link is not a symlink!")
+
+		self.assertRebuilds('link', lambda: self.touch('link.gup'))
+		self.assertNotRebuilds('link', lambda: self.touch('dest.gup'), mtime_file='dest')
+
+	def test_rebuilds_if_builder_behind_symlink_changes(self):
+		self.write('real_builder.gup', echo_to_target('1'))
+		self.symlink('real_builder.gup', 'target.gup')
+		self.assertRebuilds('target', lambda: self.touch('real_builder.gup'))
+
+	def test_rebuilds_if_builder_symlink_changes(self):
+		self.write('real_builder.gup', echo_to_target('1'))
+		self.write('second_builder.gup', echo_to_target('2'))
+		self.symlink('real_builder.gup', self.path('target.gup'))
+		self.build_assert('target', '1')
+
+		def change_referent():
+			self.unlink('target.gup')
+			self.symlink('second_builder.gup', 'target.gup')
+
+		self.assertRebuilds('target', change_referent)
+		self.assertEqual(self.read('target'), '2')
+
+	def test_rebuilds_if_dependency_behind_symlink_changes(self):
+		self.write('dep_dest', '1');
+		self.symlink('dep_dest', 'dep')
+		self.write('target.gup', echo_file_contents('dep'))
+		self.assertRebuilds('target', lambda: self.touch('dep_dest'))
+
+	def test_rebuilds_if_checksummed_dependency_behind_symlink_changes(self):
+		self.write('contents', '1')
+		self.write('dep1.gup', BASH + 'gup -u contents; cat contents > "$1"; gup --contents "$1"');
+		self.symlink('dep1', 'dep')
+		self.write('target.gup', echo_file_contents('dep'))
+
+		self.assertRebuilds('target', lambda: self.write('contents', '2'))
+		self.assertNotRebuilds('target', lambda: self.write('contents', '2'))
+
+	def test_rebuilds_if_dependency_symlink_changes(self):
+		self.write('dep1', '1');
+		self.write('dep2', '2');
+		self.symlink('dep1', 'dep')
+		self.write('target.gup', echo_file_contents('dep'))
+		self.build_assert('target', '1')
+
+		def change_referent():
+			self.unlink('dep')
+			self.symlink('dep2', 'dep')
+		self.assertRebuilds('target', change_referent)
+		self.assertEqual(self.read('target'), '2')
 	
 class TestAlwaysRebuild(TestCase):
 	def test_always_rebuild(self):

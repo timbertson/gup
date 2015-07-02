@@ -176,7 +176,7 @@ class TestCase(mocktest.TestCase):
 		return self._build(targets, **k)
 
 	def mtime(self, p):
-		mtime = os.stat(os.path.join(self.ROOT, p)).st_mtime
+		mtime = os.lstat(os.path.join(self.ROOT, p)).st_mtime
 		logging.debug("mtime %s for %s" % (mtime,p))
 		return mtime
 
@@ -205,12 +205,14 @@ class TestCase(mocktest.TestCase):
 		if dir is not None: args.append(dir)
 		return sorted(self._build(args))
 
-	def assertRebuilds(self, target, fn, built=False, **kw):
+	def assertRebuilds(self, target, fn, built=False, mtime_file=None, **kw):
+		# mtime_file allows you to build `foo` but check that `bar` has been modified (mostly useful in symlink cases)
+		if mtime_file is None: mtime_file=target
 		if not built: self.build_u(target, **kw)
-		mtime = self.mtime(target)
+		mtime = self.mtime(mtime_file)
 		fn()
 		rv = self.build_u(target, **kw)
-		self.assertNotEqual(self.mtime(target), mtime, "target %s didn't get rebuilt" % (target,))
+		self.assertNotEqual(self.mtime(mtime_file), mtime, "target %s didn't get rebuilt" % (target,))
 		return rv
 	
 	def assertDuration(self, min, max, fn):
@@ -222,19 +224,29 @@ class TestCase(mocktest.TestCase):
 		assert elapsed_time >= min, "elapsed time < %ss (%s)" % (min, elapsed_time)
 		return rv
 
-	def assertNotRebuilds(self, target, fn, built=False):
+	def assertNotRebuilds(self, target, fn, built=False, mtime_file=None):
+		if mtime_file is None: mtime_file = target
 		if not built: self.build_u(target)
-		mtime = self.mtime(target)
+		mtime = self.mtime(mtime_file)
 		fn()
 		self.build_u(target)
-		self.assertEqual(self.mtime(target), mtime, "target %s got rebuilt" % (target,))
+		self.assertEqual(self.mtime(mtime_file), mtime, "target %s got rebuilt" % (target,))
 	
 	def rename(self, src, dest):
 		os.rename(self.path(src), self.path(dest))
+
+	def unlink(self, src):
+		os.unlink(self.path(src))
+
+	def symlink(self, target, src):
+		os.symlink(target, self.path(src))
 
 	def mkdirp(self, p):
 		mkdirp(self.path(p))
 	
 	def exists(self, p):
 		return os.path.exists(self.path(p))
+
+	def lexists(self, p):
+		return os.path.lexists(self.path(p))
 

@@ -4,6 +4,8 @@ class TestClean(TestCase):
 	def setUp(self):
 		super(TestClean, self).setUp()
 		self.write('target.gup', echo_to_target('target contents'))
+		self.symlink('target', 'manual_symlink')
+		self.write('built_symlink.gup', BASH + 'ln -s target "$1"')
 		self.write('source', 'plain src')
 		self.write('source-that-was-target.gup', echo_to_target('ok'))
 		self.write('nested/dir/target.gup', echo_to_target('ok'))
@@ -14,6 +16,7 @@ class TestClean(TestCase):
 			'source-that-was-target',
 			'target-without-metadata',
 			'target',
+			'built_symlink',
 			'nested/dir/target',
 		)
 		os.remove(self.path('source-that-was-target.gup'))
@@ -41,6 +44,11 @@ class TestClean(TestCase):
 		self.assertTrue(self.exists('source'))
 		self.assertFalse(self.exists('target'))
 		self.assertFalse(self.exists('.gup'))
+
+	def test_removes_only_built_symlinks(self):
+		self.build('--clean', '-f')
+		self.assertFalse(self.lexists('built_symlink'))
+		self.assertTrue(self.lexists('manual_symlink'))
 	
 	def test_ignores_hidden_directories(self):
 		self.write('.foo/foo.gup', echo_to_target('target contents'))
