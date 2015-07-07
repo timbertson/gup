@@ -46,7 +46,7 @@ class Task(object):
 			if target_dest is not None:
 				# this target isn't buildable, but its target might be
 				if not os.path.isabs(target_dest):
-					target_dest = os.path.join(os.path.dirname(target_dest), target_dest)
+					target_dest = os.path.join(os.path.dirname(target_path), target_dest)
 				dest = Task(self.opts, self.parent_target, target_dest)
 				return dest
 

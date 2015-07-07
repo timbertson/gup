@@ -194,6 +194,13 @@ class TestSymlinkDependencies(TestCase):
 
 		self.assertRebuilds('link', lambda: self.touch('dest.gup'), mtime_file='dest')
 
+	def test_resolves_relative_symlinks(self):
+		self.write('base/dir/dest.gup', BASH + 'touch $1')
+		self.symlink('dir/dest', 'base/link')
+		self.build('base/link')
+
+		self.assertRebuilds('base/link', lambda: self.touch('base/dir/dest.gup'), mtime_file='base/dir/dest')
+
 	def test_builds_symlink_only_if_symlink_is_buildable(self):
 		self.write('dest.gup', BASH + 'echo "built by dest.gup" > $1')
 		self.write('dest', '(plain dest)')
