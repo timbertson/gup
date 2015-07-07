@@ -235,4 +235,20 @@ class target (buildscript:Gupfile.buildscript) =
 			)
 	end
 
-let prepare_build : string -> target option = _prepare_build (new target)
+type prepared_build = [
+	| `Target of target
+	| `Symlink_to of string
+]
+let prepare_build  (path: string) : prepared_build option =
+	match _prepare_build (new target) path with
+		| Some target -> Some (`Target target)
+		| None -> begin match Util.readlink path with
+			(* # this target isn't buildable, but its symlink destination might be *)
+			| Some dest ->
+					let dest = if Util.is_absolute dest
+						then dest
+						else Filename.concat (Filename.dirname path) dest
+					in
+					Some (`Symlink_to dest)
+			| None -> None
+		end

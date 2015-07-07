@@ -75,3 +75,23 @@ let islink path =
 let lisdir path =
 	try (Unix.lstat path).Unix.st_kind = Unix.S_DIR
 	with Unix.Unix_error (Unix.ENOENT, _, _) -> false
+
+let readlink path =
+	try Some (Unix.readlink path)
+	with
+		| Unix.Unix_error (Unix.ENOENT, _, _)
+		| Unix.Unix_error (Unix.EINVAL, _, _)
+			-> None
+
+let realpath path =
+	let rec _realpath path =
+		match readlink path with
+			| Some dest -> _realpath (
+				if Filename.is_relative dest
+					then Filename.concat (Filename.dirname path) dest
+					else dest
+				)
+			| None -> path
+	in
+	abspath (_realpath path)
+
