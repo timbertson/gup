@@ -101,8 +101,11 @@ class TestBuildableCheck(TestCase):
 		self.write('Gupfile', 'builder:\n\ta')
 		self.touch('builder')
 		self.touch('b.gup')
+		self.symlink('b', 'link_to_b')
 		self.build('--buildable', 'a')
 		self.build('--buildable', 'b')
+		status, _lines = self.build('--buildable', 'link_to_b', throwing=False)
+		self.assertEqual(status, 1)
 
 	def test_returns_1_when_file_is_not_buildable(self):
 		self.assertRaises(SafeError, lambda: self.build('--buildable', 'target'), message='gup failed with status 1')

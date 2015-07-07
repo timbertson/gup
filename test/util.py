@@ -46,7 +46,7 @@ def skipPermutations(fn):
 def has_feature(name):
 	return all([name in _build(exe, args=['--features'], cwd=None) for exe in GUP_EXES])
 
-def _build(exe, args, cwd, env=None, include_logging=False):
+def _build(exe, args, cwd, env=None, include_logging=False, throwing=True):
 	env = env or os.environ
 	log.warn("\n\nRunning build with args: %r [cwd=%r]" % (list(args), cwd))
 	env = env.copy()
@@ -81,7 +81,10 @@ def _build(exe, args, cwd, env=None, include_logging=False):
 	if returncode != 0:
 		if err is None:
 			err = SafeError('gup failed with status %d' % returncode)
-		raise err
+		if throwing:
+			raise err
+	if not throwing:
+		return (returncode, lines)
 	return lines
 
 class TestCase(mocktest.TestCase):
@@ -153,13 +156,13 @@ class TestCase(mocktest.TestCase):
 		finally:
 			os.chdir(initial)
 
-	def _build(self, args, cwd=None, last=False, env=None, include_logging=False):
+	def _build(self, args, cwd=None, last=False, **k):
 		self.invocation_count += 1
 		log.debug("invocation count = %r", self.invocation_count)
 
 		with self._root_cwd():
 			exe = next(self.exes)
-			lines = _build(exe, args=args, cwd=cwd, env=env, include_logging=include_logging)
+			lines = _build(exe, args=args, cwd=cwd, **k)
 
 		if LAME_MTIME and not last:
 			# OSX has 1-second mtime resolution.
