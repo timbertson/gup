@@ -2,15 +2,16 @@ open Batteries
 let log = Logging.get_logger "gup.checksum"
 
 let build fn =
-	let ctx = Sha1.init () in
+	let open Cryptokit in
+	let ctx = Hash.sha1 () in
 	fn ctx;
-	let digest = Sha1.finalize ctx in
-	Sha1.to_hex digest
+	let bytes = ctx#result in
+	transform_string (Hexa.encode ()) bytes
 
 let pump_stream ?(nread = IO.nread) stream ctx=
 	try
 		while true do
-			Sha1.update_string ctx (nread stream 4096)
+			ctx#add_string (nread stream 4096)
 		done
 	with IO.No_more_input -> ()
 

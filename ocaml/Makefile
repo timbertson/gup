@@ -1,5 +1,4 @@
 OCAMLBUILD = $(shell if which rainbow >/dev/null >&2; then echo "rainbow -- ocamlbuild"; else echo "ocamlbuild"; fi)
-PIEP=0install run http://gfxmonk.net/dist/0install/piep.xml
 
 all: bin
 bin: bin/gup
@@ -57,6 +56,6 @@ clean: phony
 	rm -rf _build *.mlpack *.byte *.native
 
 %.mlpack: phony
-	@ls -1 "$$(basename "$@" ".mlpack")"/ | ${PIEP} 'p.endswith(".ml") | p[:-3] | p[0].upper() + p[1:]' > $@
+	@python ./make-mlpack.py "$$(basename "$@" ".mlpack")"/ "$@"
 
 .PHONY: phony

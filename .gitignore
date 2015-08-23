@@ -6,6 +6,8 @@ test/tmp
 /tmp/
 /0compile
 /windows-sync.gup
+/nix/local.tgz
+/local
 
 # generated version modules
 python/gup/version.py
