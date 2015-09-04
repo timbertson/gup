@@ -496,10 +496,11 @@ two versions.
 For `python/`:
 
  - PyChecker (optional; you can disable this by exporting `$SKIP_PYCHECKER=1`)
- - `gmcs` (provided by the `mono-core` package on RPM systems and `mono-gmcs` on
-   debian-based systems) to build the gup.exe shim. If you don't need Windows
-   support, you can skip building this. The shim is tiny and changes rarely,
-   so you should also be fine to use gup.exe from a release tarball.
+ - `gmcs` (only if you want to run on windows; provided by the `mono-core`
+   package on RPM systems and `mono-gmcs` on debian-based systems).
+   If you don't need Windows support, you can ignore this. The shim
+   is tiny and changes rarely, so you should also be fine to use gup.exe
+   from a release tarball.
 
 For `ocaml/`, the best bet is to look at the before_install script in `.travis.yml`
 and follow those instructions. I plan on formalizing this in the future, and

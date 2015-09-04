@@ -32,8 +32,9 @@ bin/gup: $(SOURCES)
 	${PYTHON} ./build/combine_modules.py gup tmp/gup.py
 	cp tmp/gup.py bin/gup
 
+GMCS=$(shell which _gmcs 2>/dev/null)
 bin/gup.exe: gup.cs
-	gmcs gup.cs -out:bin/gup.exe
+	[ -z "$(GMCS)" ] || "$(GMCS)" gup.cs -out:bin/gup.exe
 
 gup/version.py: ../VERSION
 	echo "VERSION = \"$$(cat ../VERSION)\"" > $@

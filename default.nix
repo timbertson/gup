@@ -1,20 +1,9 @@
-{ pkgs ? import <nixpkgs> {} }:
+{ pkgs ? import <nixpkgs> {}, ocamlVersion ? false }:
 with pkgs;
 let
-	callPackage = newScope (ocamlPackages // {
-		# `gup` needs subsecond `stat` results
-		# these can be dropped once `lwt` is at least
-		# 2.5.0, which includes this change.
-		ocaml_lwt = lib.overrideDerivation ocamlPackages.ocaml_lwt (o: {
-			name = o.name + "-patched";
-			patches = (o.patches or []) ++ [
-				./nix/0001-lwt_unix-sub-second-precision-for-stat-results.patch
-				./nix/0002-lwt_unix-add-configure-check-to-detect-nanosecond-st.patch
-			];
-		});
-	});
-	extunix = callPackage ./nix/extunix.nix {};
+	ocamlDeps = import ./nix/ocaml-deps.nix { inherit pkgs; };
+	builder = if ocamlVersion
+		then ocamlDeps.callPackage ./nix/gup-ocaml.nix { inherit (ocamlDeps) extunix; }
+		else callPackage ./nix/gup-python.nix {};
 in
-pkgs.lib.overrideDerivation (callPackage ./nix {
-	inherit extunix;
-}) (orig: { src = ./nix/local.tgz; })
+builder { src = ./nix/local.tgz; version = "development"; }
