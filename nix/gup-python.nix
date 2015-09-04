@@ -1,12 +1,10 @@
-{ stdenv, lib, python, which
-	# TODO: pychecker
-}:
+{ stdenv, lib, python, which, pychecker ? null }:
 { src, version, meta ? {} }:
 stdenv.mkDerivation {
 	inherit src meta;
 	name = "gup-${version}";
-	buildInputs = [ python which ];
-	SKIP_PYCHECKER=true;# TODO
+	buildInputs = lib.remove null [ python which pychecker ];
+	SKIP_PYCHECKER = pychecker == null;
 	buildPhase = "make python";
 	installPhase = ''
 		mkdir $out
