@@ -197,18 +197,18 @@ directory.
 Every build script gets executed with two arguments:
 
   - `$1` - the (absolute) path to a temporary file created for this target
-  - `$2` - the (relative) path to the target, from $CWD
+  - `$2` - the (relative) path to the target, from $PWD
 
 The built file should be saved to the file named in `$1`, rather than the file
 being built. This prevents writing incorrect or partial results (e.g if some
 of the file is written but then the task fails, or if the build is cancelled
 in the middle of writing a file).
 
-When a build script is run, its working directory (`$CWD`) is determined by:
+When a build script is run, its working directory (`$PWD`) is determined by:
 
   1. For a direct build script, the working directory is the directory
      containing the target file. Note that if a target `a/b/c` is built by
-     `gup/a/b/c.gup`, then the `$CWD` will be a/b, *not* gup/a/b. If you want
+     `gup/a/b/c.gup`, then the `$PWD` will be a/b, *not* gup/a/b. If you want
      the location of the executing script, use `$0`.
 
   2. For a file named by a `Gupfile`, the working directory is set to the path
@@ -226,7 +226,7 @@ When a build script is run, its working directory (`$CWD`) is determined by:
 
       - `gup src/tmp/foo` would run `src/default.gup` from `src/`, with `$2`
         set to `tmp/foo`.
-      - `gup src/obj/foo.o` would run `src/obj/default.gup` from `src/obj`,
+      - `gup src/obj/foo.o` would run `src/obj/default.o.gup` from `src/obj`,
         with `$2` set to `foo.o`
 
     But if the same files were nested under `gup/` (e.g `gup/src/Gupfile`,
