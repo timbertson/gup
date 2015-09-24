@@ -381,6 +381,7 @@ class BuildTime(Dependency):
 
 		mtime = get_mtime(path)
 		assert mtime is not None
+		_log.debug("comparing stored mtime %s to %s", self.value, mtime)
 		if mtime != self.value:
 			log_method = _log.warn
 			if os.path.isdir(path):
