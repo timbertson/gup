@@ -5,10 +5,11 @@ class SafeError(Exception):
 	pass
 
 class TargetFailed(SafeError):
-	def __init__(self, target, status):
+	def __init__(self, target, status, tempfile):
 		self.target = target
 		self.status = status
-		super(TargetFailed, self).__init__("Target `%s` failed with exit status %s" % (self.target, self.status))
+		extra = "" if tempfile is None else " (keeping %s for inspection)" % (tempfile,)
+		super(TargetFailed, self).__init__("Target `%s` failed with exit status %s%s" % (self.target, self.status, extra))
 
 
 class Unbuildable(SafeError):

@@ -100,8 +100,8 @@ class TestCase(mocktest.TestCase):
 		log.debug('root: %s', self.ROOT)
 		# self._last_build_time = None
 	
-	def path(self, p):
-		return os.path.join(self.ROOT, p)
+	def path(self, *p):
+		return os.path.join(self.ROOT, *p)
 
 	def write(self, p, contents):
 		p = self.path(p)

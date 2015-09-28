@@ -31,3 +31,9 @@ def set_trace():
 DEFAULT_VERBOSITY = int(os.environ.get('GUP_VERBOSE', '0'))
 def set_verbosity(val):
 	os.environ['GUP_VERBOSE'] = str(val)
+
+def set_keep_failed_outputs():
+	os.environ['GUP_KEEP_FAILED'] = '1'
+
+def keep_failed_outputs():
+	return os.environ.get('GUP_KEEP_FAILED', '0') == '1'

@@ -27,6 +27,7 @@ let default_verbosity = Option.default 0 (Option.map int_of_string (get "GUP_VER
 let set_verbosity v = Unix.putenv "GUP_VERBOSE" (string_of_int v)
 
 let trace = ref (get_or "GUP_XTRACE" "0" = "1")
+
 let set_trace t =
 	(* Note: we ignore set_trace if trace is already true -
 	 * you cannot turn trace off *)
@@ -34,3 +35,6 @@ let set_trace t =
 		trace := t;
 		Unix.putenv "GUP_XTRACE" (if t then "1" else "0")
 	)
+
+let set_keep_failed_outputs () = Unix.putenv "GUP_KEEP_FAILED" "1"
+let keep_failed_outputs () = (get_or "GUP_KEEP_FAILED" "0") = "1"

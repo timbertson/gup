@@ -63,7 +63,8 @@ struct
 	let _report_nobuild path =
 		(if Var.is_root then log#info else log#trace) "%s: up to date" path
 
-	let build ~update ~jobs posargs =
+	let build ~update ~jobs ~keep_failed posargs =
+		if Opt.get keep_failed then Var.set_keep_failed_outputs ();
 		let update = Opt.get update in
 		_init_path ();
 
@@ -115,8 +116,16 @@ struct
 					| Error.BuildCancelled -> Lwt.return_unit
 					| err -> (
 						begin match err with
-							| Builder.Target_failed path ->
-								log#error "Target failed: %s" path;
+							| Builder.Target_failed (path, status, tempfile) ->
+								let status_desc = match status with
+									| None -> ""
+									| Some i -> " with exit status " ^ (string_of_int i)
+								in
+								let tempfile_desc = match tempfile with
+									| None -> ""
+									| Some path -> " (keeping " ^ path ^ " for inspection)"
+								in
+								log#error "Target `%s` failed%s%s" path status_desc tempfile_desc;
 							| _ -> ()
 						end;
 						(* once one build fails, we tell the `State` module to just raise BuildCancelled for all
@@ -302,9 +311,10 @@ struct
 	let verbose = StdOpt.incr_option ~dest:verbosity ()
 	let interactive = StdOpt.store_true ()
 	let dry_run = StdOpt.store_true ()
+	let keep_failed = StdOpt.store_true ()
 	let force = StdOpt.store_true ()
 	let metadata = StdOpt.store_true ()
-	let action = ref (Actions.build ~update:update ~jobs:jobs)
+	let action = ref (Actions.build ~update:update ~jobs:jobs ~keep_failed)
 	let clean_mode () =
 		match (Opt.get force, Opt.get dry_run) with
 			| (true, false) -> `Force
@@ -331,6 +341,7 @@ struct
 		add options ~short_name:'x' ~long_name:"trace" ~help:"Trace build script invocations (also sets $GUP_XTRACE=1)" trace;
 		add options ~short_name:'q' ~long_name:"quiet" ~help:"Decrease verbosity" quiet;
 		add options ~short_name:'v' ~long_name:"verbose" ~help:"Increase verbosity" verbose;
+		add options ~long_name:"keep-failed" ~help:"Keep temporary output files on failure" keep_failed;
 		options
 	;;
 
@@ -443,7 +454,7 @@ let main () =
 				log#error "Don't know how to build %s" path;
 				exit_error ()
 		)
-		| Builder.Target_failed path -> (
+		| Builder.Target_failed _ -> (
 				exit_error ()
 		)
 		| Error.Safe_exception (msg, ctx) -> (

@@ -10,7 +10,7 @@ from .error import *
 from .util import *
 from .state import TargetState
 from .log import getLogger
-from .var import ROOT_CWD, XTRACE, IS_WINDOWS
+from .var import ROOT_CWD, XTRACE, IS_WINDOWS, keep_failed_outputs
 from .parallel import extend_build_env
 _log = getLogger(__name__)
 
@@ -113,7 +113,7 @@ class Target(object):
 		output_file = os.path.abspath(self.state.meta_path('out'))
 		try_remove(output_file)
 
-		MOVED = False
+		cleanup_output_file = True
 		try:
 			args = [exe_path, output_file, self.builder.target]
 			_log.info(target_relative_to_cwd)
@@ -159,12 +159,17 @@ class Target(object):
 					if (not target_changed) and (not os.path.islink(self.path)):
 						_log.trace("removing old %s", self.path)
 						try_remove(self.path)
-				MOVED = True
+				cleanup_output_file = False # not needed
 			else:
+				temp_file = None
+				if keep_failed_outputs():
+					cleanup_output_file = False # not wanted
+					if os.path.lexists(output_file):
+						temp_file = os.path.relpath(output_file, ROOT_CWD)
 				_log.trace("builder exited with status %s" % (ret,))
-				raise TargetFailed(target_relative_to_cwd, ret)
+				raise TargetFailed(target_relative_to_cwd, ret, temp_file)
 		finally:
-			if not MOVED:
+			if cleanup_output_file:
 				try_remove(output_file)
 		return True
 

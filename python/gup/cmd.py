@@ -10,7 +10,7 @@ from .state import TargetState, AlwaysRebuild, Checksum, FileDependency, META_DI
 from .gupfile import Builder
 from .builder import Target
 from .log import PLAIN, getLogger, TRACE_LVL
-from .var import INDENT, set_verbosity, DEFAULT_VERBOSITY, set_trace, PY3, IS_WINDOWS
+from .var import INDENT, set_verbosity, set_keep_failed_outputs, DEFAULT_VERBOSITY, set_trace, PY3, IS_WINDOWS
 from .parallel import setup_jobserver
 from .task import Task, TaskRunner
 from .version import VERSION
@@ -131,6 +131,7 @@ def _main(argv):
 		p.add_option('-x', '--trace', action='store_true', help='Trace build script invocations (also sets $GUP_XTRACE=1)')
 		p.add_option('-q', '--quiet', action='count', default=0, help='Decrease verbosity')
 		p.add_option('-v', '--verbose', action='count', default=DEFAULT_VERBOSITY, help='Increase verbosity')
+		p.add_option('--keep-failed', action='store_true', help='Keep temporary output files on failure')
 		action = _build
 		verbosity = None
 	else:
@@ -242,6 +243,9 @@ def _clean_targets(opts, dests):
 def _build(opts, targets):
 	if opts.trace:
 		set_trace()
+
+	if opts.keep_failed:
+		set_keep_failed_outputs()
 	
 	if len(targets) == 0:
 		targets = ['all']

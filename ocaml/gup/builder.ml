@@ -3,7 +3,7 @@ open Std
 
 let log = Logging.get_logger "gup.builder"
 
-exception Target_failed of string
+exception Target_failed of string * int option * string option
 
 let _prepare_build : 'c. (Gupfile.buildscript -> 'c) -> string -> 'c option = fun cons path ->
 	let buildscript = Gupfile.find_buildscript path in
@@ -143,9 +143,9 @@ class target (buildscript:Gupfile.buildscript) =
 					let target_relative_to_cwd = Util.relpath ~from:Var.root_cwd self#path in
 					let output_file = Util.abspath (state#meta_path "out") in
 					Util.try_remove output_file;
-					let moved = ref false in
+					let cleanup_output_file = ref true in
 					let cleanup () =
-						if not !moved then
+						if !cleanup_output_file then
 							Util.try_remove output_file
 					in
 
@@ -215,16 +215,23 @@ class target (buildscript:Gupfile.buildscript) =
 										Lwt.return_unit
 									) else Lwt.return_unit
 								) in
-								moved := true;
+								cleanup_output_file := false; (* not needed *)
 								Lwt.return true
 							end
 							| Unix.WEXITED code -> begin
 								log#trace "builder exited with status %d" code;
-								raise @@ Target_failed (target_relative_to_cwd)
+								let temp_file = if Var.keep_failed_outputs () && Util.lexists output_file
+									then (
+										cleanup_output_file := false; (* not wanted *)
+										Some (Util.relpath ~from:Var.root_cwd output_file)
+									)
+									else None
+								in
+								raise @@ Target_failed (target_relative_to_cwd, Some code, temp_file)
 							end
 							| _ -> begin
 								log#trace "builder was terminated";
-								raise @@ Target_failed (target_relative_to_cwd)
+								raise @@ Target_failed (target_relative_to_cwd, None, None)
 							end
 					in
 					try_lwt
