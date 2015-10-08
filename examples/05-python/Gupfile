@@ -1,0 +1,5 @@
+gup-build-object:
+	build/*.o
+
+gup-build-src:
+	src/.all

@@ -1,0 +1,2 @@
+#!bash -eu
+echo "bee" > "$1"

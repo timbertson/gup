@@ -1,0 +1,4 @@
+#!bash -eu
+SOURCES="machine-id toc.md"
+gup -u $SOURCES
+tar czf "$1" $SOURCES

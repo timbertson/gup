@@ -27,6 +27,8 @@ intimate knowledge of build internals to maintain correct dependencies.
 
 # How do I install it?
 
+### ZeroInstall
+
 For [ZeroInstall][] users, you can just run it:
 
     $ 0install run http://gfxmonk.net/dist/0install/gup.xml
@@ -38,7 +40,13 @@ you should run (once):
 
     $ 0install add gup http://gfxmonk.net/dist/0install/gup.xml
 
-----
+### Nix
+
+`gup` is packaged in [nixpkgs][Nix], so you can do `nix-env -iA nixpkgs.gup`
+to install it in your profile, or add `pkgs.gup` to your own package's
+`buildInputs`.
+
+### Bundled with your project
 
 For repositories where you don't want to make everyone set
 up `gup` as above, you can just commit the `gup` python script
@@ -69,13 +77,15 @@ from within a build script. So you may wish to place it in
 its own directory to avoid accidentally adding other scripts
 to `$PATH`.
 
-### Python version
+----
+
+### Python version requirements
 
 Gup works under both python 2 and 3, so it should work with
 whatever recent python is on your $PATH.
 
 I don't routinely test under old python versions, so if you
-need to run gup in anything below 2.7 or 3.3 and you find
+need to run gup in anything below 2.7 and you find
 something broken, patches welcome.
 
 ### Using it via `make`
@@ -84,30 +94,109 @@ For convenience, you may wish to provide a `Makefile` that
 simply delegates to `gup`. You can find an example `Makefile`
 in the `resources/` directory.
 
-Other methods coming soon.
-
 # How does it build stuff?
 
-A trivial example would be:
+The simplest build script is an executable which creates a single target.
+This is called a "direct build script", and must be named "<target-name>.gup".
+If you've ever written a shell script to (re)generate a single file,
+you know the basics of writing a direct build script. Here's a simple example:
 
-`target.gup:`
+Here's a simple example script which would be used to build the file named `target`:
+
+`target.gup`:
 
     #!/bin/bash
     gup -u source
     cat source > "$1"
     echo "## Built by gup" >> "$1"
 
-This will build the file called `target` in the current directory, copying the
-contents of the file called `source` and adding a fairly useless footer
-comment. Because it called `gup -u source`, gup knows that it should be
-rebuilt whenever `source` is modified.
+When you ask `gup` to update target, with:
 
-(**Note:** `gup target` will cause target to rebuilt regardless of its state.
-To rebuild a target only when it's out of date, use `gup -u target`)
+    $ gup -u target
 
-Obviously, that small example doesn't tell you everything you need to know,
-but hopefully it gives you a basic idea of how `gup` works. Here are the full
-details:
+It will run this script, (almost) as if you had written `./target.gup target`.
+
+Gup also supports indirect build scripts, which maps multiple targets (e.g. "any `.o` file") to
+a single build script (which in thi case knows how to build _any_ `.o` file).
+These mappings are specified in a file named `Gupfile`.
+
+### More examples
+
+Please see the [examples][] directory - this contains example build scripts
+covering `gup`'s main features, plus a README.md file with detailed descriptions of what's going on.
+
+# Invoking `gup`:
+
+`gup` has a few options, but most of the time you'll just be using:
+
+    $ gup -u <target>
+
+The `-u` means "update" - i.e. only build the target if it
+is out of date. This is how you update a target from the command line.
+Simply enough, it's _also_ how you update a dependency from _within_ a build script.
+
+**Note**: Unlike many build tools, `gup` doesn't have the concept of a "project
+directory" - you can build any target from anywhere - building `target` from
+within `dir/` is exactly the same as building `dir/target`, building
+`../dir/target` from `some-other-dir/`, or building `/full/path/to/dir/target`
+from anywhere.
+
+# Dependencies:
+
+In each build script script, you declare your dependencies as you need them,
+simply by telling gup to make sure they're up to date. So just as you run `gup
+-u <target>` to build a target, each build script can itself run `gup -u
+<input>` to make sure each file that it depends on is up to date. If the file
+is buildable by gup, it will be built before the script continues. If not,
+`gup` will remember that this target depends on `<input>`.
+
+This allows you to keep "the place where you use a file" and "the place where
+you declare a dependency on a file" colocated, and even to create abstractions
+that handle these details for you. This makes it much easier to create correct
+dependency information compared to systems like `make` which rely on discipline
+and intimate knowledge of build internals to maintain correct dependencies.
+
+You don't have to specify all your dependencies in one place - you can
+call `gup -u` from any place in your script. All calls made while building
+your target are appended to the dependency information of the target being
+built. This is done by setting environment variables when invoking build
+scripts, so it's completely parallel-safe.
+
+Also, `gup` will by default include a dependency on the build script used to
+generate a target. If you change the build script (or add a new build script
+with a higher precedence for a given target), that target will be rebuilt.
+
+
+## Build script executaion:
+
+`gup` invokes
+your build script as `scriptname output_path target`. Wherever possible, your
+build script should generate its result in `output_path`. This is an absolute path
+to a temporary file that, once your buildscript has completed successfully, will
+replace the current `target` file. There are a few benefits to this approach:
+
+1. By generating this file instead of writing to `target` directly, you can
+   ensure that `target` is always the result of a successful build,
+   and not a partially-created file from a build script that failed halfway through.
+
+2. If your script _does not_ generate anything in `output_path`, `gup` will automatically
+   delete `target` for you. This means that you won't get left with stale built files
+   if your build script changes to no longer produce any output.
+
+3. When building a directory, you can be assured that `output_path` does not yet
+   exist. This means you can create it via `mkdir`, and not have to worry about
+   cleaning up a previous version (`gup` will do this for you on a successful build).
+
+If your build script cannot create `output_path`, it's OK to write to `target` instead.
+Often this is necessary when shelling out to other tools where it's not easy to direct
+their output to a specific file. **Note**: If you write your results to `target` directly
+and there's a chance that the build won't touch `target` (because it turns out to be a
+no-op), you must `touch target` in your build script. If you don't modify the `mtime`
+of `target`, `gup` will think that your build script produced no output, and delete
+`target` (due to point #2 above).
+
+# `gup` in depth
+
 
 ### The search path
 
@@ -187,22 +276,55 @@ script, just like it rebuilds a target when the build script is modified.
 ### Running build scripts
 
 Once `gup` has found the script to build a given target, it runs it as a
-script. It will interpret shebang lines so that you don't actually have to
+script.
+
+It will interpret shebang lines so that you don't actually have to
 make your script executable, but you can also use an actual executable (with
-no shebang line) if you need to. Relative script paths in the shebang line are
-supported, and (unlike the default UNIX behaviour) are resolved relative to
+no shebang line) if you need to.
+
+Relative script paths (starting with `./`) in the shebang line are
+supported, and are resolved relative to
 the directory containing the script, rather than the current working
 directory.
 
+If your interpreter is just a program name (e.g. `#!python`), it will
+be searched for in `$PATH`, making this a terse equivalent of `#!/usr/bin/env python`.
+
+On windows, UNIX-y paths like `/bin/bash` may not be present, so you should either
+use `#!bash` or `#!/usr/bin/env bash` (gup has special support for `/usr/bin/env`
+in shebang lines, even if that path doesn't exist locally).
+
 Every build script gets executed with two arguments:
 
-  - `$1` - the (absolute) path to a temporary file created for this target
-  - `$2` - the (relative) path to the target, from $PWD
+  - `output_path` - the (absolute) path to a temporary output location
+  - `target` - the (relative) path to the target, from $PWD
 
-The built file should be saved to the file named in `$1`, rather than the file
-being built. This prevents writing incorrect or partial results (e.g if some
-of the file is written but then the task fails, or if the build is cancelled
-in the middle of writing a file).
+The built file should be saved to the file named in `output_path`, rather than
+the `target` being built. If your build script succeeds, gup will replace the
+current `target` file with the file you just created in `output_path`. There
+are a few benefits to this approach:
+
+1. By generating this file instead of writing to `target` directly, you can
+   ensure that `target` is always the result of a successful build,
+   and not a partially-created file from a build script that failed halfway through.
+
+2. If your script _does not_ generate anything in `output_path`, `gup` will automatically
+   delete `target` for you. This means that you won't get left with stale built files
+   if your build script changes to no longer produce any output.
+
+3. When building a directory, you can be assured that `output_path` does not yet
+   exist. This means you can create it via `mkdir`, and not have to worry about
+   cleaning up a previous version (`gup` will completely replace a previous `target`
+   on successful build, regardless of whether it's a file, symlink or directory).
+
+If your build script cannot create `output_path`, it's OK to write to `target` instead.
+Often this is necessary when shelling out to other tools where it's not easy to direct
+their output to a specific file. **Note**: If you write your results to `target` directly
+and there's a chance that the build won't actually modify `target` (because it turns out to be a
+no-op), you must `touch target` in your build script. If you don't modify the `mtime`
+of `target`, `gup` will think that your build script produced no output, and delete
+`target` (due to point #2 above).
+
 
 When a build script is run, its working directory (`$PWD`) is determined by:
 
@@ -238,6 +360,30 @@ Again, these rules may seem complex to read, but the actual behaviour is
 fairly intuitive - rules get run from the target tree (not inside any `/gup/`
 path), and from a directory depth consistent with the location of the build
 script.
+
+### Variables
+
+Gup exports a few environment variables which are used to propagate settings to sub-invocations of
+`gup`. If you like, you can use some of these to influence your build script too.
+
+ - `GUP_TARGET`: You should not care about the value of this, but it will always be
+                 set in a gup build. By testing for the absence of this variable,
+                 you can have a build script which also does something useful when
+                 run directly (not through `gup`).
+
+ - `GUP_XTRACE`: Set to either `"0"` or `"1"`. When you pass the `-x` or `--trace`
+                 flags to gup, this variable will be set `"1"`. This can be used to 
+                 enable extra output from your build script (e.g. `set -x` in bash,
+                 or increasing the log verbosity in other languages).
+
+- `GUP_VERBOSE`: `"0"` is the default, and `1` is added for each `-v`
+                 flag passed to `gup`. May be a negative number if `-q` is used.
+                 You normally shouldn't need to use this, as `-v` is typically
+                 for debugging `gup` itself. But it can be useful if you need
+                 more levels than `GUP_XTRACE` provides.
+
+
+
 
 ### Sample "shadow" directory structure
 
@@ -282,39 +428,8 @@ it's building will exist.
 This also allows you to keep your source and built files separate - your
 `clean` task can be as simple as `rm -rf build/`.
 
-# Where do I list a target's dependencies?
+For a working example of a shadow directory, see the [examples][] directory.
 
-You don't, at least not up-front like you do in `make`.
-
-As part of a build script, you should tell gup to make sure any file you
-depend on is up to date. This includes both generated files and source files.
-For a simple build script that just concatenates all files in `src/`, you
-might write:
-
-`all.gup:`
-
-    #!/bin/bash
-    set -eu
-
-    files="$(find src -type f)"
-    gup -u $files
-    cat $files > "$1"
-
-When gup first builds `all`, it doesn't exist - so clearly it needs to be
-built. As the script runs, `gup` gets told to update all the files in src, so
-it remembers that `all` depends on each of these files. The next time you ask
-to build `all`, it knows that it only needs rebuilding if any of the files
-passed to `gup -u` changed.
-
-You don't have to specify all your dependencies in one place, though - you can
-call `gup -u` from any place in your script - all calls made while building
-your target are appended to the dependency information of the target being
-built. This is done by setting environment variables when invoking build
-scripts, so it's completely parallel-safe.
-
-Also, `gup` will by default include a dependency on the build script used to
-generate a target. If you change the build script (or add a new build script
-with a higher precedence for a given target), that target will be rebuilt.
 
 ### Checksum tasks
 
@@ -365,14 +480,14 @@ inherited on `exec()` (which is forbidden in some languages), so
 
 # Using bash
 
-Please don't! At least, not for anything complex.
+`bash` is convenient as it's almost always installed on UNIX-like systems.
+It has a _lot_ of gotchas, though. One benefit of `gup` is that it doesn't care what
+interpreter you use, so I encourage you to use a better language than bash for anything non-trivial.
 
-The examples in this readme all use `bash` as an interpreter, because bash is
-a lowest common denominator that most people know and understand. The author
-**strongly recommends** against using bash for any build scripts that aren't
-trivial. Most people have a preferred scripting language that is safer than
-bash - use it! I tend to use python, but ruby and perl are other common
-choices. Really, almost anything is better than bash.
+I tend to use python, but ruby and perl are other common choices. If your
+project is a library or program for a particular language, it's often a good
+choice to write your build scripts in that same language - that way anyone
+contributing source code can probably understand your build code, too!
 
 # Relationship to `redo`
 
@@ -406,19 +521,15 @@ If you're familiar with `redo`, here are the main (intentional) differences:
 As a side effect of the above differences, gup never thinks that a target is a
 source when it's actually a target, or vice versa. It *does* mean than an
 existing (source) file could be overwritten by an improperly written `Gupfile`
-if you accidentally tell `gup` it was a target (and your build script actually
-produces a result). This is true of many build systems though, and if you keep
+if you accidentally tell `gup` it was a target (_and_ your build script
+succeeds). This is true of many build systems though, and if you keep
 a clean separation between source and generated files (e.g by placing all
 generated files under `build/`), it's reasonably hard to do the wrong thing by
 accident.
 
-# Got any examples?
-
-Not yet, sorry. `gup` is still very new.
-
 # Where can I discuss stuff?
 
-If it's a straighforward bug or feature request, it can probably go straight
+If it's a straightforward bug or feature request, it can probably go straight
 on the [github issues page][issues].
 
 For all other discussion, there's a [mailing list][gup-users].
@@ -439,7 +550,9 @@ I have (as yet) made no attempt to test it on things that aren't linux.
 
 # How buggy is it?
 
-It's pretty new, so chances are there are bugs. Please report any you find
+It's a relatively simple build system compared to many, and I've been
+using it on various projects for a few years. I think it's pretty stable, but
+there could still be bugs lurking. Please report any you find
 to the github issues page.
 
 Similarly, if you think anything is confusing in this documentation, please
@@ -448,16 +561,14 @@ explaining it badly.
 
 # How stable is the design?
 
-It's not. While the design decisions seem unlikely to change, no plan survives
-contact with actual users.
+Strictly speaking, I make no guarantees. However, `gup` has been around a while
+now, and I'm pretty happy with it. Being the lazy guy that I am, it seems
+likely that gup won't change in a backwards-incompatible way unless there's a
+very good reason for it.
 
-So any details of how `gup` works may still change in the future. I'll do what
-I can to make these changes backwards compatible (or at least easy to
-migrate), but I can make no promises.
-
-On that note - please raise any issues you find or improvements you can think
-of as a github issue. If something is broken, I'd much rather know about it
-now than later :)
+However, nothing is set in stone - please raise any issues you find or
+improvements you can think of as a github issue. If something is broken, I'd
+much rather know about it now than later :)
 
 # Why the name `gup`?
 
@@ -489,9 +600,13 @@ python, and are run over both the python & ocaml versions. Doing this (aside
 from generally being a good idea) will help avoid disparity between the
 two versions.
 
-### Build dependencies:
+### Building
 
- - [0install][ZeroInstall]
+If you have [0install][ZeroInstall], you can use `./make`.
+
+If you have [nix][Nix], you can just run `nix-shell` and then use `make`.
+
+If you have neither of the above, you'll need to get dependencies manually:
 
 For `python/`:
 
@@ -533,3 +648,5 @@ All other source code is Copyright Tim Cuthbertson, 2013-2014.
 
 [redo]: https://github.com/apenwarr/redo
 [ZeroInstall]: http://0install.net/
+[Nix]: http://nixos.org/nix/
+[examples]: ./examples/
