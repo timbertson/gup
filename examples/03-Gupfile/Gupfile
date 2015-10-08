@@ -1,0 +1,3 @@
+gup-build-obj:
+	build/*.o
+

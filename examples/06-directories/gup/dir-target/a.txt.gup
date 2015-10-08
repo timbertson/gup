@@ -1,0 +1,2 @@
+#!bash -eu
+echo "ay" > "$1"

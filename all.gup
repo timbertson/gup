@@ -1,0 +1,4 @@
+#!bash
+#NOTE: `gup` is built via `make`, to ensure that bugs in `gup` don't
+# prevent `gup` from building. This target is only present for convenience
+gup -u compile examples/README.md

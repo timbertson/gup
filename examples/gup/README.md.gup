@@ -1,0 +1,70 @@
+#!python
+from __future__ import print_function
+import os, sys, subprocess
+
+DEBUG=os.environ.get('GUP_XTRACE','0') == '1'
+def dump(*a, **k):
+	if DEBUG:
+		print(*a, **k)
+
+dest, target = sys.argv[1:]
+here = os.path.dirname(__file__)
+
+dirs = filter(os.path.isdir, os.listdir('.'))
+dirs = sorted(dirs)
+
+subprocess.check_call(['gup', '-u', '.stamp'])
+
+is_hidden = lambda x: x.startswith('.')
+
+TITLES = {
+	'simple': 'A simple build script',
+	'shadow': '`gup` shadow directory',
+	'checksum': 'Recognise unchanged inputs',
+	'python': 'Using a real programming language',
+	'directories': 'Building entire directories',
+	'writing-target-directly': 'Best used sparingly',
+}
+
+with open(dest, 'w') as output:
+	def p(s, *a):
+		print(s % a, file=output)
+
+	for dir in sorted(dirs):
+		if is_hidden(dir) or dir == 'gup': continue
+
+		dump("Processing dir: %s" % dir)
+		# when generating docs, we don't want to show built files
+		subprocess.check_call(['gup', '--clean', '-f', dir])
+
+		title = TITLES.get(dir.split('-',1)[-1], None)
+		if title is None:
+			title = ''
+		else:
+			title = ': ' + title
+		p('\n# `%s/`%s', dir, title)
+
+		dotdirs = filter(lambda d: is_hidden(d[1]), enumerate(dirs))
+		# delete from the back, to prevent index shifting
+		for idx, _ in reversed(dotdirs):
+			del dirs[idx]
+
+		for base, dirs, files in os.walk(dir):
+			expand = lambda name: os.path.join(base, name)
+			dump(base, files)
+			for file in sorted(files):
+				if (file.startswith('.')
+					or file == '__init__.py'
+					or file == 'README.md'):
+					continue
+				dump("Processing file: %s" % expand(file))
+				p('\nContents of `%s`:\n', file)
+				with open(expand(file)) as f:
+					for line in f:
+						p('    %s', line.rstrip().replace('\t', '  '))
+
+		p('\n----\n')
+		with open(os.path.join(os.path.join(dir,'README.md'))) as desc:
+			for line in desc:
+				p(line.rstrip())
+

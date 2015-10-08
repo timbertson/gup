@@ -1,0 +1,4 @@
+#!bash
+SOURCES="build/main.o"
+gup -u $SOURCES
+ld -o "$1" $SOURCES

@@ -1,0 +1,5 @@
+#!bash -eu
+# this target has no dependencies - it'll only be rebuilt
+# when the .gup file changes (e.g. we change the URL)
+
+curl "http://example.com/archive.tgz" | tar xz -C "$1"

@@ -1,0 +1,14 @@
+#!python
+from build_util import gup, src
+from os import path
+import sys, subprocess
+
+dest, _ = sys.subprocess[1:]
+
+sources = src.build_all()
+def src_to_obj(src):
+	objname = path.splitext(src)[0] + '.o'
+	return path.join('build', objname)
+
+objects = list(map(src_to_obj, sources))
+subprocess.check_call(['ld', '-o', dest] + objects)

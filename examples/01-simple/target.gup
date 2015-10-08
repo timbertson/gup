@@ -1,0 +1,4 @@
+#!/bin/bash
+gup -u source
+cat source > "$1"
+echo "## Built by gup" >> "$1"

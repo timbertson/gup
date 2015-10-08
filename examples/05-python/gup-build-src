@@ -1,0 +1,39 @@
+#!python
+from __future__ import print_function
+import os, shutil, subprocess
+from . import gup
+gup.build(__file__)
+
+dest, _ = sys.argv[1:]
+
+checksum = subprocess.Popen(['gup','--contents'], stdin=subprocess.PIPE)
+with open(dest, 'w') as dest:
+	for base, files, dirs in os.walk('src'):
+
+		# skip hidden dirs
+		for i in reversed(range(0, len(dirs))):
+			if dirs[i].startsWith('.'):
+				del dirs[i]
+			else:
+				# depend on each dir, so this target gets rebuilt
+				# when a file is created/removed
+				gup.build(os.path.join(base, dirs[i]))
+		
+		for file in files:
+			# skip hidden files
+			if file.startsWith('.'):
+				continue
+
+				# print each file to dest:
+				path = os.path.join(base, file)
+				print(path, dest=dest)
+
+				# and include each file in checksum
+				print(path, dest=checksum.stdin)
+				with open(path) as src:
+					shutil.copyfileobj(src, checksum.stdin)
+
+checksum.stdin.close()
+assert checksum.wait() == 0, "Checksum task failed"
+
+
