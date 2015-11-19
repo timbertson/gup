@@ -97,7 +97,7 @@ in the `resources/` directory.
 # How does it build stuff?
 
 The simplest build script is an executable which creates a single target.
-This is called a "direct build script", and must be named "<target-name>.gup".
+This is called a "direct build script", and must be named "[target-name].gup".
 If you've ever written a shell script to (re)generate a single file,
 you know the basics of writing a direct build script. Here's a simple example:
 
