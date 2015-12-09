@@ -1,7 +1,7 @@
 language: c
 env:
   global:
-    - ocaml_ppa=avsm/ocaml41+opam10
+    - ocaml_ppa=avsm/ppa
   matrix:
     - subdir=python task=test-py2
     - subdir=python task=test-py3
@@ -23,8 +23,10 @@ before_install:
 
         opam init --no-setup
         eval "$(opam config env)"
+        opam update
 
-        opam install batteries sha extunix lwt ounit
+        opam_deps="$(sed -e 's/[]["]//g' nix/opam-dep-names.nix)"
+        opam install $opam_deps ounit
       else
         sudo apt-get update -qq
       fi

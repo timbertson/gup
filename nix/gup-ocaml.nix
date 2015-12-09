@@ -3,13 +3,7 @@
 { src, version, meta ? {} }:
 let
   opam2nix = callPackage ./opam2nix-packages.nix {};
-  opam_dep_names = [
-    "batteries"
-    "cryptokit"
-    "extunix"
-    "lwt"
-    "ocamlfind"
-  ];
+  opam_dep_names = import ./opam-dep-names.nix;
   opam_selections = opam2nix.build {
     packages = opam_dep_names;
   };
@@ -35,6 +29,7 @@ stdenv.mkDerivation {
   passthru = {
     selections = opam_selections;
     selectionNames = lib.attrNames opam_selections;
+    opamDependencyNames = opam_dep_names;
   };
   installPhase = ''
     mkdir $out
