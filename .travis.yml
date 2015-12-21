@@ -25,7 +25,7 @@ before_install:
         eval "$(opam config env)"
         opam update
 
-        opam_deps="$(sed -e 's/[]["]//g' nix/opam-dep-names.nix)"
+        opam_deps="$(grep -E -o '"[^"]+"' nix/opam-dep-names.nix | grep -v '[<=>]' | sed -e 's/[]["]//g')"
         opam install $opam_deps ounit
       else
         sudo apt-get update -qq

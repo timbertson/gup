@@ -2,6 +2,6 @@
   "batteries"
   "cryptokit"
   "extunix"
-  "lwt"
+  { "lwt" = ">=2.5.1"; }
   "ocamlfind"
 ]

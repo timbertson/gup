@@ -12,8 +12,8 @@ let
 			src = fetchgit {
 				fetchSubmodules = false;
 				url = "https://github.com/timbertson/opam2nix-packages.git";
-				rev = "6e3dc7884f80f5fad8bd329cbeaeaeced45cc3c4";
-				sha256 = "65f7c8d3f789c34ed1467c5567f85bf04a089395dcebd988f96a285bfe539e6a";
+				rev = "afc0f97a1ab1c67c8e9f6f0b584d9b32498c0400";
+				sha256 = "ef725cb2208fa634898c3f000fdb205eefc1f8347b06c5028cc99568f689cb5a";
 			};
 
 			# We could leave this out and just use `fetchSubmodules` above,
@@ -21,9 +21,8 @@ let
 			# (rather than only when opam2nix is updated)
 			opam2nix = fetchgit {
 				url = "https://github.com/timbertson/opam2nix.git";
-				rev = "87f642c0279545db8da33377d80d11a30ee551cc";
-				sha256 = "4e837675b64f4ee6b0f597a7e11f54c88087d63e30a60addf1ba1cc6c5560d08";
+				rev = "62fa8aa46aa0a9193e9e7dda92799237bde946bc";
+				sha256 = "4096a0b2c02a6ec6209fea8cea1782b091c7fdd543d0975defeee4514961ce62";
 			};
 		in callPackage "${src}/nix" {} { inherit src opam2nix; }
-
 

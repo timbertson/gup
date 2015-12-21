@@ -1,17 +1,18 @@
 { callPackage, stdenv, lib, fetchurl, python,
-  which, zlib, ocaml }:
+  which, zlib }:
 { src, version, meta ? {} }:
 let
   opam2nix = callPackage ./opam2nix-packages.nix {};
   opam_dep_names = import ./opam-dep-names.nix;
-  opam_selections = opam2nix.build {
+  opam_selections_file = opam2nix.select {
     packages = opam_dep_names;
+    ocamlAttr = "ocaml_4_02";
   };
-  opam_deps = builtins.map (name: builtins.getAttr name opam_selections) opam_dep_names;
-  ocaml_version = (builtins.parseDrvName ocaml.name).version;
+  opam_selections = opam2nix.import opam_selections_file {};
+  opam_deps = opam2nix.directDependencies opam_dep_names opam_selections;
 
   # required only for development (.byte targets)
-  libdirs = builtins.map ({dep, name}: "${dep}/lib/ocaml/${ocaml_version}/site-lib/${name}") (with opam_selections; [
+  libdirs = builtins.map ({dep, name}: "${dep}/lib/${name}") (with opam_selections; [
     {dep = lwt; name = "lwt";}
     {dep = cryptokit; name = "cryptokit";}
     {dep = extunix; name = "extunix";}
@@ -30,9 +31,10 @@ stdenv.mkDerivation {
     selections = opam_selections;
     selectionNames = lib.attrNames opam_selections;
     opamDependencyNames = opam_dep_names;
+    selectionFile = opam_selections_file;
   };
   installPhase = ''
-    mkdir $out
+    mkdir -p $out
     cp -r ocaml/bin $out/bin
     cp -r share $out/share
   '';
