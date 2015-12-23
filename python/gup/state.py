@@ -254,8 +254,7 @@ class FileDependency(Dependency):
 	@classmethod
 	def relative_to(cls, rel_root, mtime, path):
 		rel_path = os.path.relpath(path, rel_root)
-		rv = cls(mtime=mtime, checksum=None, path=rel_path)
-		return rv
+		return cls(mtime=mtime, checksum=None, path=rel_path)
 
 	@classmethod
 	def relative_to_target(cls, target, mtime, path):

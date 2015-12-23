@@ -48,7 +48,7 @@ def has_feature(name):
 
 def _build(exe, args, cwd, env=None, include_logging=False, throwing=True):
 	env = env or os.environ
-	log.warn("\n\nRunning build with args: %r [cwd=%r]" % (list(args), cwd))
+	log.warn("\n\nRunning %s with args: %r [cwd=%r]" % (exe, list(args), cwd))
 	env = env.copy()
 	for key in list(env.keys()):
 		# clear out any gup state

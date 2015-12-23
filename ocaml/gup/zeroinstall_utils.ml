@@ -6,6 +6,11 @@ open Batteries
 open Error
 let logger = Logging.get_logger "gup.utils"
 
+module StringMap = struct
+  include Map.Make(String)
+  let find key map = try Some (find key map) with Not_found -> None
+end
+
 type 'a result =
   | Success of 'a
   | Problem of exn
@@ -58,6 +63,13 @@ let _try_stat stat path =
 
 let try_lstat = _try_stat Unix.lstat
 let try_stat = _try_stat Unix.stat
+
+let readlink path =
+  try Some (Unix.readlink path)
+  with
+    | Unix.Unix_error (Unix.ENOENT, _, _)
+    | Unix.Unix_error (Unix.EINVAL, _, _)
+      -> None
 
 let makedirs ?(mode=0o777) path =
   let rec loop path =
@@ -204,3 +216,60 @@ let slice ~start ?stop lst =
   | None -> from_start
   | Some stop -> Batteries.List.take (stop - start) from_start
 
+let realpath path =
+  let (+/) = Filename.concat in   (* Faster version, since we know the path is relative *)
+
+  (* Based on Python's version *)
+  let rec join_realpath path rest seen =
+    (* Printf.printf "join_realpath <%s> + <%s>\n" path rest; *)
+    (* [path] is already a realpath (no symlinks). [rest] is the bit to join to it. *)
+    match split_first rest with
+    | Filename name, rest -> (
+      (* path + name/rest *)
+      let newpath = path +/ name in
+      match readlink newpath with
+      | Some target ->
+          (* path + symlink/rest *)
+          begin match StringMap.find newpath seen with
+          | Some (Some cached_path) -> join_realpath cached_path rest seen
+          | Some None -> (normpath (newpath +/ rest), false)    (* Loop; give up *)
+          | None ->
+              (* path + symlink/rest -> realpath(path + target) + rest *)
+              match join_realpath path target (StringMap.add newpath None seen) with
+              | path, false ->
+                  (normpath (path +/ rest), false)   (* Loop; give up *)
+              | path, true -> join_realpath path rest (StringMap.add newpath (Some path) seen)
+          end
+      | None ->
+          (* path + name/rest -> path/name + rest (name is not a symlink) *)
+          join_realpath newpath rest seen
+    )
+    | CurrentDir, "" ->
+        (path, true)
+    | CurrentDir, rest ->
+      (* path + ./rest *)
+      join_realpath path rest seen
+    | ParentDir, rest ->
+      (* path + ../rest *)
+      if String.length path > 0 then (
+        let name = Filename.basename path in
+        let path = Filename.dirname path in
+        if name = Filename.parent_dir_name then
+          join_realpath (path +/ name +/ name) rest seen    (* path/.. +  ../rest -> path/../.. + rest *)
+        else
+          join_realpath path rest seen                      (* path/name + ../rest -> path + rest *)
+      ) else (
+        join_realpath Filename.parent_dir_name rest seen    (* "" + ../rest -> .. + rest *)
+      )
+    | EmptyComponent, rest ->
+        (* [rest] is absolute; discard [path] and start again *)
+        join_realpath Filename.dir_sep rest seen
+  in
+
+  try
+    if on_windows then
+      abspath path
+    else (
+      fst @@ join_realpath (Unix.getcwd ()) path StringMap.empty
+    )
+  with Safe_exception _ as ex -> reraise_with_context ex "... in realpath(%s)" path
