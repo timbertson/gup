@@ -19,11 +19,12 @@ before_install:
         echo "yes" | sudo add-apt-repository "ppa:$ocaml_ppa"
         sudo apt-get update -qq
         export OPAMYES=yes # no questions
-        sudo apt-get install -qq ocaml opam
+        sudo apt-get install -qq opam
 
         opam init --no-setup
-        eval "$(opam config env)"
         opam update
+        opam switch 4.02.1
+        eval "$(opam config env)"
 
         opam_deps="$(grep -E -o '"[^"]+"' nix/opam-dep-names.nix | grep -v '[<=>]' | sed -e 's/[]["]//g')"
         opam install $opam_deps ounit
@@ -35,11 +36,8 @@ before_install:
         # ./python or ./
         sudo apt-get install -qq pychecker mono-gmcs
       fi
-      if [ "$task" = "test-py3" ]; then
-        sudo apt-get install -qq python3 python3-gi
-      fi
 
-      sudo apt-get install zeroinstall-injector
+      sudo apt-get install -qq zeroinstall-injector python3 python3-gi
       # not required, just useful for colour-coding of test results
       0install run \
         http://gfxmonk.net/dist/0install/zeroinstall-plugin-manager.xml \
