@@ -6,6 +6,7 @@ env:
     - subdir=python task=test-py2
     - subdir=python task=test-py3
     - subdir=ocaml task=test
+    - subdir=ocaml task=opam-test
     - task=permutation-test
 notifications:
   email: false
@@ -26,8 +27,9 @@ before_install:
         opam switch 4.02.1
         eval "$(opam config env)"
 
-        opam_deps="$(grep -E -o '"[^"]+"' nix/opam-dep-names.nix | grep -v '[<=>]' | sed -e 's/[]["]//g')"
-        opam install $opam_deps ounit
+        opam pin add --kind git --no-action "$(pwd)"
+        opam install ounit
+        opam install --deps-only gup
       else
         sudo apt-get update -qq
       fi

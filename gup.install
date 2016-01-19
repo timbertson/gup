@@ -1,0 +1,3 @@
+bin: [
+	"ocaml/_build/main.native" {"gup"}
+]

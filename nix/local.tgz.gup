@@ -26,7 +26,7 @@ function get_commit() {
 
 if [ -n "${GUP_TARGET:-}" -a "$#" -eq 2 ] && [[ $2 == *.tgz ]]; then
 	src="$(dirname "$2")"
-	dest="$(cd "$(dirname "$2")" && echo "$(pwd)/$(basename "$2")")"
+	dest="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"
 	cd "$src"
 	cd "$(git rev-parse --show-toplevel)"
 	commit="$(get_commit)"

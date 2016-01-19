@@ -31,6 +31,7 @@ stdenv.mkDerivation {
     selections = opam_selections;
     selectionNames = lib.attrNames opam_selections;
     opamDependencyNames = opam_dep_names;
+    opam2nix = opam2nix.opam2nix;
     selectionFile = opam_selections_file;
   };
   installPhase = ''

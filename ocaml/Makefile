@@ -1,4 +1,4 @@
-OCAMLBUILD = $(shell if which rainbow >/dev/null >&2; then echo "rainbow -- ocamlbuild"; else echo "ocamlbuild"; fi)
+OCAMLBUILD = $(shell if which rainbow >/dev/null 2>&1; then echo "rainbow -- ocamlbuild"; else echo "ocamlbuild"; fi)
 
 all: bin
 bin: bin/gup
@@ -51,6 +51,9 @@ install: phony native
 	cp main.native "${DISTDIR}/bin/gup"
 	mkdir -p "${DISTDIR}/share/fish/completions"
 	cp -a ../share "${DISTDIR}/"
+
+opam-test: phony
+	./test_opam_install.sh
 
 clean: phony
 	rm -rf _build *.mlpack *.byte *.native

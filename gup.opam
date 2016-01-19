@@ -1,0 +1,15 @@
+opam-version: "1.2"
+version: "0.5.1"
+authors: [ "tim@gfxmonk.net" ]
+homepage: "https://github.com/timbertson/gup"
+maintainer: "tim@gfxmonk.net"
+depends: [
+  "batteries"
+  "cryptokit"
+  "extunix"
+  "lwt" { >= "2.5.1" }
+  "ocamlfind" {build}
+]
+build: [
+  [ make "-C" "ocaml" "native"]
+]
