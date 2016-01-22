@@ -4,6 +4,7 @@ scratch/
 test/tmp
 .noseids
 /tmp/
+/gup
 /0compile
 /windows-sync.gup
 /nix/local.tgz
