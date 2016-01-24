@@ -54,8 +54,8 @@ opam switch list | grep -q gup-test || opam switch install gup-test --alias-of "
 unset OPAMYES
 
 opam config exec --switch=gup-test -- bash -eux <<"EOF"
-	OPAMNO=1 opam pin add --kind git --no-action "$(pwd)"
 	export OPAMYES=1
+	opam pin add --kind git --no-action "$(pwd)"
 	opam install gup
 	opam list
 EOF
