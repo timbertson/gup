@@ -41,6 +41,15 @@ class TestDependencies(TestCase):
 		
 		self.assertRebuilds('dep', lambda: self.touch('input'))
 		self.assertNotRebuilds('dep', lambda: None)
+
+	def test_deps_of_fully_pathed_targets(self):
+		# regression: FileDependency checked mtime of `base`
+		# (instead of `path`) when `base` is absolute
+		self.write('input', '1')
+		time.sleep(0.1)
+		self.write("counter.gup", BASH + 'gup -u input; echo 1 > "$1"')
+		
+		self.assertNotRebuilds(os.path.join(self.ROOT, 'counter'), lambda: None)
 	
 	def test_dependencies_use_correct_path_when_builder_is_not_in_same_dir_as_target(self):
 		self.write('src/input', '1')

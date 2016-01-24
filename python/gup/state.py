@@ -283,7 +283,7 @@ class FileDependency(Dependency):
 			self.path]
 
 	def full_path(self, base):
-		if os.path.isabs(base): return base
+		if os.path.isabs(self.path): return self.path
 		return os.path.normpath(os.path.join(base, self.path))
 
 	def is_dirty(self, args):
