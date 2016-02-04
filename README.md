@@ -117,7 +117,7 @@ When you ask `gup` to update target, with:
 It will run this script, (almost) as if you had written `./target.gup target`.
 
 Gup also supports indirect build scripts, which maps multiple targets (e.g. "any `.o` file") to
-a single build script (which in thi case knows how to build _any_ `.o` file).
+a single build script (which in this case knows how to build _any_ `.o` file).
 These mappings are specified in a file named `Gupfile`.
 
 ### More examples
