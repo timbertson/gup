@@ -52,14 +52,6 @@ class TestScripts(TestCase):
 		self.assertEquals(self.read('a/b/c'), os.path.join('b', 'c'))
 		self.assertEquals(self.read('a/b/d'), 'nested: ' + os.path.join('..', 'b', 'd'))
 
-	@unittest.skipIf(IS_WINDOWS, 'symlinks')
-	def test_creates_nonexisting_destinations_within_symlinks(self):
-		self.mkdirp('dir')
-		os.symlink('dir', self.path('a'))
-
-		self.write("gup/a/b/c.gup", echo_to_target('$2'))
-		self.build_assert('a/b/c', 'c')
-	
 	def test_cwd_is_relative_to_target(self):
 		self.write('gup/all.gup', BASH + 'mkdir -p foo; cd foo; gup -u bar')
 		self.write('gup/foo/bar.gup', echo_to_target('ok'))
@@ -173,43 +165,6 @@ class TestScripts(TestCase):
 		self.build('link')
 		self.assertEquals(self.listdir(), ['link', 'link.gup', 'link_dest'])
 
-	@unittest.skipIf(IS_WINDOWS, 'symlinks')
-	def test_rebuild_symlink_to_directory(self):
-		self.mkdirp('dir')
-		self.touch('dir/1')
-		self.touch('dir/2')
-
-		self.write('link.gup', BASH + 'ln -s dir "$1"')
-		self.build('link')
-		self.build('link')
-		self.assertTrue(os.path.islink(self.path('link')))
-		self.assertTrue(os.path.isdir(self.path('dir')))
-	
-	def test_cleans_up_symlink_to_directory_if_build_fails(self):
-		self.write('link.gup', BASH + 'mkdir dir; touch dir/1 dir/2; ln -s "$(pwd)/dir" "$1"; exit 1')
-		self.assertRaises(SafeError, lambda: self.build('link'))
-		# should only remove _symlink_ - not actual contents
-		self.assertTrue(os.path.exists(self.path('dir/1')))
-		self.assertTrue(os.path.exists(self.path('dir/2')))
-
-	@unittest.skipIf(IS_WINDOWS, 'symlinks')
-	def test_moves_broken_symlink_if_build_succeeds(self):
-		self.write('link.gup', BASH + 'ln -s NOT_HERE "$1"')
-		self.build('link')
-		self.assertTrue(os.path.islink(self.path('link')))
-		self.assertEquals(self._output_files(), [])
-
-	def test_cleans_up_broken_symlink_if_build_fails(self):
-		self.write('target.gup', BASH + 'ln -s NOT_HERE "$1"; exit 1')
-		self.assertRaises(SafeError, lambda: self.build('target'))
-		self.assertEquals(self._output_files(), [])
-
-	def test_leaves_broken_symlink_at_dest_if_build_succeeds(self):
-		self.write('link.gup', BASH + 'ln -s NOT_HERE "$2"')
-		self.build('link')
-		self.assertTrue(os.path.islink(self.path('link')))
-		self.assertEquals(self._output_files(), [])
-	
 	@unittest.skipIf(IS_WINDOWS, 'irrelevant on windows')
 	def test_permissions_of_tempfile_are_maintained(self):
 		self.write('hello.gup', BASH + 'echo -e "#!/bin/bash\necho ok" > "$1"; chmod a+x "$1"')
@@ -236,4 +191,53 @@ class TestScripts(TestCase):
 		# does notify on explicit build
 		lines = self.build('bad', include_logging=True)
 		self.assertEquals(warning(lines), clobber_warning)
+
+
+class TestSymlinkScripts(TestCase):
+	def setUp(self):
+		super(TestSymlinkScripts, self).setUp()
+		if IS_WINDOWS:
+			self.skipTest("symlinks")
+
+	def test_creates_nonexisting_destinations_within_symlinks(self):
+		self.mkdirp('dir')
+		os.symlink('dir', self.path('a'))
+
+		self.write("gup/a/b/c.gup", echo_to_target('$2'))
+		self.build_assert('a/b/c', 'c')
+	
+	def test_rebuild_symlink_to_directory(self):
+		self.mkdirp('dir')
+		self.touch('dir/1')
+		self.touch('dir/2')
+
+		self.write('link.gup', BASH + 'ln -s dir "$1"')
+		self.build('link')
+		self.build('link')
+		self.assertTrue(os.path.islink(self.path('link')))
+		self.assertTrue(os.path.isdir(self.path('dir')))
+	
+	def test_cleans_up_symlink_to_directory_if_build_fails(self):
+		self.write('link.gup', BASH + 'mkdir dir; touch dir/1 dir/2; ln -s "$(pwd)/dir" "$1"; exit 1')
+		self.assertRaises(SafeError, lambda: self.build('link'))
+		# should only remove _symlink_ - not actual contents
+		self.assertTrue(os.path.exists(self.path('dir/1')))
+		self.assertTrue(os.path.exists(self.path('dir/2')))
+
+	def test_moves_broken_symlink_if_build_succeeds(self):
+		self.write('link.gup', BASH + 'ln -s NOT_HERE "$1"')
+		self.build('link')
+		self.assertTrue(os.path.islink(self.path('link')))
+		self.assertEquals(self._output_files(), [])
+
+	def test_cleans_up_broken_symlink_if_build_fails(self):
+		self.write('target.gup', BASH + 'ln -s NOT_HERE "$1"; exit 1')
+		self.assertRaises(SafeError, lambda: self.build('target'))
+		self.assertEquals(self._output_files(), [])
+
+	def test_leaves_broken_symlink_at_dest_if_build_succeeds(self):
+		self.write('link.gup', BASH + 'ln -s NOT_HERE "$2"')
+		self.build('link')
+		self.assertTrue(os.path.islink(self.path('link')))
+		self.assertEquals(self._output_files(), [])
 
