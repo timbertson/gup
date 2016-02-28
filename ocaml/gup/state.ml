@@ -462,6 +462,15 @@ and target_state (target_path:string) =
 		method mark_always_rebuild =
 			self#add_dependency (serializable (new always_rebuild))
 
+		method private builder_dependency path =
+			let path = Util.realpath path in
+			lwt builder_mtime = Util.get_mtime path in
+			return (new builder_dependency
+				~mtime: builder_mtime
+				~checksum: None
+				(Util.relpath ~from: (Filename.dirname self#path) path)
+			)
+
 		method perform_build exe block : bool Lwt.t =
 			assert (Sys.file_exists exe);
 			log#trace "perform_build %s" self#path;
@@ -478,13 +487,7 @@ and target_state (target_path:string) =
 				if (!builds_have_been_cancelled) then raise Error.BuildCancelled;
 				lwt deps = self#deps in
 				if still_needs_build deps then (
-					lwt builder_mtime = Util.get_mtime exe in
-					let builder_dep = new builder_dependency
-						~mtime: builder_mtime
-						~checksum: None
-						(Util.relpath ~from: (Filename.dirname self#path) exe)
-					in
-
+					lwt builder_dep = self#builder_dependency exe in
 					let temp = ensure_meta_path new_deps_ext in
 					with_file_out temp (fun file ->
 						Lwt_io.write_line file (version_marker ^ (string_of_int format_version)) >>

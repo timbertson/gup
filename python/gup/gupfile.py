@@ -132,7 +132,7 @@ class Builder(object):
 	builder was obtained indirectly (via a Gupfile match)
 	'''
 	def __init__(self, script_path, target, basedir):
-		self.path = os.path.realpath(script_path)
+		self.path = script_path
 		self.target = target
 		self.basedir = basedir
 		self.target_path = os.path.join(self.basedir, self.target)

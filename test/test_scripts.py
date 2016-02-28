@@ -241,3 +241,7 @@ class TestSymlinkScripts(TestCase):
 		self.assertTrue(os.path.islink(self.path('link')))
 		self.assertEquals(self._output_files(), [])
 
+	def test_builder_is_invoked_via_link(self):
+		self.write('buildscript.sh', echo_to_target('$(basename "$0")'))
+		self.symlink('buildscript.sh', 'target.gup')
+		self.build_assert('target', 'target.gup')

@@ -193,7 +193,6 @@ class buildscript
 	(script_path:string)
 	(target:string)
 	(basedir:string) =
-	let script_path = Util.realpath script_path in
 	object (self)
 		method repr = Printf.sprintf "buildscript(%s, %s, %s)" script_path target basedir
 		method target = target

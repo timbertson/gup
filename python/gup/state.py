@@ -99,9 +99,10 @@ class TargetState(object):
 			if not still_needs_build(deps):
 				return False
 
+			builder_path = os.path.realpath(exe)
 			builder_dep = BuilderDependency.relative_to_target(self.path,
-				path=exe,
-				mtime=get_mtime(exe))
+				path=builder_path,
+				mtime=get_mtime(builder_path))
 
 			_log.trace("created dep %s from builder %r" % (builder_dep, exe))
 			temp = self._ensure_meta_path('deps2')
