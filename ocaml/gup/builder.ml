@@ -117,9 +117,9 @@ class target (buildscript:Gupfile.buildscript) =
 		method repr = "Target(" ^ buildscript#repr ^ ")"
 		method state = state
 
-		method build update : bool Lwt.t = self#_perform_build buildscript#path update
+		method build update : bool Lwt.t = self#_perform_build update
 
-		method private _perform_build (exe_path:string) (update: bool) : bool Lwt.t =
+		method private _perform_build (update: bool) : bool Lwt.t =
 			let exe_path = Util.abspath buildscript#path in
 			if not (Sys.file_exists exe_path) then
 				Error.raise_safe "Build script does not exist: %s" exe_path;
@@ -129,7 +129,7 @@ class target (buildscript:Gupfile.buildscript) =
 				log#trace("no build needed");
 				Lwt.return false
 			) else (
-				state#perform_build exe_path (fun exe deps ->
+				state#perform_build buildscript (fun exe deps ->
 
 					let basedir = buildscript#basedir in
 					Util.makedirs basedir;

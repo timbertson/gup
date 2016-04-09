@@ -277,7 +277,7 @@ and dependencies target_path (data:base_dependency intermediate_dependencies) =
 				let args = {
 					path = target_path;
 					base_path = base_path;
-					builder_path = Util.relpath ~from:base_path buildscript#path;
+					builder_path = Util.relpath ~from:base_path buildscript#realpath;
 					built = built
 				} in
 
@@ -463,7 +463,6 @@ and target_state (target_path:string) =
 			self#add_dependency (serializable (new always_rebuild))
 
 		method private builder_dependency path =
-			let path = Util.realpath path in
 			lwt builder_mtime = Util.get_mtime path in
 			return (new builder_dependency
 				~mtime: builder_mtime
@@ -471,7 +470,8 @@ and target_state (target_path:string) =
 				(Util.relpath ~from: (Filename.dirname self#path) path)
 			)
 
-		method perform_build exe block : bool Lwt.t =
+		method perform_build (buildscript:Gupfile.buildscript) block : bool Lwt.t =
+			let exe = buildscript#path in
 			assert (Sys.file_exists exe);
 			log#trace "perform_build %s" self#path;
 
@@ -487,7 +487,7 @@ and target_state (target_path:string) =
 				if (!builds_have_been_cancelled) then raise Error.BuildCancelled;
 				lwt deps = self#deps in
 				if still_needs_build deps then (
-					lwt builder_dep = self#builder_dependency exe in
+					lwt builder_dep = self#builder_dependency buildscript#realpath in
 					let temp = ensure_meta_path new_deps_ext in
 					with_file_out temp (fun file ->
 						Lwt_io.write_line file (version_marker ^ (string_of_int format_version)) >>

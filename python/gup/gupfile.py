@@ -133,6 +133,7 @@ class Builder(object):
 	'''
 	def __init__(self, script_path, target, basedir):
 		self.path = script_path
+		self.realpath = os.path.realpath(self.path)
 		self.target = target
 		self.basedir = basedir
 		self.target_path = os.path.join(self.basedir, self.target)

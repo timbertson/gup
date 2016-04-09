@@ -88,7 +88,8 @@ class TargetState(object):
 	def mark_clobbers(self):
 		self.add_dependency(ClobbersTarget())
 	
-	def perform_build(self, exe, do_build):
+	def perform_build(self, builder, do_build):
+		exe = builder.path
 		assert os.path.exists(exe)
 		def still_needs_build(deps):
 			_log.trace("checking if %s still needs build after releasing lock" % self.path)
@@ -99,10 +100,9 @@ class TargetState(object):
 			if not still_needs_build(deps):
 				return False
 
-			builder_path = os.path.realpath(exe)
 			builder_dep = BuilderDependency.relative_to_target(self.path,
-				path=builder_path,
-				mtime=get_mtime(builder_path))
+				path=builder.realpath,
+				mtime=get_mtime(builder.realpath))
 
 			_log.trace("created dep %s from builder %r" % (builder_dep, exe))
 			temp = self._ensure_meta_path('deps2')
@@ -165,7 +165,7 @@ class Dependencies(object):
 			return True
 
 		base = os.path.dirname(self.path)
-		builder_path = os.path.relpath(builder.path, base)
+		builder_path = os.path.relpath(builder.realpath, base)
 
 		unknown_states = []
 		dirty_args = _dirty_args(deps=self, base=base, builder_path=builder_path, built=built)

@@ -85,7 +85,7 @@ class Target(object):
 		return 'Target(%r)' % (self.path,)
 	
 	def build(self, update):
-		return self.state.perform_build(self.builder.path, lambda deps: self._perform_build(update, deps))
+		return self.state.perform_build(self.builder, lambda deps: self._perform_build(update, deps))
 
 	def _perform_build(self, update, deps):
 		'''
@@ -97,7 +97,7 @@ class Target(object):
 			if not _is_dirty(self.state):
 				_log.trace("no build needed")
 				return False
-		exe_path = os.path.abspath(self.builder.path)
+		exe_path = path.abspath(self.builder.path)
 		exe_path_relative_to_cwd = os.path.relpath(exe_path,ROOT_CWD)
 
 		# dest may not exist, if a /gup/ directory is in use
