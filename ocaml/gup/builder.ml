@@ -208,8 +208,10 @@ class target (buildscript:Gupfile.buildscript) =
 									Lwt_unix.rename output_file self#path
 								) else (
 									log#trace "output file %s did not get created" output_file;
-									if (not target_changed) && (not (Util.islink self#path)) then (
-										log#trace "removing previous %s" self#path;
+									if (not target_changed) && (Util.lexists self#path) && (not (Util.islink self#path)) then (
+										if Util.lexists self#path; then (
+											log#warn "Removing stale target: %s" target_relative_to_cwd
+										);
 										(* TODO make this an lwt.t *)
 										Util.try_remove self#path;
 										Lwt.return_unit

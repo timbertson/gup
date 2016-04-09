@@ -156,8 +156,8 @@ class Target(object):
 						try_remove(self.path)
 					rename(output_file, self.path)
 				else:
-					if (not target_changed) and (not os.path.islink(self.path)):
-						_log.trace("removing old %s", self.path)
+					if (not target_changed) and (os.path.lexists(self.path)) and (not os.path.islink(self.path)):
+						_log.warn("Removing stale target: %s", target_relative_to_cwd)
 						try_remove(self.path)
 				cleanup_output_file = False # not needed
 			else:
