@@ -59,7 +59,20 @@ def _build(exe, args, cwd, env=None, include_logging=False, throwing=True):
 	use_color = sys.stdout.isatty() and not IS_WINDOWS
 	env['GUP_COLOR'] = '1' if use_color else '0'
 
-	proc = subprocess.Popen([exe] + list(args), cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
+	exe_dir = os.path.basename(os.path.dirname(os.path.dirname(exe)))
+	exe_args = [exe]
+	if exe_dir == 'ocaml':
+		pass
+	elif exe_dir == 'python':
+		if not IS_WINDOWS:
+			exe_args = [sys.executable, exe]
+	elif exe == 'gup':
+		# unit tests, just use what's on $PATH
+		pass
+	else:
+		raise RuntimeError("Unknown exe_dir: %r" % exe_dir)
+
+	proc = subprocess.Popen(exe_args + list(args), cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
 
 	child_log = logging.getLogger('out')
 	err = None
