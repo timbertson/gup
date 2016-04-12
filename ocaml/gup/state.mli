@@ -6,10 +6,6 @@ val built_targets : string -> string list
 type base_dependency
 type 'a intermediate_dependencies
 
-type 'a dirty_result =
-	| Known of bool
-	| Unknown of 'a
-
 val cancel_all_future_builds : unit -> unit
 
 class target_state : string ->
@@ -29,10 +25,9 @@ class target_state : string ->
 
 and dependencies : string -> base_dependency intermediate_dependencies ->
 	object
-		method is_dirty : Gupfile.buildscript -> bool -> (target_state list) dirty_result Lwt.t
+		method is_dirty : Gupfile.buildscript -> (string -> bool Lwt.t) -> bool Lwt.t
 		method checksum : string option
 		method clobbers : bool
 		method already_built : bool
-		method children : string list
 		method print : unit IO.output -> unit
 	end

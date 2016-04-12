@@ -160,6 +160,18 @@ struct
 		in
 		(new State.target_state parent_target)#add_checksum checksum
 
+	let mark_leave args =
+		expect_no args;
+		let parent_target = _assert_parent_target "--leave" in
+		let open Unix in
+		let kind = try Some ((lstat parent_target).st_kind)
+		with Unix_error(ENOENT, _, _) -> None in
+		let () = match kind with
+			| None | Some S_LNK -> ()
+			| Some _ -> Unix.utimes parent_target 0.0 0.0
+		in
+		Lwt.return_unit
+
 	let mark_always args =
 		expect_no args;
 		let parent_target = _assert_parent_target "--always" in
@@ -260,6 +272,27 @@ struct
 		end ;
 		Lwt.return_unit
 
+	let test_dirty args =
+		begin match args with
+			| [] -> raise (Invalid_argument "At least one argument expected")
+			| args ->
+				let rec is_dirty path =
+					let target = Builder.prepare_build path in
+					match target with
+						| Some (`Target target) -> target#is_dirty
+						| Some (`Symlink_to dest) -> is_dirty dest
+						| None -> Lwt.return_false
+				in
+				lwt dirty =
+					try_lwt
+						lwt (_dirty:string) = args |> Lwt_list.find_s is_dirty in
+						Lwt.return_true
+					with Not_found -> Lwt.return_false
+				in
+				exit (if dirty then 0 else 1);
+				Lwt.return_unit
+		end
+
 	let list_features args =
 		expect_no args;
 		let features = [
@@ -326,14 +359,19 @@ struct
 	let main () =
 		let options = OptParser.make ~usage: (
 			"Usage: gup [action] [OPTIONS] [target [...]]\n\n" ^
-				"actions: (if present, the action must be the first argument)\n\n" ^
+				"Actions: (if present, the action must be the first argument)\n" ^
+				"  --clean        Clean any gup-built targets\n" ^
+				"  --buildable    Check if the given file is buildable\n" ^
+				"  --dirty        Check if one or more targets are out of date\n" ^
+				"  --targets/-t   List buildable targets in a directory\n" ^
+				"  --features     List the features of this gup version\n" ^
+				"\n" ^
+				"Actions which can only be called from a buildscript:\n" ^
 				"  --always       Mark this target as always-dirty\n" ^
+				"  --leave        Don\'t remove any existing target file, even if it\'s stale\n" ^
 				"  --ifcreate     Rebuild the current target if the given file(s) are created\n" ^
 				"  --contents     Checksum the contents of stdin\n" ^
-				"  --clean        Clean any gup-built targets\n" ^
-				"  --targets/-t   List buildable targets in a directory\n" ^
-				"  --buildable    Check whether the given file is buildable\n" ^
-				"  --features     List the features of this gup version\n" ^
+				"\n" ^
 				"  (use gup <action> --help) for further details") () in
 
 		add options ~short_name:'u' ~long_names:["update";"ifchange"] ~help:"Only rebuild stale targets" update;
@@ -373,6 +411,12 @@ struct
 		options
 	;;
 
+	let leave () =
+		let options = OptParser.make ~usage: "Usage: gup --leave" () in
+		action := Actions.mark_leave;
+		options
+	;;
+
 	let list_targets () =
 		let options = OptParser.make ~usage: "Usage: gup --targets [directory]" () in
 		action := Actions.list_targets;
@@ -382,6 +426,12 @@ struct
 	let test_buildable () =
 		let options = OptParser.make ~usage: "Usage: gup --buildable <target>" () in
 		action := Actions.test_buildable;
+		options
+	;;
+
+	let test_dirty () =
+		let options = OptParser.make ~usage: "Usage: gup --dirty [target [...]]" () in
+		action := Actions.test_dirty;
 		options
 	;;
 
@@ -437,7 +487,9 @@ let main () =
 		| Some "--targets" | Some "-t" -> Options.list_targets ()
 		| Some "--complete-command" -> Options.complete_args ()
 		| Some "--always" -> Options.always ()
+		| Some "--leave" -> Options.leave ()
 		| Some "--buildable" -> Options.test_buildable ()
+		| Some "--dirty" -> Options.test_dirty ()
 		| Some "--features" -> Options.list_features ()
 		| _ -> firstarg := 1; Options.main ()
 		in

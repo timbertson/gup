@@ -146,6 +146,19 @@ class TestScripts(TestCase):
 		self.build('file', 'dir', 'link')
 		self.assertEquals(self.listdir(), ['dir.gup','file.gup', 'link', 'link.gup'])
 
+	def test_gup_leave_keeps_output_file(self):
+		self.write('file.gup', BASH + 'gup --leave')
+		self.write('dir.gup', BASH + 'gup --leave')
+		self.write('link.gup', BASH + 'gup --leave') # noop
+		self.write('doesnotexist.gup', BASH + 'gup --leave') # noop
+		self.touch('dir/contents')
+		self.touch('file')
+		os.symlink('link_dest', self.path('link'))
+		expected_files = ['dir','dir.gup', 'doesnotexist.gup', 'file','file.gup', 'link', 'link.gup']
+		self.assertEquals(self.listdir(), expected_files)
+		self.build('file', 'dir', 'link', 'doesnotexist')
+		self.assertEquals(self.listdir(), expected_files)
+
 	def test_keeps_modified_file(self):
 		self.write('file.gup', BASH + 'touch "$2"; exit 0')
 		self.build('file')

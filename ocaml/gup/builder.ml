@@ -1,3 +1,4 @@
+module StringMap = Map.Make(String)
 open Batteries
 open Std
 
@@ -41,15 +42,48 @@ let in_dir wd action =
 	Unix.chdir wd;
 	Util.finally_do (fun _ -> Unix.chdir initial_wd) () action
 
-class target (buildscript:Gupfile.buildscript) =
-	let path = buildscript#target_path in
-	let state = new State.target_state path in
+let rec _is_dirty ?perform_build = (
+	(*
+	* Returns whether the dependency is dirty.
+	* Builds any targets required to check dirtiness
+	*)
+	let allow_build, perform_build = match perform_build with
+		| Some action -> true, action
+		| None -> false, fun _ -> assert false
+	in
 
-	let rec _is_dirty (state:State.target_state) (buildscript:Gupfile.buildscript) =
-		(*
-		* Returns whether the dependency is dirty.
-		* Builds any targets required to check dirtiness
-		*)
+	let rec _is_dirty = fun (state:State.target_state) (buildscript:Gupfile.buildscript) -> (
+		let built : unit Lwt.t StringMap.t ref = ref StringMap.empty in
+		let build_child_if_dirty : string -> bool Lwt.t = fun path -> (
+			let open Lwt in
+			try
+				lwt () = StringMap.find path !built in
+				return_false
+			with Not_found -> (
+				let result : bool Lwt.t = (
+					log#trace "Recursing over dependency: %s -> %s" buildscript#target_path path;
+					match Gupfile.find_buildscript path with
+						| None ->
+							log#trace "CLEAN: %s (not a target)" path;
+							return_false
+						| Some buildscript ->
+							let child_state = new State.target_state path in
+							lwt child_dirty = _is_dirty child_state buildscript in
+							if child_dirty then (
+								log#trace "_is_dirty(%s) -> True" path;
+								if not allow_build then
+									return_true
+								else perform_build buildscript
+							) else (
+								log#trace "_is_dirty(%s) -> False" path;
+								return_false
+							)
+				) in
+				built := StringMap.add path (result |> (Lwt.map ignore)) !built;
+				result
+			)
+		) in
+
 		lwt deps = state#deps in
 		match deps with
 			| None -> (
@@ -61,56 +95,31 @@ class target (buildscript:Gupfile.buildscript) =
 					log#trace "CLEAN: %s has already been built in this invocation" state#path;
 					Lwt.return false
 				) else (
-					let rec deps_dirty built : bool Lwt.t =
-						lwt dirty = deps#is_dirty buildscript built in
-						(* log#trace "deps.is_dirty(%r) -> %r" state.path, dirty *)
-						match dirty with
-						| State.Known true -> (Lwt.return_true)
-						| State.Known false ->
-							(
-								(* not directly dirty - recurse children
-								* and return `true` for the first dirty one, otherwise `false`
-								*)
-								try_lwt
-									deps#children |> Lwt_list.exists_p (fun path ->
-										log#trace "Recursing over dependency: %s" path;
-										match Gupfile.find_buildscript path with
-											| None ->
-												log#trace "CLEAN: not a target";
-												Lwt.return_false
-											| Some buildscript ->
-												let child_state = new State.target_state path in
-												lwt child_dirty = _is_dirty child_state buildscript in
-												if child_dirty then (
-													log#trace "_is_dirty(%s) -> True" child_state#path;
-													Lwt.return true
-												) else Lwt.return_false
-									)
-								with Not_found -> Lwt.return_false
-							)
-						| State.Unknown deps ->
-							(
-								if built then
-									Error.raise_safe "after building unknown targets, deps.is_dirty(TODO) -> TODO"
-								;
-								(* build undecided deps first, then retry: *)
-								lwt () = deps |> Lwt_list.iter_s (fun dep ->
-									log#trace "MAYBE_DIRTY: %s (unknown state - building it to find out)" dep#path;
-									match _prepare_build (new target) dep#path with
-										| None ->
-												log#trace "%s turned out not to be a target - skipping" dep#path;
-												Lwt.return_unit
-										| Some target ->
-												lwt (_:bool) = (target#build true) in
-												Lwt.return_unit
-								) in
-								deps_dirty true
-							)
-					in
-					deps_dirty false
+					if allow_build then
+						deps#is_dirty buildscript build_child_if_dirty
+					else (
+						(* This is a bit weird. Either the file is straight-up
+						 * dirty, or we faked building of a child dep because it
+						 * may have been dirty *)
+						let open Lwt in
+						let child_dirty = ref false in
+						lwt dirty = deps#is_dirty buildscript (fun path ->
+							lwt child_built = build_child_if_dirty path in
+							if child_built then child_dirty := true;
+							return_false
+						) in
+						return (dirty || !child_dirty)
+					)
 				)
 			)
-	in
+	) in
+	_is_dirty
+)
+
+
+class target (buildscript:Gupfile.buildscript) =
+	let path = buildscript#target_path in
+	let state = new State.target_state path in
 
 	object (self)
 		method path = path
@@ -119,12 +128,18 @@ class target (buildscript:Gupfile.buildscript) =
 
 		method build update : bool Lwt.t = self#_perform_build update
 
+		method is_dirty : bool Lwt.t =
+			_is_dirty ?perform_build:None state buildscript
+
 		method private _perform_build (update: bool) : bool Lwt.t =
 			let exe_path = Util.abspath buildscript#path in
 			if not (Sys.file_exists exe_path) then
 				Error.raise_safe "Build script does not exist: %s" exe_path;
 
-			lwt needs_build = if update then (_is_dirty state buildscript) else Lwt.return_true in
+			lwt needs_build = if update then (
+				let perform_build buildscript = (new target buildscript)#build false in
+				_is_dirty ~perform_build state buildscript
+			) else Lwt.return_true in
 			if not needs_build then (
 				log#trace("no build needed");
 				Lwt.return false

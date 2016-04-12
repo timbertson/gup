@@ -186,6 +186,53 @@ class TestDependencies(TestCase):
 
 		self.assertNotRebuilds('a', lambda: self.touch('b'))
 	
+class TestDirtyCheck(TestCase):
+	def assertDirty(self, target, expected):
+		code, lines = self.build('--dirty', target, throwing = False)
+		self.assertEqual(code, 0 if expected else 1)
+		self.assertEqual(lines, [])
+
+	def test_simple_dependency_dirty(self):
+		self.write('file.gup', echo_file_contents('input'))
+		self.write('input', '1')
+		self.build('file')
+
+		self.touch('input')
+		self.assertDirty('file', True)
+
+	def test_simple_dependency_clean(self):
+		self.write('file.gup', echo_file_contents('input'))
+		self.write('input', '1')
+		self.build('file')
+
+		self.assertDirty('file', False)
+
+	def test_unbuilt_target(self):
+		self.write('file.gup', echo_file_contents('input'))
+		self.assertDirty('file', True)
+
+	def test_pseudo_target(self):
+		self.write('target.gup', BASH + 'true')
+		self.build('target')
+		self.assertDirty('target', True)
+
+	def test_checksum_dependency(self):
+		self.write('checksum.gup', echo_file_contents('input-cs'))
+		self.write('input-cs.gup', echo_file_contents('input') + '; gup --contents "$1"')
+		self.write('input', '1')
+		self.build('checksum')
+
+		self.assertDirty('checksum', False)
+
+		def action():
+			self.touch('input')
+			# the above should make --dirty return true, even though
+			# the target doesn't really need to be rebuilt
+			# (because without building input-cs, we can't know whether
+			# the target is actually dirty)
+			self.assertDirty('checksum', True)
+		self.assertNotRebuilds('checksum', action)
+
 class TestSymlinkDependencies(TestCase):
 	def test_dependencies_outside_symlink(self):
 		self.write('src/build/foo.gup', BASH + 'gup -u '+self.ROOT + '/input; touch $1')
@@ -333,8 +380,10 @@ class TestChecksums(TestCase):
 	def test_parent_of_checksum_is_rebult_if_checksum_contents_changes(self):
 		self.assertRebuilds('parent', lambda: self.write('input', 'ok2'))
 
-	def test_parent_of_checksum_is_rebult_if_checksum_state_is_missing(self):
-		self.assertRebuilds('parent', lambda: os.remove(self.path('.gup/cs.deps')))
+	def test_parent_of_checksum_does_not_need_rebuilding_if_checksum_state_is_missing(self):
+		change = lambda: os.remove(self.path('.gup/cs.deps'))
+		self.assertRebuilds('cs', change)
+		self.assertNotRebuilds('parent', change)
 
 	@skipPermutations
 	def test_checksum_accepts_a_number_of_files_instead_of_stdin(self):

@@ -9,15 +9,11 @@ open Parallel
  * this though.
  *)
 
-type 'a dirty_result =
-	| Known of bool
-	| Unknown of 'a
-
 type dirty_args = {
 	path:string;
 	base_path:string;
 	builder_path:string;
-	built:bool;
+	build: (string -> bool Lwt.t)
 }
 
 let builds_have_been_cancelled = ref false
@@ -129,10 +125,22 @@ let write_dependency output (tag,fields) =
 	if List.length fields <> typ.num_fields then Error.raise_safe "invalid fields";
 	Lwt_io.write_line output @@ (string_of_dependency_type tag) ^ ": " ^ (String.join " " fields)
 
+let dirty_check_with_dep ~full_path checker args =
+	lwt dirty = checker () in
+	if dirty then Lwt.return_true else (
+		lwt built = args.build full_path in
+		if built
+			then (
+				log#trace "dirty_check_with_dep: path %s was built, rechecking" full_path;
+				checker ()
+			) else Lwt.return_false
+	)
+
+
 class virtual base_dependency = object (self)
 	method virtual tag : dependency_type
 	method virtual fields : string list
-	method virtual is_dirty : dirty_args -> target_state dirty_result Lwt.t
+	method virtual is_dirty : dirty_args -> bool Lwt.t
 
 	method child : string option = None
 	method print out =
@@ -155,49 +163,41 @@ and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:st
 		method private mtime = mtime
 		method private is_dirty_cs full_path checksum args =
 			(* checksum-based check *)
-			log#trace "%s: comparing using checksum" self#path;
+			log#trace "%s: comparing using checksum %s" self#path checksum;
 			let state = new target_state full_path in
-			lwt deps = state#deps in
-			let latest_checksum = Option.bind deps (fun deps -> deps#checksum) in
-			let checksum_matches = match latest_checksum with
-				| None -> false
-				| Some dep_cs -> dep_cs = checksum
-			in
-			if not checksum_matches then (
-				log#debug "DIRTY: %s (stored checksum is %s, current is %a)"
+			let checksum_mismatch () = 
+				lwt deps = state#deps in
+				let latest_checksum = Option.bind deps (fun deps -> deps#checksum) in
+				let dirty = match latest_checksum with
+					| None -> true
+					| Some dep_cs -> dep_cs <> checksum
+				in
+				log#debug "%s: %s (stored checksum is %s, current is %a)"
+					(if dirty then "DIRTY" else "CLEAN")
 					self#path checksum (Option.print String.print) latest_checksum;
-				Lwt.return @@ Known true)
-			else (
-				if args.built then
-					Lwt.return @@ Known false
-				else (
-					log#trace "%s: might be dirty - returning %a"
-						self#path
-						print_repr state;
-					Lwt.return @@ Unknown (state :> target_state)
-				)
-			)
+				Lwt.return dirty
+			in
+			dirty_check_with_dep ~full_path checksum_mismatch args
 
-		method private is_dirty_mtime full_path =
-			(* pure mtime-based check *)
-			lwt current_mtime = Util.get_mtime full_path in
-			log#trace "%s: comparing stored mtime %a against current %a"
-				self#path
-				(Option.print Big_int.print) self#mtime
-				(Option.print Big_int.print) current_mtime;
-			Lwt.return @@ if not @@ eq (Option.compare ~cmp:Big_int.compare) current_mtime self#mtime then (
-				log#debug "DIRTY: %s (stored mtime is %a, current is %a)"
+		method private is_dirty_mtime full_path args =
+			let mtime_mismatch () =
+				lwt current_mtime = Util.get_mtime full_path in
+				log#trace "%s: comparing stored mtime %a against current %a"
 					self#path
-					Util.print_mtime self#mtime
-					Util.print_mtime current_mtime;
-				Known true
-			) else Known false
+					(Option.print Big_int.print) self#mtime
+					(Option.print Big_int.print) current_mtime;
+				Lwt.return @@ not @@ eq (Option.compare ~cmp:Big_int.compare) current_mtime self#mtime
+			in
+			dirty_check_with_dep ~full_path mtime_mismatch args
 
 		method is_dirty args =
 			let full_path = self#full_path args.base_path in
-			match checksum with
-				| Some checksum -> self#is_dirty_cs full_path checksum args
-				| None -> self#is_dirty_mtime full_path
+			lwt mtime_dirty = self#is_dirty_mtime full_path args in
+			if mtime_dirty then (
+				match checksum with
+					| Some checksum -> self#is_dirty_cs full_path checksum args
+					| None -> Lwt.return_true
+			) else Lwt.return_false
 
 		method private full_path base = Util.join_if_relative ~base self#path
 	end
@@ -213,7 +213,7 @@ and builder_dependency ~mtime ~checksum path =
 			assert (not @@ Util.is_absolute path);
 			if builder_path <> path then (
 				log#debug "DIRTY: builder changed from %s -> %s" path builder_path;
-				Lwt.return (Known true)
+				Lwt.return_true
 			) else super#is_dirty args
 	end
 
@@ -222,7 +222,7 @@ and always_rebuild =
 		inherit base_dependency
 		method tag = AlwaysRebuild
 		method fields = []
-		method is_dirty (_:dirty_args) = Lwt.return (Known true)
+		method is_dirty (_:dirty_args) = Lwt.return_true
 	end
 
 and build_time time =
@@ -233,7 +233,7 @@ and build_time time =
 		method is_dirty args =
 			let path = args.path in
 			lwt mtime = Util.get_mtime path >>= (return $ Option.get) in
-			Lwt.return @@ Known (
+			Lwt.return (
 				if neq Big_int.compare mtime time then (
 					let log_method = ref log#warn in
 					if Util.lisdir path then
@@ -254,10 +254,6 @@ and dependencies target_path (data:base_dependency intermediate_dependencies) =
 			| None -> false
 			| Some r -> r#is_current
 
-		method children : string list = !(data.rules) |> List.filter_map (fun dep ->
-			dep#child |> Option.map (Util.join_if_relative ~base:base_path)
-		)
-
 		method print out =
 			Printf.fprintf out "<#Dependencies(run=%a, cs=%a, clobbers=%b, rules=%a)>"
 				(Option.print print_obj) !(data.run_id)
@@ -269,41 +265,32 @@ and dependencies target_path (data:base_dependency intermediate_dependencies) =
 
 		method clobbers = !(data.clobbers)
 
-		method is_dirty (buildscript: Gupfile.buildscript) (built:bool) : (target_state list) dirty_result Lwt.t =
+		method is_dirty (buildscript: Gupfile.buildscript) (build:string -> bool Lwt.t) : bool Lwt.t =
 			if not (Util.lexists target_path) then (
 				log#debug "DIRTY: %s (target does not exist)" target_path;
-				return (Known true)
+				return true
 			) else (
 				let args = {
 					path = target_path;
 					base_path = base_path;
 					builder_path = Util.relpath ~from:base_path buildscript#realpath;
-					built = built
+					build = build
 				} in
 
-				let rec collapse rules unknown_states =
+				let rec iter rules =
 					match rules with
-					| [] -> (
-						(* no more rules to consider; final return *)
-						match unknown_states with
-						| [] ->
+					| [] ->
 							log#trace "is_dirty: %s returning false" target_path;
-							return @@ Known false
-						| _ ->
-							log#trace "is_dirty: %s returning %a" target_path (List.print print_repr) unknown_states;
-							return @@ Unknown (unknown_states)
-					)
+							Lwt.return_false
 					| (rule::remaining_rules) ->
-						lwt state = rule#is_dirty args in
-						match state with
-						| Known true -> (
+						log#trace "calling %a#is_dirty for path %s" print_obj rule target_path;
+						lwt dirty = rule#is_dirty args in
+						if dirty then (
 							log#trace "is_dirty: %s returning true" target_path;
-							return (Known true)
-						)
-						| Known false   -> collapse remaining_rules unknown_states
-						| Unknown state -> collapse remaining_rules (state :: unknown_states)
+							Lwt.return_true
+						) else iter remaining_rules
 				in
-				collapse !(data.rules) []
+				iter !(data.rules)
 			)
 end
 
@@ -477,7 +464,7 @@ and target_state (target_path:string) =
 
 			(* TODO: quicker mtime-based check *)
 			let still_needs_build = (fun deps ->
-				log#trace "Checking if %s still needs buld after releasing lock" self#path;
+				log#trace "Checking if %s still needs build after releasing lock" self#path;
 				match deps with
 					| Some d -> not d#already_built
 					| None -> true
