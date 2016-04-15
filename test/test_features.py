@@ -14,7 +14,7 @@ class TestFeatures(TestCase):
 	def test_ocaml_version_has_list_targets(self):
 		exe = GUP_EXES[0]
 		if not os.path.isabs(exe):
-			from which import which
+			from whichcraft import which
 			exe = which(exe)
 		is_ocaml = os.path.join("ocaml", "bin") in exe
 		if not is_ocaml:

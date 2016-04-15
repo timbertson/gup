@@ -14,11 +14,21 @@ META_DIR = '.gup'
 class VersionMismatch(ValueError): pass
 
 class _dirty_args(object):
-	def __init__(self, deps, base, builder_path, built):
+	def __init__(self, deps, base, builder_path, build_dependency):
 		self.deps = deps
 		self.base = base
 		self.builder_path = builder_path
-		self.built = built
+		self.build_dependency = build_dependency
+
+def dirty_check_with_dep(path, check_fn, args):
+	dirty = check_fn()
+	if dirty: return True
+	built = args.build_dependency(path)
+	if built:
+		_log.trace("dirty_check_with_dep: path %s was built, rechecking", path);
+		return check_fn()
+	else:
+		return False
 
 class TargetState(object):
 	_dep_lock = None
@@ -158,7 +168,7 @@ class Dependencies(object):
 				else:
 					self.rules.append(dep)
 	
-	def is_dirty(self, builder, built):
+	def is_dirty(self, builder, build_dependency):
 		assert isinstance(builder, Builder)
 		if not os.path.lexists(self.path):
 			_log.debug("DIRTY: %s (target does not exist)", self.path)
@@ -167,29 +177,18 @@ class Dependencies(object):
 		base = os.path.dirname(self.path)
 		builder_path = os.path.relpath(builder.realpath, base)
 
-		unknown_states = []
-		dirty_args = _dirty_args(deps=self, base=base, builder_path=builder_path, built=built)
+		dirty_args = _dirty_args(deps=self, base=base, builder_path=builder_path, build_dependency=build_dependency)
 		for rule in self.rules:
 			d = rule.is_dirty(dirty_args)
-			if d is True:
+			if d:
 				_log.trace('DIRTY: %s (from rule %r)', self.path, rule)
 				return True
-			elif d is False:
-				continue
-			else:
-				unknown_states.append(d)
-		_log.trace('is_dirty: %s returning %r', self.path, unknown_states or False)
-		return unknown_states or False
+		_log.trace('is_dirty: %s returning %r', self.path, False)
+		return False
 	
 	def already_built(self):
 		return self.runid.is_current()
 
-	def children(self):
-		base = os.path.dirname(self.path)
-		for rule in self.rules:
-			if rule.recursive:
-				yield rule.full_path(base)
-	
 	@classmethod
 	def init_file(cls, f):
 		f.write('version: %s\n' % (cls.FORMAT_VERSION,))
@@ -223,7 +222,7 @@ class Dependency(object):
 		line = self.tag + ' ' + ' '.join(self.fields)
 		assert "\n" not in line
 		file.write(line + "\n")
-
+	
 	def __repr__(self):
 		return '%s(%s)' % (type(self).__name__, ', '.join(map(repr, self.fields)))
 
@@ -289,33 +288,32 @@ class FileDependency(Dependency):
 
 	def is_dirty(self, args):
 		base = args.base
-		built = args.built
-
 		path = self.full_path(base)
 		self._target = path
 
-		if self.checksum is not None:
-			_log.trace("%s: comparing using checksum", self.path)
-			# use checksum only
-			state = TargetState(path)
-			deps = state.deps()
-			checksum = deps and deps.checksum
-			if checksum != self.checksum:
-				_log.debug("DIRTY: %s (stored checksum is %s, current is %s)", self.path, self.checksum, checksum)
-				return True
-			if built:
-				return False
-			# if not built, we don't actually know whether this dep is dirty
-			_log.trace("%s: might be dirty - returning %r", self.path, state)
-			return state
-
-		else:
-			# use mtime only
+		def mtime_dirty():
 			current_mtime = get_mtime(path)
 			if current_mtime != self.mtime:
 				_log.debug("DIRTY: %s (stored mtime is %r, current is %r)" % (self.path, self.mtime, current_mtime))
 				return True
 			return False
+		
+		dirty = dirty_check_with_dep(path, mtime_dirty, args)
+
+		if dirty and self.checksum is not None:
+			def checksum_dirty():
+				_log.trace("%s: comparing using checksum %s", self.path, self.checksum)
+				state = TargetState(path)
+				deps = state.deps()
+				checksum = deps and deps.checksum
+				if checksum != self.checksum:
+					_log.debug("DIRTY: %s (stored checksum is %s, current is %s)", self.path, self.checksum, checksum)
+					return True
+				return False
+
+			return dirty_check_with_dep(path, checksum_dirty, args)
+		else:
+			return dirty
 
 class BuilderDependency(FileDependency):
 	tag = 'builder:'

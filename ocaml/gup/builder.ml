@@ -71,9 +71,9 @@ let rec _is_dirty ?perform_build = (
 							lwt child_dirty = _is_dirty child_state buildscript in
 							if child_dirty then (
 								log#trace "_is_dirty(%s) -> True" path;
-								if not allow_build then
-									return_true
-								else perform_build buildscript
+								if allow_build
+									then perform_build buildscript
+									else return_true
 							) else (
 								log#trace "_is_dirty(%s) -> False" path;
 								return_false

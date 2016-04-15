@@ -81,7 +81,7 @@ class run_id id =
 	end
 
 let current_run_id = new run_id Var.run_id
- 
+
 type 'a intermediate_dependencies = {
 	checksum: string option ref;
 	run_id: run_id option ref;
@@ -165,7 +165,7 @@ and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:st
 			(* checksum-based check *)
 			log#trace "%s: comparing using checksum %s" self#path checksum;
 			let state = new target_state full_path in
-			let checksum_mismatch () = 
+			let checksum_mismatch () =
 				lwt deps = state#deps in
 				let latest_checksum = Option.bind deps (fun deps -> deps#checksum) in
 				let dirty = match latest_checksum with

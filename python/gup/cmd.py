@@ -8,7 +8,7 @@ from .error import *
 from .util import *
 from .state import TargetState, AlwaysRebuild, Checksum, FileDependency, META_DIR
 from .gupfile import Builder
-from .builder import Target
+from .builder import Target, prepare_build
 from .log import PLAIN, getLogger, TRACE_LVL
 from .var import INDENT, set_verbosity, set_keep_failed_outputs, DEFAULT_VERBOSITY, set_trace, PY3, IS_WINDOWS
 from .parallel import setup_jobserver
@@ -101,17 +101,23 @@ def _main(argv):
 			p.add_option('-m', '--metadata', action='store_true', help='Remove .gup metadata directories, but leave targets')
 			action = _clean_targets
 		elif cmd == '--contents':
-			p = optparse.OptionParser('Usage: gup --contents')
+			p = optparse.OptionParser('Usage: gup --contents [file=<stdin>]')
 			action = _mark_contents
 		elif cmd == '--always':
 			p = optparse.OptionParser('Usage: gup --always')
 			action = _mark_always
+		elif cmd == '--leave':
+			p = optparse.OptionParser('Usage: gup --leave')
+			action = _mark_leave
 		elif cmd == '--ifcreate':
 			p = optparse.OptionParser('Usage: gup --ifcreate [file [...]]')
 			action = _mark_ifcreate
 		elif cmd == '--buildable':
-			p = optparse.OptionParser('Usage: gup --buildable')
+			p = optparse.OptionParser('Usage: gup --buildable [file]')
 			action = _test_buildable
+		elif cmd == '--dirty':
+			p = optparse.OptionParser('Usage: gup --dirty [file [...]]')
+			action = _test_dirty
 		elif cmd == '--features':
 			p = optparse.OptionParser('Usage: gup --features')
 			action = _list_features
@@ -120,17 +126,21 @@ def _main(argv):
 		# default parser
 		p = optparse.OptionParser('Usage: gup [action] [OPTIONS] [target [...]]\n\n' +
 			'Actions: (if present, the action must be the first argument)\n'
-			'  --always     Mark this target as always-dirty\n' +
-			'  --ifcreate   Rebuild the current target if the given file(s) are created\n' +
-			'  --contents   Checksum the contents of stdin\n' +
 			'  --clean      Clean any gup-built targets\n' +
+			'  --buildabe   Check if a target is buildable\n' +
+			'  --dirty      Check if one or more targets are out of date\n' +
+			'\n' +
+			'Actions which can only be called from a buildscript:\n' +
+			'  --always     Mark this target as always-dirty\n' +
+			'  --leave      Don\'t remove any existing target file, even if it\'s stale\n' +
+			'  --ifcreate   Rebuild the current target if the given file(s) are created\n' +
+			'  --contents   Checksum the contents of a file\n' +
+			'\n' +
 			'  (use gup <action> --help) for further details')
 
 		p.add_option('-u', '--update', '--ifchange', dest='update', action='store_true', help='Only rebuild stale targets', default=False)
 		p.add_option('-j', '--jobs', type='int', default=None, help="Number of concurrent jobs to run")
 		p.add_option('-x', '--trace', action='store_true', help='Trace build script invocations (also sets $GUP_XTRACE=1)')
-		p.add_option('-q', '--quiet', action='count', default=0, help='Decrease verbosity')
-		p.add_option('-v', '--verbose', action='count', default=DEFAULT_VERBOSITY, help='Increase verbosity')
 		p.add_option('--keep-failed', action='store_true', help='Keep temporary output files on failure')
 		action = _build
 		verbosity = None
@@ -138,13 +148,16 @@ def _main(argv):
 		argv.pop(0)
 		verbosity = 0
 
+	p.add_option('-q', '--quiet', action='count', default=0, help='Decrease verbosity')
+	p.add_option('-v', '--verbose', action='count', default=DEFAULT_VERBOSITY, help='Increase verbosity')
+
 	opts, args = p.parse_args(argv)
 
-	if verbosity is None:
-		verbosity = opts.verbose - opts.quiet
-
+	verbosity = opts.verbose - opts.quiet
 	_init_logging(verbosity)
-	_bin_init()
+
+	if action is _build:
+		_bin_init()
 
 	_log.trace('argv: %r, action=%r', argv, action)
 	args = [arg.rstrip(os.path.sep) for arg in args]
@@ -161,6 +174,21 @@ def _assert_parent_target(action):
 	if p is None:
 		raise SafeError("%s was used outside of a gup target" % (action,))
 	return p
+
+def _mark_leave(opts, targets):
+	assert len(targets) == 0, "no arguments expected"
+	parent_target = _assert_parent_target('--keep')
+	import stat
+	try:
+		st = os.lstat(parent_target)
+	except OSError as e:
+		import errno
+		if e.errno == errno.ENOENT:
+			return
+		raise
+
+	if not stat.S_ISLNK(st.st_mode):
+		os.utime(parent_target, None)
 
 def _mark_always(opts, targets):
 	assert len(targets) == 0, "no arguments expected"
@@ -181,6 +209,14 @@ def _test_buildable(opts, args):
 	target = args[0]
 	if Builder.for_target(target) is None:
 		sys.exit(1)
+
+def _test_dirty(opts, args):
+	assert len(args) > 0, "at least one argument expected"
+	for target in args:
+		target = prepare_build(target)
+		if target is None or target.is_dirty():
+			sys.exit(0)
+	sys.exit(1)
 
 def _list_features(opts, args):
 	assert len(args) == 0, "no arguments expected"

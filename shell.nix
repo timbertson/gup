@@ -14,10 +14,10 @@ let
 	extraDeps = (lib.optional (useProgressive) pythonPackages.nose_progressive);
 in
 {
-	inherit (pythonImpl) SKIP_PYCHECKER;
 	NOSE_CMD = "${pythonPackages.nose}/bin/nosetests${
 		if useProgressive then " --with-progressive" else ""
 	}";
+	SKIP_PYCHECKER = false; # hacky
 	nativeBuildInputs = super.nativeBuildInputs ++ pythonImpl.nativeBuildInputs ++ extraDeps;
 	buildInputs = super.buildInputs ++ pythonImpl.buildInputs ++ extraDeps;
 })

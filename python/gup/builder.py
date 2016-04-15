@@ -26,7 +26,7 @@ def prepare_build(p):
 		return Target(builder)
 	return None
 
-def _is_dirty(state):
+def _is_dirty(state, allow_build):
 	'''
 	Returns whether the dependency is dirty.
 	Builds any targets required to check dirtiness
@@ -46,33 +46,36 @@ def _is_dirty(state):
 		_log.trace("CLEAN: %s has already been built in this invocation", state.path)
 		return False
 
-	dirty = deps.is_dirty(builder, built = False)
+	built_children = set()
+	def build_child_if_dirty(path):
+		if path in built_children:
+			return False
+		else:
+			built_children.add(path)
+			_log.trace("Recursing over dependency: %s -> %s", state.path, path)
+			child = prepare_build(path)
+			if child is not None:
+				child_dirty = _is_dirty(child.state, allow_build)
+				if child_dirty:
+					_log.trace("_is_dirty(%s) -> True", path)
+					if allow_build:
+						child.build(update=False)
+					return True
+			_log.trace("_is_dirty(%s) -> False", path)
+			return False
+
+	if not allow_build:
+		child_dirty = []
+		def wrapped_build(path):
+			built = build_child_if_dirty(path)
+			if built:
+				child_dirty.append(True)
+			return False
+		dirty = deps.is_dirty(builder, wrapped_build)
+		dirty = dirty or bool(child_dirty)
+	else:
+		dirty = deps.is_dirty(builder, build_child_if_dirty)
 	_log.trace("deps.is_dirty(%r) -> %r", state.path, dirty)
-
-	if dirty is True:
-		return True
-
-	if isinstance(dirty, list):
-		for target in dirty:
-			_log.trace("MAYBE_DIRTY: %s (unknown state - building it to find out)", target.path)
-			target = prepare_build(target.path)
-			if target is None:
-				_log.trace("%s turned out not to be a target - skipping", target)
-				continue
-			target.build(update=True)
-
-		dirty = deps.is_dirty(builder, built = True)
-		assert dirty in (True, False)
-		_log.trace("after rebuilding unknown targets, deps.is_dirty(%r) -> %r", state.path, dirty)
-
-	if dirty is False:
-		# not directly dirty - recurse children
-		for path in deps.children():
-			_log.trace("Recursing over dependency: %s", path)
-			child = TargetState(path)
-			if _is_dirty(child):
-				_log.trace("_is_dirty(%r) -> True", child.path)
-				return True
 	return dirty
 
 class Target(object):
@@ -87,6 +90,9 @@ class Target(object):
 	def build(self, update):
 		return self.state.perform_build(self.builder, lambda deps: self._perform_build(update, deps))
 
+	def is_dirty(self):
+		return _is_dirty(self.state, False)
+
 	def _perform_build(self, update, deps):
 		'''
 		Assumes locks are held (by state.perform_build)
@@ -94,7 +100,7 @@ class Target(object):
 		assert self.builder is not None
 		assert os.path.exists(self.builder.path)
 		if update:
-			if not _is_dirty(self.state):
+			if not _is_dirty(self.state, True):
 				_log.trace("no build needed")
 				return False
 		exe_path = path.abspath(self.builder.path)
