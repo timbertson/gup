@@ -1,3 +1,5 @@
+<img src="http://gfxmonk.net/dist/status/project/gup.png">
+
 # What is gup?
 
 Gup is a general purpose, recursive, top down software build system. It
