@@ -29,19 +29,6 @@ intimate knowledge of build internals to maintain correct dependencies.
 
 # How do I install it?
 
-### ZeroInstall
-
-For [ZeroInstall][] users, you can just run it:
-
-    $ 0install run http://gfxmonk.net/dist/0install/gup.xml
-
-That's handy for use in build scripts (as there's no setup step),
-but for interactive use you're not going to type that each time.
-To make a local alias so you can just run it as `gup`,
-you should run (once):
-
-    $ 0install add gup http://gfxmonk.net/dist/0install/gup.xml
-
 ### Nix
 
 `gup` is packaged in [nixpkgs][Nix], so you can do `nix-env -iA nixpkgs.gup`
@@ -54,14 +41,11 @@ For repositories where you don't want to make everyone set
 up `gup` as above, you can just commit the `gup` python script
 to your project's repository:
 
- - From a git checkout:
-
-        make python
-        cp python/bin/* [your-project-workspace]/tools
-
- - From a [released tarball (download links are down the bottom)](http://gfxmonk.net/dist/0install/gup.xml):
+ - From a git checkout or released tarball:
 
         cp python/bin/* [your-project-workspace]/tools
+
+(If python/bin doesn't exist, you may need to `make python` first).
 
 Then, you can run it as `./tools/gup`.
 
@@ -604,11 +588,9 @@ two versions.
 
 ### Building
 
-If you have [0install][ZeroInstall], you can use `./make`.
-
 If you have [nix][Nix], you can just run `nix-shell` and then use `make`.
 
-If you have neither of the above, you'll need to get dependencies manually:
+Otherwise, you'll need to get dependencies manually:
 
 For `python/`:
 
@@ -620,8 +602,7 @@ For `python/`:
    from a release tarball.
 
 For `ocaml/`, the best bet is to look at the before_install script in `.travis.yml`
-and follow those instructions. I plan on formalizing this in the future, and
-hopefully removing the requirement for a custom fork of `lwt`.
+and follow those instructions.
 
 ### Building
 

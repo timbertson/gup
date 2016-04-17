@@ -32,7 +32,7 @@ bin/gup: $(SOURCES)
 	${PYTHON} ./build/combine_modules.py gup tmp/gup.py
 	cp tmp/gup.py bin/gup
 
-GMCS=$(shell which _gmcs 2>/dev/null)
+GMCS=$(shell which gmcs 2>/dev/null)
 bin/gup.exe: gup.cs
 	[ -z "$(GMCS)" ] || "$(GMCS)" gup.cs -out:bin/gup.exe
 
