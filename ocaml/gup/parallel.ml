@@ -344,8 +344,7 @@ exception Not_locked
 
 
 (* a reentrant lock file *)
-class lock_file path =
-	let lock_path = path ^ ".lock" in
+class lock_file ~target lock_path =
 	let current_lock = ref None in
 
 	let do_lockf path fd flag =
@@ -380,13 +379,13 @@ object (self)
 			(* acquire initial lock *)
 			| None -> with_lock mode lock_path (fun () ->
 					current_lock := Some mode;
-					let rv = f path in
+					let rv = f target in
 					current_lock := None;
 					rv
 				)
 
 			(* already locked, perform action immediately *)
-			| Some WriteLock -> f path
+			| Some WriteLock -> f target
 
 			(* other transitions not yet needed *)
 			| _ -> assert false

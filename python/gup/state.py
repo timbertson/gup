@@ -44,12 +44,17 @@ class TargetState(object):
 		'''
 		Returns the target names which have metadata stored in `dir`
 		'''
-		return [f[:-5] for f in os.listdir(dir) if f.endswith('.deps')]
+		for f in os.listdir(dir):
+			_log.trace("checking file %s", f);
+			if f.startswith('deps.'):
+				target_name = f[5:]
+				_log.trace(".deps file: %s", target_name);
+				yield target_name
 
 	def meta_path(self, ext):
 		base, target = os.path.split(self.path)
 		meta_dir = os.path.join(base, META_DIR)
-		return os.path.join(meta_dir, "%s.%s" % (target, ext))
+		return os.path.join(meta_dir, "%s.%s" % (ext, target))
 
 	def _ensure_meta_path(self, ext):
 		p = self.meta_path(ext)
@@ -58,7 +63,7 @@ class TargetState(object):
 	
 	def _ensure_dep_lock(self):
 		if not self._dep_lock:
-			self._dep_lock = Lock(self._ensure_meta_path('deps.lock'))
+			self._dep_lock = Lock(self._ensure_meta_path('deps-lock'))
 		return self._dep_lock
 
 	def deps(self):
@@ -89,7 +94,7 @@ class TargetState(object):
 			self.lockfile = Lock(self.meta_path('lock'))
 
 	def add_dependency(self, dep):
-		lock = Lock(self.meta_path('deps2.lock'))
+		lock = Lock(self.meta_path('deps2-lock'))
 		_log.debug('add dep: %s -> %s' % (self.path, dep))
 		with lock.write():
 			with open(self.meta_path('deps2'), 'a') as f:

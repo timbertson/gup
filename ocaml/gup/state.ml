@@ -65,8 +65,8 @@ let int_option_of_string s = try Some (Int.of_string s) with Invalid_argument _ 
 let built_targets dir =
 	let contents = Sys.readdir dir in
 	contents |> Array.filter_map (fun f ->
-		if String.ends_with f ("." ^ deps_ext)
-			then Some (Tuple.Tuple2.first (String.rsplit f "."))
+		if String.starts_with f (deps_ext ^ ".")
+			then Some (Tuple.Tuple2.second (String.split f "."))
 			else None
 	) |> Array.to_list
 
@@ -377,7 +377,7 @@ and target_state (target_path:string) =
 	let meta_path ext =
 		let target = Filename.basename target_path in
 		let meta_dir = Filename.concat base_path meta_dir_name in
-		Filename.concat meta_dir (target ^ "." ^ ext)
+		Filename.concat meta_dir (ext ^ "." ^ target)
 	in
 
 	let ensure_meta_path ext =
@@ -386,7 +386,10 @@ and target_state (target_path:string) =
 		p
 	in
 
-	let lock_for_ext ext = new Parallel.lock_file (ensure_meta_path ext) in
+	let lock_for_ext ext = new Parallel.lock_file
+		~target:(ensure_meta_path ext)
+		(meta_path (ext ^ "-lock"))
+	in
 	let deps_lock = lazy (lock_for_ext deps_ext) in
 	let new_deps_lock = lazy (lock_for_ext new_deps_ext) in
 

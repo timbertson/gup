@@ -381,7 +381,7 @@ class TestChecksums(TestCase):
 		self.assertRebuilds('parent', lambda: self.write('input', 'ok2'))
 
 	def test_parent_of_checksum_does_not_need_rebuilding_if_checksum_state_is_missing(self):
-		change = lambda: os.remove(self.path('.gup/cs.deps'))
+		change = lambda: os.remove(self.path('.gup/deps.cs'))
 		self.assertRebuilds('cs', change)
 		self.assertNotRebuilds('parent', change)
 
@@ -409,7 +409,7 @@ class TestChecksums(TestCase):
 			self.assertEquals(cs1, cs2)
 
 		def get_checksum(target):
-			lines = self.read('.gup/%s.deps' % target).splitlines()
+			lines = self.read('.gup/deps.%s' % target).splitlines()
 			for line in lines:
 				if line.startswith('checksum: '):
 					return line.split(' ', 1)[1]
@@ -458,7 +458,7 @@ class TestChecksums(TestCase):
 
 class TestVersion(TestCase):
 	def write_deps(self, lines):
-		self.write('.gup/target.deps', '\n'.join(lines))
+		self.write('.gup/deps.target', '\n'.join(lines))
 
 	def write_old_deps(self):
 		self.write_deps(['version: 0', 'some_old_key: xyz'])

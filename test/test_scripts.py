@@ -1,7 +1,7 @@
 from .util import *
 def _tmp_output_files(self):
 	meta_files = os.listdir(self.path('.gup'))
-	meta_files = filter(lambda f: not (f.endswith('.lock') or f.endswith('.deps')), meta_files)
+	meta_files = filter(lambda f: not (f.startswith('lock') or f.startswith('deps')), meta_files)
 	return list(meta_files)
 
 class TestInterpreter(TestCase):

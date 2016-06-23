@@ -34,10 +34,10 @@ class TestFeatures(TestCase):
 		# firstly, check that only extant files are reported
 		self.assertEqual(error_lines, [
 			'Target `bad_a` failed with exit status 1',
-			'Target `bad_b` failed with exit status 2 (keeping %s for inspection)' % os.path.join('.gup', 'bad_b.out'),
-			'Target `bad_c` failed with exit status 2 (keeping %s for inspection)' % os.path.join('.gup', 'bad_c.out'),
+			'Target `bad_b` failed with exit status 2 (keeping %s for inspection)' % os.path.join('.gup', 'out.bad_b'),
+			'Target `bad_c` failed with exit status 2 (keeping %s for inspection)' % os.path.join('.gup', 'out.bad_c'),
 		])
 
 		# then check their contents
-		self.assertEqual(self.read('.gup/bad_b.out'), 'bad_b')
-		self.assertEqual(self.read('.gup/bad_c.out'), 'bad_c')
+		self.assertEqual(self.read('.gup/out.bad_b'), 'bad_b')
+		self.assertEqual(self.read('.gup/out.bad_c'), 'bad_c')

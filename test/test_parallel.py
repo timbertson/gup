@@ -112,7 +112,7 @@ if not IS_WINDOWS:
 		def test_contention_on_built_target(self):
 			# regression: releasing a flock() on a file releases
 			# _all_ locks, so this fails if we don't handle reentrant
-			# locking of .deps files ourselves
+			# locking of deps files ourselves
 			self.build('-u', 'counter')
 			self.build('-j10', 'step1', 'step2')
 
@@ -158,14 +158,17 @@ if not IS_WINDOWS:
 				import os,sys,fcntl,errno
 				dest = sys.argv[1]
 				print(dest)
-				dest_base = os.path.splitext(dest)[0]
-				deps_file = dest_base + '.deps'
-				deps_lock = deps_file + 'deps.lock'
-				newdeps_file = dest_base + '.deps2'
-				newdeps_file_lock = newdeps_file + '.lock'
+				dest_dir = os.path.dirname(dest)
+				dest_fname = os.path.basename(dest).split('.', 1)[1]
+				def dest_of(type):
+					return os.path.join(dest_dir, type + '.' + dest_fname)
+				deps_file = dest_of('deps')
+				deps_lock = dest_of('deps-lock')
+				newdeps_file = dest_of('deps2')
+				newdeps_file_lock = dest_of('lock-deps2')
 
 				print(repr(os.listdir(os.path.dirname(dest))))
-				for lockfile in [dest_base + '.deps.lock']:
+				for lockfile in [deps_lock]:
 					assert os.path.exists(lockfile), "%s does not exist" % lockfile
 					with open(lockfile) as f:
 						fcntl.flock

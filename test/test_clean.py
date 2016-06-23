@@ -20,7 +20,7 @@ class TestClean(TestCase):
 			'nested/dir/target',
 		)
 		os.remove(self.path('source-that-was-target.gup'))
-		os.remove(self.path('.gup/target-without-metadata.deps'))
+		os.remove(self.path('.gup/deps.target-without-metadata'))
 
 		self.initial_files = self.list_root()
 		assert '.gup' in self.initial_files
