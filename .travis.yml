@@ -39,7 +39,7 @@ before_install:
         sudo apt-get install -qq pychecker mono-gmcs
       fi
 
-      sudo apt-get install -qq zeroinstall-injector python3 python3-gi
+      sudo apt-get install -qq zeroinstall-injector python3 python3-gi python-whichcraft python3-whichcraft
       # not required, just useful for colour-coding of test results
       0install run \
         http://gfxmonk.net/dist/0install/zeroinstall-plugin-manager.xml \
