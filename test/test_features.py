@@ -14,8 +14,8 @@ class TestFeatures(TestCase):
 	def test_ocaml_version_has_list_targets(self):
 		exe = GUP_EXES[0]
 		if not os.path.isabs(exe):
-			from whichcraft import which
-			exe = which(exe)
+			import subprocess
+			exe = subprocess.check_output(['which',exe]).decode('utf-8')
 		is_ocaml = os.path.join("ocaml", "bin") in exe
 		if not is_ocaml:
 			assert os.path.join("python", "bin") in exe or os.path.join("test","bin") in exe, ("unknown exe: %s" % exe)
