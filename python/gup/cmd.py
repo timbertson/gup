@@ -127,12 +127,12 @@ def _main(argv):
 		p = optparse.OptionParser('Usage: gup [action] [OPTIONS] [target [...]]\n\n' +
 			'Actions: (if present, the action must be the first argument)\n'
 			'  --clean      Clean any gup-built targets\n' +
-			'  --buildabe   Check if a target is buildable\n' +
+			'  --buildable  Check if a target is buildable\n' +
 			'  --dirty      Check if one or more targets are out of date\n' +
 			'\n' +
 			'Actions which can only be called from a buildscript:\n' +
 			'  --always     Mark this target as always-dirty\n' +
-			'  --leave      Don\'t remove any existing target file, even if it\'s stale\n' +
+			'  --leave      Mark this target as fresh, preventing removal (even if the file is unchanged)\n' +
 			'  --ifcreate   Rebuild the current target if the given file(s) are created\n' +
 			'  --contents   Checksum the contents of a file\n' +
 			'\n' +

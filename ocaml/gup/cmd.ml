@@ -368,7 +368,7 @@ struct
 				"\n" ^
 				"Actions which can only be called from a buildscript:\n" ^
 				"  --always       Mark this target as always-dirty\n" ^
-				"  --leave        Don\'t remove any existing target file, even if it\'s stale\n" ^
+				"  --leave        Mark this target as fresh, preventing removal (even if the file is unchanged)\n" ^
 				"  --ifcreate     Rebuild the current target if the given file(s) are created\n" ^
 				"  --contents     Checksum the contents of stdin\n" ^
 				"\n" ^
