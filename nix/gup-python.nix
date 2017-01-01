@@ -1,18 +1,34 @@
-{ stdenv, lib, python, nose, mocktest, pychecker ? null }:
-{ src, version, meta ? {} }:
+# NOTE: the `nixpkgs` version of this file is copied from the upstream repository
+# for this package. Please make any changes to https://github.com/timbertson/gup/
+
+{ stdenv, lib, pythonPackages }:
+{ src, version, meta ? {}, passthru ? {}, forceTests ? false }:
 let
-  usePychecker = pychecker != null;
+  testInputs = [
+    pythonPackages.mocktest or null
+    pythonPackages.nose or null
+  ];
+  pychecker = pythonPackages.pychecker or null;
+  usePychecker = forceTests || pychecker != null;
+  enableTests = forceTests || (lib.all (dep: dep != null) testInputs);
+  basePackage = {
+    inherit src meta passthru;
+    name = "gup-${version}";
+    buildInputs = [ pythonPackages.python ]
+      ++ (lib.optionals enableTests testInputs)
+      ++ (lib.optional usePychecker pychecker)
+    ;
+    SKIP_PYCHECKER = !usePychecker;
+    buildPhase = "make python";
+    installPhase = ''
+      mkdir $out
+      cp -r python/bin $out/bin
+    '';
+  };
 in
-stdenv.mkDerivation {
-  inherit src meta;
-  name = "gup-${version}";
-  buildInputs = [ python mocktest nose ] ++ (lib.optional usePychecker pychecker);
-  SKIP_PYCHECKER = !usePychecker;
-  NOSE_CMD = "${nose}/bin/nosetests";
-  buildPhase = "make python";
-  testPhase = "make test";
-  installPhase = ''
-    mkdir $out
-    cp -r python/bin $out/bin
-  '';
-}
+stdenv.mkDerivation (
+  basePackage // (if enableTests then {
+    NOSE_CMD = "${pythonPackages.nose}/bin/nosetests";
+    testPhase = "make test";
+  } else {})
+)
