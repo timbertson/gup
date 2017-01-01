@@ -34,11 +34,12 @@ try:
 		if os.environ.get('CI', 'false') == 'true':
 			args = args + ['-v']
 		args = ['--with-doctest', '-w', test_dir] + args
-		args = filter(None, os.environ.get('NOSE_ARGS', '').split()) + args
+		args = list(filter(None, os.environ.get('NOSE_ARGS', '').split())) + args
 
-		nose_cmd = 'NOSE_CMD'
-		nose_exe = os.environ.get(nose_cmd, 'nosetests')
-		subprocess.check_call([nose_exe] + args)
+		nose_exe = os.environ.get('NOSE_CMD', 'nosetests')
+		cmd = [nose_exe] + args
+		print('running: %r' % cmd)
+		subprocess.check_call(cmd)
 
 	subprocess.check_call(['make', '%s-test-pre' % action_name])
 

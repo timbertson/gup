@@ -1,5 +1,4 @@
-{ callPackage, stdenv, lib, fetchurl, python,
-  which, zlib, ncurses }:
+{ callPackage, stdenv, lib, fetchurl, pythonPackages, zlib, ncurses }:
 { src, version, meta ? {}, forceTests ? false }:
 let
   opam2nix = callPackage ./opam2nix-packages.nix {};
@@ -32,7 +31,11 @@ in
 stdenv.mkDerivation {
   name = "gup-${version}";
   inherit src meta;
-  buildInputs = [ python which zlib ] ++ opam_deps;
+  buildInputs =
+    (with pythonPackages; [ python whichcraft nose nose_progressive mocktest])
+    ++ [ zlib ]
+    ++ opam_deps
+  ;
   shellHook = add_ldpath;
   buildPhase = "make -C ocaml native";
   passthru = {

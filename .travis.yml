@@ -1,51 +1,13 @@
-language: c
+language: nix
 env:
-  global:
-    - ocaml_ppa=avsm/ppa
   matrix:
-    - subdir=python task=test-py2
-    - subdir=python task=test-py3
-    - subdir=ocaml task=test
-    - subdir=ocaml task=opam-test
-    - task=permutation-test
+    - target=ci-python2
+    - target=ci-python3
+    - target=ci-ocaml
+    - target=ci-opam
+    - target=ci-permutation
 notifications:
   email: false
-
-before_install:
- - |
-      set -eux
-      export subdir=${subdir:-.}
-      if [ $subdir != python ]; then
-        # ./ocaml or ./
-        echo "yes" | sudo add-apt-repository "ppa:$ocaml_ppa"
-        sudo apt-get update -qq
-        export OPAMYES=yes # no questions
-        sudo apt-get install -qq opam
-
-        opam init --no-setup
-        opam update
-        opam switch 4.02.1
-        eval "$(opam config env)"
-
-        opam pin add --kind git --no-action "$(pwd)"
-        opam install ounit
-        opam install --deps-only gup
-      else
-        sudo apt-get update -qq
-      fi
-
-      if [ $subdir != ocaml ]; then
-        # ./python or ./
-        sudo apt-get install -qq pychecker mono-gmcs
-      fi
-
-      sudo apt-get install -qq zeroinstall-injector python3 python3-gi
-      # not required, just useful for colour-coding of test results
-      0install run \
-        http://gfxmonk.net/dist/0install/zeroinstall-plugin-manager.xml \
-        http://gfxmonk.net/dist/0install/nosetests-runner.xml \
-        --plugin-add http://gfxmonk.net/dist/0install/rednose.xml
-      set +eux
-
-script: "cd $subdir && make $task"
-
+script:
+  - git archive HEAD --format=tar.gz --prefix=git-export > nix/local.tgz
+  - make "$target"

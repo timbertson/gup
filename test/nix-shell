@@ -1,0 +1,37 @@
+#!/usr/bin/env python
+from __future__ import print_function
+import subprocess, os, sys
+cmd = ['nix-shell', '--pure', '--show-trace']
+args = sys.argv[1:]
+init_args = args[:args.index('--run')+1] + ['true']
+
+def fold(name, fn):
+	print('travis_fold:start:' + name)
+	try:
+		return fn()
+	finally:
+		print('travis_fold:end:' + name)
+
+lines = []
+proc = subprocess.Popen(cmd + init_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+def buffer_nix_lines():
+	print("Building nix-shell dependencies...")
+	limit = 400
+	total = 0
+	indicator = 100
+	for line in proc.stdout:
+		total += 1
+		lines.append(line.decode('utf-8'))
+		if total%indicator == 0:
+			print(" ... buffered %s lines" % total)
+		while len(lines) > limit:
+			lines.pop(0)
+fold('Building nix dependencies', buffer_nix_lines)
+
+status = proc.wait()
+if status != 0:
+	for line in lines:
+		print(line, end='')
+	sys.exit(status)
+
+os.execvp('nix-shell', cmd + args)

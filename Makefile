@@ -1,4 +1,3 @@
-ZEROLOCAL=0install run --not-before=0.2.4 http://gfxmonk.net/dist/0install/0local.xml
 PYTHON=python
 
 all: python ocaml
@@ -12,13 +11,6 @@ ocaml/%: phony
 
 python/%: phony
 	make -C python "$$(basename "$@")" "PYTHON=${PYTHON}"
-
-local: gup-test-local.xml gup-local.xml
-gup-test-local.xml: gup-test.xml.template
-	${ZEROLOCAL} gup-test.xml.template
-
-gup-local.xml: gup.xml.template
-	${ZEROLOCAL} gup.xml.template
 
 test: phony
 	$(MAKE) unit-test
@@ -38,18 +30,28 @@ integration-test: phony
 	$(MAKE) python/integration-test
 	$(MAKE) permutation-test
 
-# Minimal test action: runs full tests, with minimal dependencies.
-# This is the only test target that is likely to work on windows
-test-min:
-	env TEST_COMMAND=test-min make test
-
 # Used for development only
 update-windows: phony
 	git fetch
 	git checkout origin/windows
 
-0compile: gup-local.xml phony
-	if [ ! -e 0compile ]; then 0compile setup gup-local.xml 0compile; fi
-	cd 0compile && 0compile build --clean
+# CI targets: invoked from the top-level, will run tests inside nix
+ci-python2: phony
+	./test/nix-shell -A python2 --run "make -C python test"
+
+ci-python3: phony
+	./test/nix-shell -A python3 --run "make -C python test"
+
+ci-ocaml: phony
+	./test/nix-shell -A ocaml --run "make -C ocaml test"
+
+ci-opam: phony
+	./test/nix-shell -A opam --run "make -C ocaml opam-test"
+
+ci-permutation: phony
+	./test/nix-shell \
+		--run "make permutation-test"
+
+ci-all: phony ci-python2 ci-python3 ci-ocaml ci-opam ci-permutation
 
 .PHONY: phony
