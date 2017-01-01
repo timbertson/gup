@@ -34,24 +34,12 @@ try:
 		if os.environ.get('CI', 'false') == 'true':
 			args = args + ['-v']
 		args = ['--with-doctest', '-w', test_dir] + args
+		args = list(filter(None, os.environ.get('NOSE_ARGS', '').split())) + args
 
-		nose_cmd = 'NOSE_CMD'
-		nose_exe = os.environ.get(nose_cmd, None)
-		if nose_exe is None:
-			with open(os.devnull, 'w') as null:
-				if subprocess.Popen(
-					['which', '0install'], stdout=null, stderr=subprocess.STDOUT
-				).wait() == 0:
-					print("Note: running with 0install.", file=sys.stderr)
-					subprocess.check_call(['make', '-C', root, 'gup-test-local.xml'])
-					subprocess.check_call([
-						'0install', 'run', '--command=' + os.environ.get('TEST_COMMAND', 'test'),
-						os.path.join(root, 'gup-test-local.xml')] + args)
-				else:
-					nose_exe = 'nosetests'
-
-		if nose_exe is not None:
-			subprocess.check_call(nose_exe.split() + args)
+		nose_exe = os.environ.get('NOSE_CMD', 'nosetests')
+		cmd = [nose_exe] + args
+		print('running: %r' % cmd)
+		subprocess.check_call(cmd)
 
 	subprocess.check_call(['make', '%s-test-pre' % action_name])
 

@@ -1,23 +1,22 @@
 { pkgs ? import <nixpkgs> {} }:
 with pkgs;
 let
-	pythonPackages = if builtins.getEnv("GUP_PYTHON_VERSION") == "3"
-		then pkgs.python3Packages
-		else pkgs.python2Packages;
-	useProgressive = !pythonPackages.isPy3k;
-	pythonImpl = import ./default.nix { ocamlVersion = false; inherit pythonPackages; };
-	ocamlImpl = import ./default.nix { ocamlVersion = true; inherit pythonPackages; };
-	
+	withExtraDeps = base: extraDeps: lib.overrideDerivation base (base: {
+		nativeBuildInputs = base.nativeBuildInputs ++ extraDeps;
+		buildInputs = base.buildInputs ++ extraDeps;
+	});
+	python2Impl = import ./default.nix { ocamlVersion = false; pythonVersion = 2; };
+	python3Impl = import ./default.nix { ocamlVersion = false; pythonVersion = 3; };
+	ocamlImpl = import ./default.nix { ocamlVersion = true; };
+	combinedImpl = withExtraDeps ocamlImpl (python3Impl.nativeBuildInputs);
 in
-lib.overrideDerivation (ocamlImpl) (super:
-let
-	extraDeps = (lib.optional (useProgressive) pythonPackages.nose_progressive);
-in
-{
-	NOSE_CMD = "${pythonPackages.nose}/bin/nosetests${
-		if useProgressive then " --with-progressive" else ""
-	}";
-	SKIP_PYCHECKER = false; # hacky
-	nativeBuildInputs = super.nativeBuildInputs ++ pythonImpl.nativeBuildInputs ++ extraDeps;
-	buildInputs = super.buildInputs ++ pythonImpl.buildInputs ++ extraDeps;
+# default action gets the combined impl, but specific attrs can be selected for CI
+(lib.addPassthru combinedImpl {
+	python2 = python2Impl;
+	python3 = python3Impl;
+	ocaml = ocamlImpl;
+	opam = stdenv.mkDerivation {
+		name = "opam-test";
+		buildInputs = [opam which git curl unzip ocaml rsync pkgconfig gnum4 gcc ncurses];
+	};
 })
