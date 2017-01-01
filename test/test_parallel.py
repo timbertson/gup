@@ -124,6 +124,8 @@ if not IS_WINDOWS:
 			def build():
 				proc = subprocess.Popen(['make', '-j6', 'a', 'b'], cwd=self.ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 				out, _ = proc.communicate()
+				for line in out.decode('ascii').splitlines():
+					logging.debug(line)
 				self.assertEqual(proc.returncode, 0, out)
 
 				self.assertEquals(self.read('counter'), '2')
@@ -132,7 +134,7 @@ if not IS_WINDOWS:
 
 			env = load_env(self.path('step1.env'))
 			self.assertEqual(env.get(GUP_JOBSERVER), None)
-			self.assertTrue('--jobserver-fds=' in env[MAKEFLAGS], env[MAKEFLAGS])
+			self.assertTrue('--jobserver-' in env[MAKEFLAGS], env[MAKEFLAGS])
 
 		def test_nested_tasks_are_executed_in_parallel(self):
 			steps = ['step1', 'step2', 'step3', 'step4', 'step5', 'step6']

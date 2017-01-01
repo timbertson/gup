@@ -201,12 +201,12 @@ module Jobserver = struct
 	let not_required = "0"
 
 	let _extract_fds makeflags =
-		let flags_re = Str.regexp "--jobserver-fds=\\([0-9]+\\),\\([0-9]+\\)" in
+		let flags_re = Str.regexp "--jobserver-\\(auth\\|fds\\)=\\([0-9]+\\),\\([0-9]+\\)" in
 		try
 			ignore @@ Str.search_forward flags_re makeflags 0;
 			Some (
-				Int.of_string (Str.matched_group 1 makeflags),
-				Int.of_string (Str.matched_group 2 makeflags)
+				Int.of_string (Str.matched_group 2 makeflags),
+				Int.of_string (Str.matched_group 3 makeflags)
 			)
 		with Not_found -> None
 

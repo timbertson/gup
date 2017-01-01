@@ -262,33 +262,33 @@ def _discover_jobserver():
 		return SerialJobserver(None) if gup_server == '0' else NamedPipeJobserver(gup_server, None)
 	# use a make jobserver, if present
 	flags = ' ' + os.getenv('MAKEFLAGS', '') + ' '
-	FIND = ' --jobserver-fds='
-	ofs = flags.find(FIND)
-	if ofs >= 0:
-		s = flags[ofs+len(FIND):]
-		(arg,junk) = s.split(' ', 1)
-		(a,b) = arg.split(',', 1)
-		try:
-			a = atoi(a)
-			b = atoi(b)
-		except ValueError:
-			_log.warn('invalid --jobserver-fds: %r' % arg)
-			return None
-
-		if a <= 0 or b <= 0:
-			_log.warn('invalid --jobserver-fds: %r' % arg)
-			return None
-		try:
-			fcntl.fcntl(a, fcntl.F_GETFL)
-			fcntl.fcntl(b, fcntl.F_GETFL)
-		except IOError as e:
-			if e.errno == errno.EBADF:
-				_log.debug("--jobserver-fds error (flags=%r, a=%r, b=%r)", flags, a, b, exc_info=True)
-				_log.warn('broken --jobserver-fds from make; prefix your Makefile rule with a "+"')
+	for FIND in (' --jobserver-fds=', ' --jobserver-auth='):
+		ofs = flags.find(FIND)
+		if ofs >= 0:
+			s = flags[ofs+len(FIND):]
+			(arg,junk) = s.split(' ', 1)
+			(a,b) = arg.split(',', 1)
+			try:
+				a = atoi(a)
+				b = atoi(b)
+			except ValueError:
+				_log.warn('invalid --jobserver-fds: %r' % arg)
 				return None
-			else:
-				raise
-		return FDJobserver((a,b), None)
+
+			if a <= 0 or b <= 0:
+				_log.warn('invalid --jobserver-fds: %r' % arg)
+				return None
+			try:
+				fcntl.fcntl(a, fcntl.F_GETFL)
+				fcntl.fcntl(b, fcntl.F_GETFL)
+			except IOError as e:
+				if e.errno == errno.EBADF:
+					_log.debug("--jobserver-fds error (flags=%r, a=%r, b=%r)", flags, a, b, exc_info=True)
+					_log.warn('broken --jobserver-fds from make; prefix your Makefile rule with a "+"')
+					return None
+				else:
+					raise
+			return FDJobserver((a,b), None)
 
 def _create_named_pipe():
 	path = os.path.join(tempfile.gettempdir(), 'gup-job-%d' % (os.getpid()))
