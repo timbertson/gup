@@ -76,3 +76,11 @@ let lisdir path =
 	try (Unix.lstat path).Unix.st_kind = Unix.S_DIR
 	with Unix.Unix_error (Unix.ENOENT, _, _) -> false
 
+let which exe =
+	try Some (
+		String.nsplit (Unix.getenv "PATH") ":"
+			|> List.enum
+			|> Enum.filter ((<>) "")
+			|> Enum.map (fun p -> Filename.concat p exe)
+			|> Enum.find Sys.file_exists
+	) with Not_found -> None

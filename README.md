@@ -220,10 +220,12 @@ Gupfile has the syntax:
       TARGET3
 
 That is, a non-indented line names a build script - any file path (relative to
-the directory containing this Gupfile). Each following indented line is a
-target pattern, which may include the `*` wildcard to match anything except a
-"/", and `**` to match anything including "/". A target pattern beginning with
-`!` inverts the match.
+the directory containing this Gupfile). A BUILDSCRIPT prefixed with `!`
+will search for the named executable on $PATH, rather than in the current directory.
+
+Each following indented line is a target pattern, which may include the `*`
+wildcard to match anything except a "/", and `**` to match anything including
+"/". A target pattern beginning with `!` inverts the match.
 
 The search for Gupfiles follows a similar pattern as the search for direct
 build scripts, but if it fails to find a match for "foo", it'll start to look

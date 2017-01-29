@@ -4,6 +4,7 @@ from os import path
 import re
 import itertools
 
+from .whichcraft import which
 from .log import getLogger
 from .error import SafeError
 from .var import INDENT, PY3
@@ -107,18 +108,26 @@ class BuildCandidate(object):
 
 		for script, ruleset in rules:
 			if ruleset.match(match_target):
-				script_path = os.path.join(os.path.dirname(path), script)
-				if not os.path.exists(script_path):
-					raise SafeError("Build script not found: %s\n     %s(specified in %s)" % (script_path, INDENT, path))
+				base = target_base
 
-				script = os.path.normpath(script)
-				# if `Gupfile` lives inside a gup/ dir but `script` does not,
-				# we need to drop one `..` component to account for that
-				if self.suffix is not None:
-					if _goes_above(_suffix_length(self.suffix), script):
-						script = script.split(os.path.sep, 1)[1]
+				if script.startswith('!'):
+					script = script[1:]
+					script_path = which(script)
+					if script_path is None:
+						raise SafeError("Build command not found on PATH: %s\n     %s(specified in %s)" % (script, INDENT, path))
+				else:
+					script_path = os.path.join(os.path.dirname(path), script)
+					if not os.path.exists(script_path):
+						raise SafeError("Build script not found: %s\n     %s(specified in %s)" % (script_path, INDENT, path))
 
-				base = os.path.join(target_base, os.path.dirname(script))
+					script = os.path.normpath(script)
+					# if `Gupfile` lives inside a gup/ dir but `script` does not,
+					# we need to drop one `..` component to account for that
+					if self.suffix is not None:
+						if _goes_above(_suffix_length(self.suffix), script):
+							script = script.split(os.path.sep, 1)[1]
+					base = os.path.join(target_base, os.path.dirname(script))
+
 				return Builder(
 					script_path,
 					os.path.relpath(os.path.join(target_base, self.target), base),

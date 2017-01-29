@@ -3,6 +3,7 @@ from mocktest import *
 import mocktest
 import os
 import sys
+import stat
 import time
 import tempfile
 import contextlib
@@ -121,6 +122,10 @@ class TestCase(mocktest.TestCase):
 		mkdirp(os.path.dirname(p))
 		with open(p, 'w') as f:
 			f.write(contents)
+
+	def write_executable(self, p, contents):
+		self.write(p, contents)
+		self.make_executable(p)
 
 	def read(self, p):
 		with open(self.path(p)) as f:
@@ -265,4 +270,8 @@ class TestCase(mocktest.TestCase):
 
 	def lexists(self, p):
 		return os.path.lexists(self.path(p))
+
+	def make_executable(self, p):
+		st = os.stat(self.path(p))
+		os.chmod(self.path(p), st.st_mode | stat.S_IXUSR)
 

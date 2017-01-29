@@ -203,6 +203,11 @@ class buildscript
 		method basedir = basedir
 	end
 
+type resolved_gup_rule = {
+	script_path : string;
+	basedir: string;
+}
+
 class build_candidate
 	(root:string)
 	(suffix:builder_suffix option) =
@@ -276,25 +281,34 @@ class build_candidate
 								let match_target = canonicalize_target_name target in
 								(List.enum rules) |> Enum.filter_map (fun (script, ruleset) ->
 									if ruleset#matches match_target then (
-										let script_path = Filename.concat (Filename.dirname path) script in
-										if not (Sys.file_exists script_path) then
-											Error.raise_safe "Build script not found: %s\n     %s(specified in %s)" script_path Var.indent path;
+										let resolved = if String.starts_with script "!" then (
+											let script = String.lchop ~n:1 script in
+											let script_path = match Util.which script with
+												| Some script_path -> script_path
+												| None -> Error.raise_safe "Build command not found on PATH: %s\n     %s(specified in %s)" script Var.indent path
+											in
+											{ script_path; basedir = target_base }
+										) else (
+											let script_path = Filename.concat (Filename.dirname path) script in
+											if not (Sys.file_exists script_path) then
+												Error.raise_safe "Build script not found: %s\n     %s(specified in %s)" script_path Var.indent path;
 
-										(* if `Gupfile` lives inside a gup/ dir but `script` does not,
-										 * we need to drop one `..` component to account for that *)
-										let script = match suffix with
-											| None -> script
-											| Some suffix ->
-												let script = Util.normpath script in
-												if goes_above (suffix_depth suffix) script
-													then snd (Util.split_first script)
-													else script
-										in
-										let base = Filename.concat target_base (Filename.dirname script) in
+											(* if `Gupfile` lives inside a gup/ dir but `script` does not,
+											 * we need to drop one `..` component to account for that *)
+											let script = match suffix with
+												| None -> script
+												| Some suffix ->
+													let script = Util.normpath script in
+													if goes_above (suffix_depth suffix) script
+														then snd (Util.split_first script)
+														else script
+											in
+											{ script_path; basedir = Filename.concat target_base (Filename.dirname script) }
+										) in
 										Some (new buildscript
-											script_path
-											(Util.relpath ~from:base (Filename.concat target_base target))
-											base)
+											resolved.script_path
+											(Util.relpath ~from:resolved.basedir (Filename.concat target_base target))
+											resolved.basedir)
 									) else
 										None
 								) |> Enum.get

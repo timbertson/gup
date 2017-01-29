@@ -38,7 +38,7 @@ def main():
 
 	existing_files = set(filter(is_interesting, os.listdir(root)))
 	
-	files = [mod + '.py' for mod in 'var log version error util parallel gupfile state builder task cmd'.split()]
+	files = [mod + '.py' for mod in 'whichcraft var log version error util parallel gupfile state builder task cmd'.split()]
 	assert set(files) == existing_files, "file mismatch:\n%r\n%r" % (sorted(files), sorted(existing_files))
 
 	mods = []

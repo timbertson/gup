@@ -35,6 +35,42 @@ class TestBasicRules(TestCase):
 		self.build("output.txt")
 		self.assertRaises(Unbuildable, lambda: self.build("source.txt"))
 		self.assertEqual(self.read("source.txt"), self.source_contents)
+
+	@unittest.skipIf(IS_WINDOWS, 'hard to test on windows')
+	def test_builder_from_PATH(self):
+		self.write('Gupfile', "!write-text-file:\n\t*.txt")
+		self.write_executable('bin/write-text-file', BASH + 'echo "bin wrote $2" > "$1"')
+		self.write_executable('bin2/write-text-file', BASH + 'echo "bin2 wrote $2" > "$1"')
+
+		def env_with_path(p):
+			env = os.environ.copy()
+			env['PATH'] = self.path(p) + ':' + os.environ.get('PATH', '')
+			return env
+
+		env_with_bin = env_with_path('bin')
+		env_with_bin2 = env_with_path('bin2')
+
+		ret, lines = self.build('output.txt', throwing=False, include_logging=True)
+
+		# without PATH, it shouldn't build:
+		self.assertNotEqual(ret, 0)
+		lines = lines[-2:]
+		err, info = lines
+		self.assertEqual(err.strip('# '), 'ERROR Build command not found on PATH: write-text-file')
+		self.assertEqual(info.strip(), '(specified in ./Gupfile)')
+
+		# depends on script mtime
+		self.build_assert('output.txt', 'bin wrote output.txt', env=env_with_bin)
+		self.assertRebuilds('output.txt', lambda: self.touch('bin/write-text-file'), env=env_with_bin)
+
+		# depends on which PATH entry is used
+		mutable_env = env_with_bin.copy()
+		self.assertRebuilds('output.txt', lambda: mutable_env.update(env_with_bin2), env=mutable_env)
+		self.assertEqual(self.read('output.txt'), 'bin2 wrote output.txt')
+
+	def test_builder_with_args(self):
+		self.write('Gupfile', "!write-text-file --uppercase:\n\t*.txt")
+		self.skipTest('TODO')
 	
 	def test_runs_all_target_by_default(self):
 		self.write('all.gup', echo_to_target('1'))

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # Gup build tool
-# VERSION: 0.5.5
+# VERSION: 0.6.0
 # Copyright (C) 2013  Tim Cuthbertson, Avery Pennarun
 #
 # This library is free software; you can redistribute it and/or
@@ -18,6 +18,84 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 from __future__ import print_function
+## --- whichcraft.py --- ##
+
+
+
+__author__ = 'Daniel Roy Greenfeld'
+__email__ = 'pydanny@gmail.com'
+__version__ = '0.4.0'
+
+import os
+import sys
+
+try:    # Forced testing
+    from shutil import which
+except ImportError:    # Forced testing
+    # Versions prior to Python 3.3 don't have shutil.which
+
+    def which(cmd, mode=os.F_OK | os.X_OK, path=None):
+        """Given a command, mode, and a PATH string, return the path which
+        conforms to the given mode on the PATH, or None if there is no such
+        file.
+        `mode` defaults to os.F_OK | os.X_OK. `path` defaults to the result
+        of os.environ.get("PATH"), or can be overridden with a custom search
+        path.
+        Note: This function was backported from the Python 3 source code.
+        """
+        # Check that a given file can be accessed with the correct mode.
+        # Additionally check that `file` is not a directory, as on Windows
+        # directories pass the os.access check.
+        def _access_check(fn, mode):
+            return (os.path.exists(fn) and os.access(fn, mode) and
+                    not os.path.isdir(fn))
+
+        # If we're given a path with a directory part, look it up directly
+        # rather than referring to PATH directories. This includes checking
+        # relative to the current directory, e.g. ./script
+        if os.path.dirname(cmd):
+            if _access_check(cmd, mode):
+                return cmd
+            return None
+
+        if path is None:
+            path = os.environ.get("PATH", os.defpath)
+        if not path:
+            return None
+        path = path.split(os.pathsep)
+
+        if sys.platform == "win32":
+            # The current directory takes precedence on Windows.
+            if os.curdir not in path:
+                path.insert(0, os.curdir)
+
+            # PATHEXT is necessary to check on Windows.
+            pathext = os.environ.get("PATHEXT", "").split(os.pathsep)
+            # See if the given file matches any of the expected path
+            # extensions. This will allow us to short circuit when given
+            # "python.exe". If it does match, only test that one, otherwise we
+            # have to try others.
+            if any(cmd.lower().endswith(ext.lower()) for ext in pathext):
+                files = [cmd]
+            else:
+                files = [cmd + ext for ext in pathext]
+        else:
+            # On other platforms you don't have things like PATHEXT to tell you
+            # what file suffixes are executable, so just pass on cmd as-is.
+            files = [cmd]
+
+        seen = set()
+        for dir in path:
+            normdir = os.path.normcase(dir)
+            if normdir not in seen:
+                seen.add(normdir)
+                for thefile in files:
+                    name = os.path.join(dir, thefile)
+                    if _access_check(name, mode):
+                        return name
+        return None
+
+
 ## --- var.py --- ##
 import os, sys
 import time
@@ -114,7 +192,7 @@ def getLogger(*a):
 
 
 ## --- version.py --- ##
-VERSION = "0.5.5"
+VERSION = "0.6.0"
 
 ## --- error.py --- ##
 UNKNOWN_ERROR_CODE = 1
@@ -486,33 +564,33 @@ def _parallel_discover_jobserver():
 		return SerialJobserver(None) if gup_server == '0' else NamedPipeJobserver(gup_server, None)
 	# use a make jobserver, if present
 	flags = ' ' + os.getenv('MAKEFLAGS', '') + ' '
-	FIND = ' --jobserver-fds='
-	ofs = flags.find(FIND)
-	if ofs >= 0:
-		s = flags[ofs+len(FIND):]
-		(arg,junk) = s.split(' ', 1)
-		(a,b) = arg.split(',', 1)
-		try:
-			a = atoi(a)
-			b = atoi(b)
-		except ValueError:
-			_parallel_log.warn('invalid --jobserver-fds: %r' % arg)
-			return None
-
-		if a <= 0 or b <= 0:
-			_parallel_log.warn('invalid --jobserver-fds: %r' % arg)
-			return None
-		try:
-			fcntl.fcntl(a, fcntl.F_GETFL)
-			fcntl.fcntl(b, fcntl.F_GETFL)
-		except IOError as e:
-			if e.errno == errno.EBADF:
-				_parallel_log.debug("--jobserver-fds error (flags=%r, a=%r, b=%r)", flags, a, b, exc_info=True)
-				_parallel_log.warn('broken --jobserver-fds from make; prefix your Makefile rule with a "+"')
+	for FIND in (' --jobserver-fds=', ' --jobserver-auth='):
+		ofs = flags.find(FIND)
+		if ofs >= 0:
+			s = flags[ofs+len(FIND):]
+			(arg,junk) = s.split(' ', 1)
+			(a,b) = arg.split(',', 1)
+			try:
+				a = atoi(a)
+				b = atoi(b)
+			except ValueError:
+				_parallel_log.warn('invalid --jobserver-fds: %r' % arg)
 				return None
-			else:
-				raise
-		return FDJobserver((a,b), None)
+
+			if a <= 0 or b <= 0:
+				_parallel_log.warn('invalid --jobserver-fds: %r' % arg)
+				return None
+			try:
+				fcntl.fcntl(a, fcntl.F_GETFL)
+				fcntl.fcntl(b, fcntl.F_GETFL)
+			except IOError as e:
+				if e.errno == errno.EBADF:
+					_parallel_log.debug("--jobserver-fds error (flags=%r, a=%r, b=%r)", flags, a, b, exc_info=True)
+					_parallel_log.warn('broken --jobserver-fds from make; prefix your Makefile rule with a "+"')
+					return None
+				else:
+					raise
+			return FDJobserver((a,b), None)
 
 def _parallel_create_named_pipe():
 	path = os.path.join(tempfile.gettempdir(), 'gup-job-%d' % (os.getpid()))
@@ -772,18 +850,26 @@ class BuildCandidate(object):
 
 		for script, ruleset in rules:
 			if ruleset.match(match_target):
-				script_path = os.path.join(os.path.dirname(path), script)
-				if not os.path.exists(script_path):
-					raise SafeError("Build script not found: %s\n     %s(specified in %s)" % (script_path, INDENT, path))
+				base = target_base
 
-				script = os.path.normpath(script)
-				# if `Gupfile` lives inside a gup/ dir but `script` does not,
-				# we need to drop one `..` component to account for that
-				if self.suffix is not None:
-					if _gupfile_goes_above(_gupfile_suffix_length(self.suffix), script):
-						script = script.split(os.path.sep, 1)[1]
+				if script.startswith('!'):
+					script = script[1:]
+					script_path = which(script)
+					if script_path is None:
+						raise SafeError("Build command not found on PATH: %s\n     %s(specified in %s)" % (script, INDENT, path))
+				else:
+					script_path = os.path.join(os.path.dirname(path), script)
+					if not os.path.exists(script_path):
+						raise SafeError("Build script not found: %s\n     %s(specified in %s)" % (script_path, INDENT, path))
 
-				base = os.path.join(target_base, os.path.dirname(script))
+					script = os.path.normpath(script)
+					# if `Gupfile` lives inside a gup/ dir but `script` does not,
+					# we need to drop one `..` component to account for that
+					if self.suffix is not None:
+						if _gupfile_goes_above(_gupfile_suffix_length(self.suffix), script):
+							script = script.split(os.path.sep, 1)[1]
+					base = os.path.join(target_base, os.path.dirname(script))
+
 				return Builder(
 					script_path,
 					os.path.relpath(os.path.join(target_base, self.target), base),
