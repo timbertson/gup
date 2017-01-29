@@ -44,6 +44,7 @@ stdenv.mkDerivation {
   installPhase = ''
     mkdir -p $out
     cp -r ocaml/bin $out/bin
+    cp builders/* $out/bin
     cp -r share $out/share
   '';
 }

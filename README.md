@@ -63,6 +63,16 @@ from within a build script. So you may wish to place it in
 its own directory to avoid accidentally adding other scripts
 to `$PATH`.
 
+# Bundled builders
+
+Gup includes some generic builder scripts (in [./builders][]), which are
+typically installed alongside `gup`. These are intended to be used as builders
+in a `Gupfile` (prefixed with `!`). They are provided as-is, and will not
+necessarily be as portable or as stable as gup itself. If you bundle `gup` into
+your project, you should also include any scripts you make use of (you can
+place them next to the `gup` binary, as gup will automatically add its
+directory to your `$PATH` when building).
+
 ----
 
 ### Python version requirements

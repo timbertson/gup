@@ -28,5 +28,6 @@ stdenv.mkDerivation {
   installPhase = ''
     mkdir $out
     cp -r python/bin $out/bin
+    cp builders/* $out/bin/
   '';
 }
