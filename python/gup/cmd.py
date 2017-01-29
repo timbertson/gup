@@ -172,7 +172,8 @@ def _get_parent_target():
 def _assert_parent_target(action):
 	p = _get_parent_target()
 	if p is None:
-		raise SafeError("%s was used outside of a gup target" % (action,))
+		_log.warn("%s was used outside of a gup target; ignoring" % (action,))
+		sys.exit(0)
 	return p
 
 def _mark_leave(opts, targets):

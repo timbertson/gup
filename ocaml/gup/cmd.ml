@@ -25,7 +25,9 @@ struct
 	
 	let _assert_parent_target action : string =
 		match _get_parent_target () with
-			| None -> Error.raise_safe "%s was used outside of a gup target" action
+			| None ->
+				log#warn "%s was used outside of a gup target; ignoring" action;
+				Pervasives.exit 0
 			| Some p -> p
 
 	let expect_no args =

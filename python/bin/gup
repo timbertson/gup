@@ -208,7 +208,6 @@ class TargetFailed(SafeError):
 		extra = "" if tempfile is None else " (keeping %s for inspection)" % (tempfile,)
 		super(TargetFailed, self).__init__("Target `%s` failed with exit status %s%s" % (self.target, self.status, extra))
 
-
 class Unbuildable(SafeError):
 	def __init__(self, path):
 		super(Unbuildable, self).__init__("Don't know how to build %s" % (path,))
@@ -1984,7 +1983,8 @@ def _cmd_get_parent_target():
 def _cmd_assert_parent_target(action):
 	p = _cmd_get_parent_target()
 	if p is None:
-		raise SafeError("%s was used outside of a gup target" % (action,))
+		_cmd_log.warn("%s was used outside of a gup target; ignoring" % (action,))
+		sys.exit(0)
 	return p
 
 def _cmd_mark_leave(opts, targets):
