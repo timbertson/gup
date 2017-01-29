@@ -26,9 +26,9 @@ if not IS_WINDOWS:
 	# we disable parallel builds on windows, so
 	# these tests won't pass
 
-	sleep_time = 1
+	sleep_time = 2
 	# travis-ci often executes under load, so multiply sleep_times to give more reliability
-	if os.environ.get('CI', None): sleep_time = 2
+	if os.environ.get('CI', None): sleep_time *= 2
 
 	class TestJobserverMode(TestCase):
 		def setUp(self):
