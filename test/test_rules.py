@@ -7,6 +7,11 @@ class TestBasicRules(TestCase):
 		self.source_contents = "Don't overwrite me!"
 		self.write("source.txt", self.source_contents)
 
+	def env_with_path(self, p):
+		env = os.environ.copy()
+		env['PATH'] = self.path(p) + ':' + os.environ.get('PATH', '')
+		return env
+
 	def test_doesnt_overwrite_existing_file(self):
 		self.assertRaises(SafeError, lambda: self.build("source.txt"))
 
@@ -41,14 +46,8 @@ class TestBasicRules(TestCase):
 		self.write('Gupfile', "!write-text-file:\n\t*.txt")
 		self.write_executable('bin/write-text-file', BASH + 'echo "bin wrote $2" > "$1"')
 		self.write_executable('bin2/write-text-file', BASH + 'echo "bin2 wrote $2" > "$1"')
-
-		def env_with_path(p):
-			env = os.environ.copy()
-			env['PATH'] = self.path(p) + ':' + os.environ.get('PATH', '')
-			return env
-
-		env_with_bin = env_with_path('bin')
-		env_with_bin2 = env_with_path('bin2')
+		env_with_bin = self.env_with_path('bin')
+		env_with_bin2 = self.env_with_path('bin2')
 
 		ret, lines = self.build('output.txt', throwing=False, include_logging=True)
 
@@ -57,7 +56,7 @@ class TestBasicRules(TestCase):
 		lines = lines[-2:]
 		err, info = lines
 		self.assertEqual(err.strip('# '), 'ERROR Build command not found on PATH: write-text-file')
-		self.assertEqual(info.strip(), '(specified in ./Gupfile)')
+		self.assertEqual(info.strip(), '(specified in '+self.path('Gupfile') + ')')
 
 		# depends on script mtime
 		self.build_assert('output.txt', 'bin wrote output.txt', env=env_with_bin)
@@ -71,11 +70,23 @@ class TestBasicRules(TestCase):
 	def test_builder_with_args(self):
 		self.write('Gupfile', "!write-text-file --uppercase:\n\t*.txt")
 		self.skipTest('TODO')
+
+	def test_PATH_builder_cwd(self):
+		self.write('src/Gupfile', "!write-text-file:\n\t*.txt")
+		self.write_executable('bin/write-text-file', BASH + 'echo "wrote $2 from $(pwd)" > "$1"')
+		env_with_bin = self.env_with_path('bin')
+		self.build_assert('src/output.txt', 'wrote output.txt from ' + self.path('src'), env=env_with_bin)
 	
 	def test_runs_all_target_by_default(self):
 		self.write('all.gup', echo_to_target('1'))
 		self.build()
 		self.assertEqual(self.read('all'), '1')
+
+	def test_directory_can_be_built_from_within_itself(self):
+		# probably not of much value, but (currently) supported
+		self.write('dir.gup', BASH + 'mkdir -p "$2"; touch "$2"')
+		self.build('dir')
+		self.build('.', cwd=self.path('dir'))
 
 class TestGupdirectory(TestCase):
 	def test_gupdir_is_search_target(self):
@@ -114,23 +125,19 @@ class TestGupdirectory(TestCase):
 		self.assertRaises(Unbuildable, lambda: self.build("x/b/cd"))
 	
 	def test_gupfile_may_specify_a_non_local_script(self):
-		self.write("gup/a/default.c.gup", echo_to_target('$2, called from $(basename "$(pwd)")'))
+		self.write("gup/a/default.c.gup", echo_to_target('$2, called from $(pwd)'))
 		self.write('gup/a/b/Gupfile', '../default.c.gup:\n\t*.c')
 
 		self.assertRaises(Unbuildable, lambda: self.build('a/foo.c'))
-		self.build_assert('a/b/foo.c', os.path.join('b','foo.c') + ', called from a')
+		self.build_assert('a/b/foo.c', 'foo.c, called from ' + self.path('a/b'))
 
 	def test_build_script_outside_gup_dir(self):
 		self.write("default.gup", echo_to_target('$2, called from "$(pwd)"'))
 		self.write("gup/default.gup", echo_to_target('$2, called from gup dir "$(pwd)"'))
 		self.write('gup/bin/Gupfile', '../../default.gup:\n\tfoo\n../default.gup:\n\tbar')
-		self.write('gup/tools/bin/Gupfile', '../../../default.gup:\n\t*')
-		self.write('gup/tools/Gupfile', 'bin/../../../default.gup:\n\t*')
 
-		self.build_assert('bin/foo', os.path.join('bin','foo') + ', called from ' + self.ROOT)
-		self.build_assert('bin/bar', os.path.join('bin','bar') + ', called from gup dir ' + self.ROOT)
-		self.build_assert('tools/bin/foo', os.path.join('tools', 'bin','foo') + ', called from ' + self.ROOT)
-		self.build_assert('tools/foo', os.path.join('tools', 'foo') + ', called from ' + self.ROOT)
+		self.build_assert('bin/foo', 'foo, called from ' + self.path('bin'))
+		self.build_assert('bin/bar', 'bar, called from gup dir ' + self.path('bin'))
 
 class TestBuildableCheck(TestCase):
 	def test_indicates_buildable_file(self):
@@ -164,3 +171,11 @@ class TestDirectoryTargets(TestCase):
 		self.build_u('dir' + os.path.sep)
 		self.assertEqual(self.read('dir/hello'), 'ok')
 	
+	def test_relative_paths_are_supported_from_within_target(self):
+		self.write('dir.gup', BASH + 'mkdir -p $1; echo ok > $1/hello; mkdir $1/child')
+		self.build_u('dir' + os.path.sep)
+		self.build_u('.' + os.path.sep, cwd=self.path('dir'))
+		self.build_u('./' + os.path.sep, cwd=self.path('dir'))
+		self.build_u('../' + os.path.sep, cwd=self.path('dir/child'))
+		self.build_u('..' + os.path.sep, cwd=self.path('dir/child'))
+		self.assertEqual(self.read('dir/hello'), 'ok')

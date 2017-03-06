@@ -1,15 +1,17 @@
-module StringMap = Map.Make(String)
 open Batteries
 open Std
+open Path
+module PathMap = Map.Make(ConcreteBase)
+open Lwt.Infix
 
 let log = Logging.get_logger "gup.builder"
 
 exception Target_failed of string * int option * string option
 
-let _prepare_build : 'c. (Gupfile.buildscript -> 'c) -> string -> 'c option = fun cons path ->
+let _prepare_build : 'c. (Gupfile.buildscript -> 'c) -> ConcreteBase.t -> 'c option = fun cons path ->
 	let buildscript = Gupfile.find_buildscript path in
 	log#trace "Prepare_build %a -> %a"
-		String.print_quoted path
+		String.print_quoted (ConcreteBase.to_string path)
 		(Option.print print_repr) buildscript;
 	Option.map cons buildscript
 
@@ -53,33 +55,34 @@ let rec _is_dirty ?perform_build = (
 	in
 
 	let rec _is_dirty = fun (state:State.target_state) (buildscript:Gupfile.buildscript) -> (
-		let built : unit Lwt.t StringMap.t ref = ref StringMap.empty in
-		let build_child_if_dirty : string -> bool Lwt.t = fun path -> (
+		let built : unit Lwt.t PathMap.t ref = ref PathMap.empty in
+		let build_child_if_dirty : RelativeFrom.t -> bool Lwt.t = fun path -> (
+			let path = ConcreteBase.resolve_from path in
 			let open Lwt in
 			try
-				lwt () = StringMap.find path !built in
+				lwt () = PathMap.find path !built in
 				return_false
 			with Not_found -> (
 				let result : bool Lwt.t = (
-					log#trace "Recursing over dependency: %s -> %s" buildscript#target_path path;
+					log#trace "Recursing over dependency: %s -> %s" (buildscript#target_path_repr) (ConcreteBase.to_string path);
 					match Gupfile.find_buildscript path with
 						| None ->
-							log#trace "CLEAN: %s (not a target)" path;
+							log#trace "CLEAN: %s (not a target)" (ConcreteBase.to_string path);
 							return_false
 						| Some buildscript ->
 							let child_state = new State.target_state path in
 							lwt child_dirty = _is_dirty child_state buildscript in
 							if child_dirty then (
-								log#trace "_is_dirty(%s) -> True" path;
+								log#trace "_is_dirty(%s) -> True" (ConcreteBase.to_string path);
 								if allow_build
 									then perform_build buildscript
 									else return_true
 							) else (
-								log#trace "_is_dirty(%s) -> False" path;
+								log#trace "_is_dirty(%s) -> False" (ConcreteBase.to_string path);
 								return_false
 							)
 				) in
-				built := StringMap.add path (result |> (Lwt.map ignore)) !built;
+				built := PathMap.add path (result |> (Lwt.map (ignore: bool -> unit))) !built;
 				result
 			)
 		) in
@@ -87,12 +90,12 @@ let rec _is_dirty ?perform_build = (
 		lwt deps = state#deps in
 		match deps with
 			| None -> (
-				log#debug "DIRTY: %s (is buildable but has no stored deps)" state#path;
+				log#debug "DIRTY: %s (is buildable but has no stored deps)" state#path_repr;
 				Lwt.return true
 			)
 			| Some deps -> (
 				if deps#already_built then (
-					log#trace "CLEAN: %s has already been built in this invocation" state#path;
+					log#trace "CLEAN: %s has already been built in this invocation" state#path_repr;
 					Lwt.return false
 				) else (
 					if allow_build then
@@ -132,9 +135,9 @@ class target (buildscript:Gupfile.buildscript) =
 			_is_dirty ?perform_build:None state buildscript
 
 		method private _perform_build (update: bool) : bool Lwt.t =
-			let exe_path = Util.abspath buildscript#path in
-			if not (Sys.file_exists exe_path) then
-				Error.raise_safe "Build script does not exist: %s" exe_path;
+			let exe_path = buildscript#script_path in
+			if not (Absolute.exists exe_path) then
+				Error.raise_safe "Build script does not exist: %s" (Absolute.to_string exe_path);
 
 			lwt needs_build = if update then (
 				let perform_build buildscript = (new target buildscript)#build false in
@@ -144,19 +147,27 @@ class target (buildscript:Gupfile.buildscript) =
 				log#trace("no build needed");
 				Lwt.return false
 			) else (
-				state#perform_build buildscript (fun exe deps ->
+				state#perform_build buildscript (fun deps ->
+					let path_str = ConcreteBase.to_string self#path in
 
 					let basedir = buildscript#basedir in
-					Util.makedirs basedir;
+					let basedir_str = Concrete.to_string basedir in
+					Util.makedirs basedir_str;
 
 					let env = Unix.environment_map ()
-						|> EnvironmentMap.add "GUP_TARGET" (Util.abspath self#path)
+						|> EnvironmentMap.add "GUP_TARGET" path_str
 						|> Parallel.Jobserver.extend_env
 						|> EnvironmentMap.array
 					in
 
-					let target_relative_to_cwd = Util.relpath ~from:Var.root_cwd self#path in
-					let output_file = Util.abspath (state#meta_path "out") in
+					let relative_to_root_cwd path =
+						ConcreteBase.rebase_to Var.root_cwd path
+						|> RelativeFrom.relative |> Relative.to_string
+					in
+
+					let target_relative_to_cwd = relative_to_root_cwd self#path in
+
+					let output_file = Concrete.resolve_abs (state#meta_path "out") |> Concrete.to_string in
 					Util.try_remove output_file;
 					let cleanup_output_file = ref true in
 					let cleanup () =
@@ -166,43 +177,44 @@ class target (buildscript:Gupfile.buildscript) =
 
 					let do_build () =
 						log#infos target_relative_to_cwd;
-						lwt mtime = Util.get_mtime self#path in
+						lwt mtime = Util.get_mtime path_str in
+						let exe_path_str = Absolute.to_string exe_path in
 						let args = List.concat
 							[
-								_guess_executable exe_path;
-								[ exe_path; output_file; buildscript#target ]
+								_guess_executable exe_path_str;
+								[ exe_path_str; output_file; buildscript#target |> Relative.to_string ]
 							]
 						in
 
 						if !Var.trace then begin
-							log#info " # %s" (Util.abspath basedir);
+							log#info " # %s" basedir_str;
 							log#info " + %a" (List.print String.print_quoted) args
 						end else begin
-							log#trace " from cwd: %s" (Util.abspath basedir);
+							log#trace " from cwd: %s" basedir_str;
 							log#trace "executing: %a" (List.print String.print_quoted) args
 						end;
 
-						lwt ret = try_lwt in_dir basedir (fun () -> Lwt_process.exec
+						lwt ret = try_lwt in_dir basedir_str (fun () -> Lwt_process.exec
 								~env:env
 								((List.first args), (Array.of_list args))
 							)
 							with ex -> begin
-								log#error "%s is not executable and has no shebang line" exe_path;
+								log#error "%s is not executable and has no shebang line" exe_path_str;
 								raise ex
 							end
 						in
-						lwt new_mtime = Util.get_mtime self#path in
+						lwt new_mtime = Util.get_mtime path_str in
 						let target_changed = neq (Option.compare ~cmp:Big_int.compare) mtime new_mtime in
 						lwt () = if target_changed then (
 							let p = Option.print Big_int.print in
 							log#trace "old_mtime=%a, new_mtime=%a" p mtime p new_mtime;
-							if (Util.lisdir self#path) then Lwt.return_unit else (
+							if (Util.lisdir path_str) then Lwt.return_unit else (
 								(* directories often need to be created directly *)
 								let expect_clobber = match deps with None -> false | Some d -> d#clobbers in
 								if (not (update && expect_clobber)) then (
 									log#warn "%s modified %s directly"
-										(Util.relpath ~from:Var.root_cwd exe_path)
-										self#path
+										(relative_to_root_cwd (ConcreteBase.resolve_abs exe_path))
+										target_relative_to_cwd
 								);
 								state#mark_clobbers
 							)
@@ -213,22 +225,22 @@ class target (buildscript:Gupfile.buildscript) =
 								lwt () = if Util.lexists output_file then (
 									(* If both old and new exist, and either is a directory,
 									 * remove the old dir before renaming *)
-									if (Util.lexists self#path &&
-										(Util.lisdir self#path || Util.lisdir output_file)
+									if (Util.lexists path_str &&
+										(Util.lisdir path_str || Util.lisdir output_file)
 									) then (
-										log#trace "removing previous %s" self#path;
-										Util.rmtree self#path
+										log#trace "removing previous %s" path_str;
+										Util.rmtree path_str
 									);
-									log#trace "renaming %s -> %s" output_file self#path;
-									Lwt_unix.rename output_file self#path
+									log#trace "renaming %s -> %s" output_file path_str;
+									Lwt_unix.rename output_file path_str
 								) else (
 									log#trace "output file %s did not get created" output_file;
-									if (not target_changed) && (Util.lexists self#path) && (not (Util.islink self#path)) then (
-										if Util.lexists self#path; then (
+									if (not target_changed) && (Util.lexists path_str) && (not (Util.islink path_str)) then (
+										if Util.lexists path_str; then (
 											log#warn "Removing stale target: %s" target_relative_to_cwd
 										);
 										(* TODO make this an lwt.t *)
-										Util.try_remove self#path;
+										Util.try_remove path_str;
 										Lwt.return_unit
 									) else Lwt.return_unit
 								) in
@@ -240,7 +252,7 @@ class target (buildscript:Gupfile.buildscript) =
 								let temp_file = if Var.keep_failed_outputs () && Util.lexists output_file
 									then (
 										cleanup_output_file := false; (* not wanted *)
-										Some (Util.relpath ~from:Var.root_cwd output_file)
+										Some (relative_to_root_cwd (ConcreteBase.resolve output_file))
 									)
 									else None
 								in
@@ -261,18 +273,14 @@ class target (buildscript:Gupfile.buildscript) =
 
 type prepared_build = [
 	| `Target of target
-	| `Symlink_to of string
+	| `Symlink_to of RelativeFrom.t
 ]
-let prepare_build  (path: string) : prepared_build option =
+
+let prepare_build  (path: ConcreteBase.t) : prepared_build option =
 	match _prepare_build (new target) path with
 		| Some target -> Some (`Target target)
-		| None -> begin match Util.readlink path with
+		| None -> (match ConcreteBase.readlink path with
 			(* # this target isn't buildable, but its symlink destination might be *)
-			| Some dest ->
-					let dest = if Util.is_absolute dest
-						then dest
-						else Filename.concat (Filename.dirname path) dest
-					in
-					Some (`Symlink_to dest)
-			| None -> None
-		end
+			| `concrete _ -> None
+			| `link dest -> Some (`Symlink_to dest)
+		)

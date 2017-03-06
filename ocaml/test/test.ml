@@ -5,5 +5,6 @@ let _ =
 	run_test_tt_main (OUnit2.test_list [
 		Util.suite;
 		Gupfile.suite;
-		Parallel.suite
+		Parallel.suite;
+		Path.suite
 	])

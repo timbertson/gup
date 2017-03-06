@@ -23,6 +23,7 @@ let
     {dep = lwt; name = "lwt";}
     {dep = cryptokit; name = "cryptokit";}
     {dep = extunix; name = "extunix";}
+    {dep = zarith; name = "zarith";}
   ]);
   add_ldpath = ''
     export LD_LIBRARY_PATH="''${LD_LIBRARY_PATH:+:}${lib.concatStringsSep ":" libdirs}";

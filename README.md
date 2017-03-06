@@ -324,40 +324,46 @@ of `target`, `gup` will think that your build script produced no output, and del
 `target` (due to point #2 above).
 
 
-When a build script is run, its working directory (`$PWD`) is determined by:
+When a build script is run, its working directory (`$PWD`) is typically set to the directory
+containing the Gupfile (for indirect targets), or the script itself (for direct `<name>.gup` targets).
+The exception is that when a Gupfile or script lives inside a `gup/` directory, it is run from the
+equivalent path without the `gup/` directory. This means that `$2` will always correspond to
+the matched pattern in a Gupfile.
 
-  1. For a direct build script, the working directory is the directory
-     containing the target file. Note that if a target `a/b/c` is built by
-     `gup/a/b/c.gup`, then the `$PWD` will be a/b, *not* gup/a/b. If you want
-     the location of the executing script, use `$0`.
+For example:
 
-  2. For a file named by a `Gupfile`, the working directory is set to the path
-     which makes $2 (the relative path to the target) match what was specified
-     in the Gupfile. Some examples:
+1. building `a/b/c` with a direct gupfile at `a/b/c.gup` will invoke `a/b/c.gup` from
+   `a/b` with `$2` set to `c`.
 
-     src/Gupfile contents:
+2. For the following `src/Gupfile` contents:
 
-         default.gup:
-           tmp/*
-         obj/default.o.gup:
-           *.o
+```
+default.gup:
+  tmp/*
+scripts/default.o.gup:
+  *.o
+!gup-link:
+  *.a
+```
 
-    Then:
+  Then:
 
-      - `gup src/tmp/foo` would run `src/default.gup` from `src/`, with `$2`
-        set to `tmp/foo`.
-      - `gup src/obj/foo.o` would run `src/obj/default.o.gup` from `src/obj`,
-        with `$2` set to `foo.o`
+   - `gup src/tmp/foo` would run `src/default.gup` from `src/`, with `$2`
+     set to `tmp/foo`.
+   - `gup src/foo.o` would run `src/scripts/default.o.gup` from `src`,
+     with `$2` set to `foo.o`
+   - `gup src/foo.a` would run `gup-link` (found on $PATH) from `src`,
+     with `$2` set to `foo.a`
 
-    But if the same files were nested under `gup/` (e.g `gup/src/Gupfile`,
-    `gup/src/default.gup`, etc, then the paths would remain the same - the
-    `gup/` path containing the actual script being executed would be
-    accessible only via `$0`.
+  But if the same files were nested under `gup/` (e.g `gup/src/Gupfile`,
+  `gup/src/default.gup`, etc, then the paths would remain the same - the
+  `gup/` path containing the actual script being executed would be
+  accessible only via `$0`.
 
 Again, these rules may seem complex to read, but the actual behaviour is
 fairly intuitive - rules get run from the target tree (not inside any `/gup/`
-path), and from a directory depth consistent with the location of the build
-script.
+path), and from a directory depth consistent with the location of the Gupfile
+(or .gup file).
 
 ### Variables
 

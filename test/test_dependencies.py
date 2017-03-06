@@ -185,7 +185,33 @@ class TestDependencies(TestCase):
 		self.write('Gupfile', 'build_a.gup:\n\tnothing')
 
 		self.assertNotRebuilds('a', lambda: self.touch('b'))
-	
+
+class TestCyclicDependencies(TestCase):
+	def setUp(self):
+		super(TestCyclicDependencies, self).setUp()
+
+	def test_cannot_build_self(self):
+		self.write("self.gup", BASH + 'gup -u self')
+		self.assertEqual(self.buildErrors('self')[0],
+				'Target ' + self.path('self') + ' attempted to build itself')
+
+	def test_cannot_build_self_indirectly(self):
+		self.mkdirp("dir")
+		self.write("indirect-self.gup", BASH + 'gup -u dir/../indirect-self')
+
+		self.assertEqual(self.buildErrors('indirect-self')[0],
+			'Target ' + self.path('indirect-self') + ' attempted to build itself')
+
+	def test_can_build_a_symlink_to_self(self):
+		self.write("symlink-dest.gup", BASH + 'gup -u symlink; touch $1')
+		self.write("symlink.gup", BASH + 'ln -s symlink-dest "$1"')
+
+		target = 'symlink-dest'
+		link = 'symlink'
+		self.build(target)
+		self.assertEqual(os.readlink(self.path(link)), target)
+		self.build(target)
+
 class TestDirtyCheck(TestCase):
 	def assertDirty(self, target, expected):
 		code, lines = self.build('--dirty', target, throwing = False)
@@ -256,6 +282,42 @@ class TestSymlinkDependencies(TestCase):
 		self.build('base/link')
 
 		self.assertRebuilds('base/link', lambda: self.touch('base/dir/dest.gup'), mtime_file='base/dir/dest')
+
+	def test_depends_on_each_file_in_symlink_chain(self):
+		self.write('target.gup', echo_file_contents('dir1/contents'))
+		self.write('concrete1/contents', '1')
+		self.write('concrete2/contents', '2')
+		self.write('concrete3/contents', '3')
+		self.symlink('dir2', 'dir1')
+		self.symlink('dir3', 'dir2')
+		self.symlink('concrete1', 'dir3')
+
+		self.assertNotRebuilds('target', lambda: None)
+		self.assertEqual(self.read('target'), '1')
+
+		self.assertRebuilds('target', lambda: self.symlink('concrete2', 'dir3', force=True))
+		self.assertEqual(self.read('target'), '2')
+
+		self.assertRebuilds('target', lambda: self.symlink('concrete3', 'dir2', force=True))
+		self.assertEqual(self.read('target'), '3')
+
+	def test_resolves_non_normalized_symlinks(self):
+		# i.e. those where a symlink's `../` component is resolved from an intermediate
+		# symlink target, not from the original link
+		self.write('target.gup', BASH + 'gup -u bin/tsc; cat bin/tsc > $1')
+		self.mkdirp('prefix/libexec')
+		self.mkdirp('prefix/bin')
+		self.symlink('prefix/bin', 'bin')
+		self.symlink('../libexec/tsc', 'prefix/bin/tsc')
+		self.write('prefix/libexec/tsc', 'tsc')
+		self.write('prefix/libexec/tsc2', 'tsc2')
+
+		self.assertNotRebuilds('target', lambda: None)
+		self.assertRebuilds('target', lambda: self.touch('prefix/libexec/tsc'))
+		self.assertEqual(self.read('target'), 'tsc')
+
+		self.assertRebuilds('target', lambda: self.symlink('../libexec/tsc2', 'prefix/bin/tsc', force=True))
+		self.assertEqual(self.read('target'), 'tsc2')
 
 	def test_builds_symlink_only_if_symlink_is_buildable(self):
 		self.write('dest.gup', BASH + 'echo "built by dest.gup" > $1')
