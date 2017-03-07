@@ -87,7 +87,7 @@ struct
 					lwt () = Lwt_option.may (fun parent ->
 						let path = ConcreteBase.resolve_from path in
 						if ConcreteBase.eq path parent then
-							raise_safe "Target %s attempted to build itself" (ConcreteBase.to_string path);
+							raise_safe "Target `%s` attempted to build itself" (ConcreteBase.to_string path);
 						Lwt.return_unit
 					) parent_target in
 

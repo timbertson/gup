@@ -192,15 +192,15 @@ class TestCyclicDependencies(TestCase):
 
 	def test_cannot_build_self(self):
 		self.write("self.gup", BASH + 'gup -u self')
-		self.assertEqual(self.buildErrors('self')[0],
-				'Target ' + self.path('self') + ' attempted to build itself')
+		self.assertRegexpMatches(self.buildErrors('self')[0],
+			re.compile('Target `.*self` attempted to build itself'))
 
 	def test_cannot_build_self_indirectly(self):
 		self.mkdirp("dir")
 		self.write("indirect-self.gup", BASH + 'gup -u dir/../indirect-self')
 
-		self.assertEqual(self.buildErrors('indirect-self')[0],
-			'Target ' + self.path('indirect-self') + ' attempted to build itself')
+		self.assertRegexpMatches(self.buildErrors('indirect-self')[0],
+			re.compile('Target `.*indirect-self` attempted to build itself'))
 
 	def test_can_build_a_symlink_to_self(self):
 		self.write("symlink-dest.gup", BASH + 'gup -u symlink; touch $1')

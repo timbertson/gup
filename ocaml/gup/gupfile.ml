@@ -227,27 +227,6 @@ class buildscript
 class build_candidate
 	(root:Concrete.t)
 	(suffix:builder_suffix option) =
-
-	let suffix_depth = function
-		| Empty -> 0
-		| Suffix path ->
-				String.fold_left (fun count c ->
-					log#trace "compare %c to %s" c Filename.dir_sep;
-					if (String.make 1 c) = Filename.dir_sep
-					then succ count
-					else count
-				) 1 (Direct.to_string path)
-	in
-
-	let rec goes_above depth path =
-		match Util.split_first path with
-			| (Util.ParentDir, rest) ->
-					if depth = 0
-					then true
-					else goes_above (depth - 1) rest
-			| _ -> false
-	in
-
 	object (self)
 		method _base_path include_gup : Absolute.t =
 			let path = root |> Concrete.absolute in

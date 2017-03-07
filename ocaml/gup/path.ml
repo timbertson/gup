@@ -41,7 +41,7 @@ module Make(Unix:UNIX) = struct
 			) else noop
 
 		let direct =
-			if var.is_test_mode then (fun p ->
+			if Var.is_test_mode then (fun p ->
 				let p = relative p in
 				let parts = PathString_.split p in
 				let is_direct = try
@@ -415,3 +415,21 @@ module Make(Unix:UNIX) = struct
 end
 
 include Make(Unix)
+
+module Var = struct
+	include Var
+	let (run_id, root_cwd) =
+		if Var.is_root then
+			begin
+				let runid = Big_int.to_string (Util.int_time (Unix.gettimeofday ()))
+				and root = Sys.getcwd () in
+				Unix.putenv "GUP_RUNID" runid;
+				Unix.putenv "GUP_ROOT" root;
+				(runid, Concrete.of_string root)
+			end
+		else
+			(
+				Unix.getenv "GUP_RUNID",
+				Unix.getenv "GUP_ROOT" |> Concrete.of_string
+			)
+end

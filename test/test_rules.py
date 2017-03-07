@@ -56,7 +56,7 @@ class TestBasicRules(TestCase):
 		lines = lines[-2:]
 		err, info = lines
 		self.assertEqual(err.strip('# '), 'ERROR Build command not found on PATH: write-text-file')
-		self.assertEqual(info.strip(), '(specified in '+self.path('Gupfile') + ')')
+		self.assertRegexpMatches(info.strip(), '\(specified in .*Gupfile\)')
 
 		# depends on script mtime
 		self.build_assert('output.txt', 'bin wrote output.txt', env=env_with_bin)
@@ -81,12 +81,6 @@ class TestBasicRules(TestCase):
 		self.write('all.gup', echo_to_target('1'))
 		self.build()
 		self.assertEqual(self.read('all'), '1')
-
-	def test_directory_can_be_built_from_within_itself(self):
-		# probably not of much value, but (currently) supported
-		self.write('dir.gup', BASH + 'mkdir -p "$2"; touch "$2"')
-		self.build('dir')
-		self.build('.', cwd=self.path('dir'))
 
 class TestGupdirectory(TestCase):
 	def test_gupdir_is_search_target(self):
