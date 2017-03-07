@@ -6,6 +6,7 @@ from .log import getLogger
 from .util import get_mtime
 from .state import FileDependency, TargetState
 from .error import Unbuildable, TargetFailed, SafeError
+from .path import traverse_from
 from .var import IS_ROOT
 
 _log = getLogger(__name__)
@@ -65,7 +66,7 @@ class Task(object):
 
 	def complete(self):
 		if self.parent_target is not None:
-			target_path = self.target_path
+			intermediate_paths, target_path = traverse_from(os.getcwd(), self.target_path)
 			mtime = get_mtime(target_path)
 
 			if self.target:
@@ -73,7 +74,16 @@ class Task(object):
 			else:
 				dep = FileDependency.relative_to_target(self.parent_target, mtime=mtime, path=self.target_path)
 
-			TargetState(self.parent_target).add_dependency(dep)
+			state = TargetState(self.parent_target)
+			state.add_dependency(dep)
+			if intermediate_paths or True:
+				_log.trace("adding intermediate paths: %r", intermediate_paths)
+				for intermediate in intermediate_paths:
+					dep = FileDependency.relative_to_target(
+							self.parent_target,
+							path=intermediate,
+							mtime=get_mtime(intermediate))
+					state.add_dependency(dep)
 	
 	def handle_result(self, rv):
 		_log.trace("build process exited with status: %r" % (rv,))

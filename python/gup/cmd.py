@@ -14,6 +14,7 @@ from .var import INDENT, set_verbosity, set_keep_failed_outputs, DEFAULT_VERBOSI
 from .parallel import setup_jobserver
 from .task import Task, TaskRunner
 from .version import VERSION
+from .path import resolve_base
 
 _log = getLogger(__name__)
 
@@ -296,7 +297,7 @@ def _build(opts, targets):
 
 	runner = TaskRunner()
 	for target_path in targets:
-		if os.path.abspath(target_path) == parent_target:
+		if resolve_base(target_path) == parent_target:
 			raise SafeError("Target `%s` attempted to build itself" % (target_path,))
 
 		next_task = Task(opts, parent_target, target_path)
