@@ -46,8 +46,8 @@ else
 fi
 
 unset OCAMLPATH OCAMLFIND_DESTDIR
-BASE_SWITCH="4.02.1"
-BASE_SWITCH="system" # quicker
+BASE_SWITCH="4.02.3"
+# BASE_SWITCH="system" # quicker
 
 export OPAMYES=1
 opam switch list | grep -q gup-test || opam switch install gup-test --alias-of "$BASE_SWITCH"
