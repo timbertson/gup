@@ -5,14 +5,6 @@ let
   opam2nixParams = {
     packages = import ./opam-dep-names.nix;
     ocamlAttr = "ocaml_4_02";
-    overrides = {super, self}: let sels = super.opamSelection; in {
-      opamSelection = lib.overrideExisting sels {
-        lwt = lib.overrideDerivation sels.lwt (o: {
-          # TODO: remove ncurses hack when https://github.com/ocaml/opam-repository/pull/6773 is resolved
-          nativeBuildInputs = o.nativeBuildInputs ++ [ ncurses ];
-        });
-      };
-    };
   };
 
   opam_deps = opam2nix.build opam2nixParams;
@@ -23,6 +15,7 @@ let
     {dep = lwt; name = "lwt";}
     {dep = cryptokit; name = "cryptokit";}
     {dep = extunix; name = "extunix";}
+    {dep = zarith; name = "zarith";}
   ]);
   add_ldpath = ''
     export LD_LIBRARY_PATH="''${LD_LIBRARY_PATH:+:}${lib.concatStringsSep ":" libdirs}";

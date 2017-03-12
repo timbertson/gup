@@ -2,6 +2,7 @@ from __future__ import print_function
 from mocktest import *
 import mocktest
 import os
+import re
 import sys
 import stat
 import time
@@ -167,9 +168,14 @@ class TestCase(mocktest.TestCase):
 
 	@contextlib.contextmanager
 	def _root_cwd(self):
+		with(self.in_dir(self.ROOT)):
+			yield
+
+	@contextlib.contextmanager
+	def in_dir(self, dir):
 		initial = os.getcwd()
 		try:
-			os.chdir(self.ROOT)
+			os.chdir(dir)
 			yield
 		finally:
 			os.chdir(initial)
@@ -252,6 +258,12 @@ class TestCase(mocktest.TestCase):
 		fn()
 		self.build_u(target)
 		self.assertEqual(self.mtime(mtime_file), mtime, "target %s got rebuilt" % (target,))
+
+	def buildErrors(self, target):
+		status, output = self.build(target, throwing = False, include_logging = True)
+		self.assertEqual(status, 2)
+		error_prefix="# ERROR "
+		return [line[len(error_prefix):].strip() for line in output if line.startswith(error_prefix)]
 	
 	def rename(self, src, dest):
 		os.rename(self.path(src), self.path(dest))
@@ -259,8 +271,11 @@ class TestCase(mocktest.TestCase):
 	def unlink(self, src):
 		os.unlink(self.path(src))
 
-	def symlink(self, target, src):
-		os.symlink(target, self.path(src))
+	def symlink(self, target, src, force=False):
+		src = self.path(src)
+		if force and os.path.exists(src):
+			os.unlink(src)
+		os.symlink(target, src)
 
 	def mkdirp(self, p):
 		mkdirp(self.path(p))

@@ -18,11 +18,6 @@ let isfile path =
 		Lwt.return (stat.Unix.st_kind <> Unix.S_DIR)
 	with Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return false
 
-let join_if_relative ~base path =
-	if Filename.is_relative path
-		then Zeroinstall_utils.normpath (Filename.concat base path)
-		else path
-
 let lexists (path:string) : bool =
 	try
 		let (_:Unix.stats) = Unix.lstat path in
@@ -44,25 +39,6 @@ let samefile a b =
 	assert (Zeroinstall_utils.is_absolute b);
 	(* TODO: windows case-insensitivity *)
 	Zeroinstall_utils.normpath a = Zeroinstall_utils.normpath b
-
-let relpath ~from path =
-	(* TODO: windows *)
-	let to_list p = List.filter (not $ String.is_empty) @@
-		String.nsplit (Zeroinstall_utils.abspath p) Filename.dir_sep
-	in
-	let start_list = to_list from in
-	let path_list = to_list path in
-
-	let zipped = Enum.combine (List.enum path_list, List.enum start_list) in
-	let common = Enum.count @@ Enum.take_while (fun (a,b) -> a = b) zipped in
-
-	let rel_list =
-		List.of_enum (Enum.repeat ~times:(List.length start_list - common) "..")
-		@ (List.drop common path_list)
-	in
-	if List.length rel_list = 0
-		then "."
-		else String.join Filename.dir_sep rel_list
 
 let isdir path =
 	try Sys.is_directory path

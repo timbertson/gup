@@ -17,6 +17,9 @@ in
 	ocaml = ocamlImpl;
 	opam = stdenv.mkDerivation {
 		name = "opam-test";
-		buildInputs = [opam which git curl unzip ocaml rsync pkgconfig gnum4 gcc ncurses];
+		buildInputs = [
+			opam which git curl unzip python ocaml
+			rsync pkgconfig gnum4 gcc ncurses gmp perl
+		];
 	};
 })

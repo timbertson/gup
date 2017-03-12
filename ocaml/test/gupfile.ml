@@ -2,9 +2,17 @@ open Batteries
 open OUnit2
 open Gup.Gupfile
 open Gup
+open Gup.Path
 
-let possible_gup_files path = List.of_enum (possible_builders path)
-let print_builder (candidate, gupfile, target) = Printf.sprintf2 "%s (%s)" (candidate#guppath gupfile) target
+let possible_gup_files path =
+	let path = PathAssertions.absolute path in
+	List.of_enum (possible_builders (ConcreteBase._cast path))
+
+let print_builder (candidate, gupfile, target) =
+	let guppath = Absolute.to_string (candidate#guppath gupfile) in
+	let target = Relative.to_string target in
+	Printf.sprintf2 "%s (%s)" guppath target
+
 let print_str_list lst = "[ " ^ (lst |> String.concat "\n") ^ " ]"
 let custom_printf fn obj = Printf.sprintf2 "%a" fn obj
 let lift_compare m f a b = m (f a) (f b)
@@ -54,33 +62,15 @@ let suite = "Gupfile" >:::
 		assert_equal
 			~printer: print_str_list
 			[
-				"x/y/somefile.gup (somefile)";
-				"x/y/gup/somefile.gup (somefile)";
-				"x/gup/y/somefile.gup (somefile)"
-			]
-			(possible_gup_files("x/y/somefile") |> List.take 3 |> List.map print_builder)
-		;
-
-		assert_equal
-			~printer: print_str_list
-			[
 				"/x/y/somefile.gup (somefile)";
 				"/x/y/gup/somefile.gup (somefile)";
 				"/x/gup/y/somefile.gup (somefile)"
 			]
 			(possible_gup_files "/x/y/somefile" |> List.take 3 |> List.map print_builder)
 		;
+	);
 
-		assert_equal
-			~printer: print_str_list
-			[
-				"./somefile.gup (somefile)";
-				"./gup/somefile.gup (somefile)";
-			]
-			(possible_gup_files("somefile") |> List.take 2 |> List.map print_builder)
-	)
-
-	; "gupfile parsing" >:: (fun _ ->
+	"gupfile parsing" >:: (fun _ ->
 		assert_equal
 		~printer: (custom_printf print_gupfile)
 		~cmp: (compare_gupfile)
@@ -108,15 +98,15 @@ let suite = "Gupfile" >:::
 				"    bar2";
 			])
 		)
-	)
+	);
 
-	; "rule parsing" >:: (fun _ ->
+	"rule parsing" >:: (fun _ ->
 		assert_equal ~printer:identity "^[^/]*$"         (regexp_of_rule "*");
 		assert_equal ~printer:identity "^.*$"            (regexp_of_rule "**");
 		assert_equal ~printer:identity "^foo.*bar[^/]*$" (regexp_of_rule "foo**bar*");
-	)
+	);
 
-	; "extracting extant targets from rules" >:: (fun _ ->
+	"extracting extant targets from rules" >:: (fun _ ->
 		let assert_equal = assert_equal ~printer: print_str_list in
 		let gen_targets rules ?(dir="") files =
 			let rules = new match_rules (
@@ -129,5 +119,5 @@ let suite = "Gupfile" >:::
 		assert_equal [ "file1" ] (gen_targets ["file1"; "*.html"] []);
 		assert_equal [ "file1"; "index.html" ] (gen_targets ["file1"; "*.html"] ["index.html"]);
 		assert_equal [ "file2" ] (gen_targets ["file1"; "dir*/file2"] ~dir:"dir1" []);
-	)
+	);
 ]

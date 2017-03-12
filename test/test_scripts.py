@@ -47,7 +47,7 @@ class TestInterpreter(TestCase):
 		self.assertRaises(SafeError, lambda: self.build('not_env'))
 
 class TestScripts(TestCase):
-	def test_target_name_is_relative_to_gupfile_without_gup_dir(self):
+	def test_target_name_is_relative_to_Gupfile_without_gup_dir(self):
 		mkdirp(self.path('a/b'))
 		self.write("gup/a/default.gup", echo_to_target('$2'))
 		self.write("gup/a/nested/default.gup", echo_to_target('nested: $2'))
@@ -55,7 +55,7 @@ class TestScripts(TestCase):
 
 		self.build('c', 'd', cwd='a/b')
 		self.assertEquals(self.read('a/b/c'), os.path.join('b', 'c'))
-		self.assertEquals(self.read('a/b/d'), 'nested: ' + os.path.join('..', 'b', 'd'))
+		self.assertEquals(self.read('a/b/d'), 'nested: ' + os.path.join('b', 'd'))
 
 	def test_cwd_is_relative_to_target(self):
 		self.write('gup/all.gup', BASH + 'mkdir -p foo; cd foo; gup -u bar')
@@ -188,14 +188,14 @@ class TestScripts(TestCase):
 	def test_ignores_repeated_clobbers_on_update_build(self):
 		self.touch('input')
 		self.write('bad.gup', BASH + 'gup -u input; echo bad > "$2"')
-		clobber_warning = '# WARNING bad.gup modified %s directly' % (os.path.join('.', 'bad'))
+		clobber_warning = re.compile('# WARNING bad\.gup modified (.*/)?bad directly')
 
 		def warning(lines):
 			return next(iter(filter(lambda line: line.startswith('# WARN'), lines)), None)
 
 		# initial build should have the warning
 		lines = self.build_u('bad', include_logging=True)
-		self.assertEquals(warning(lines), clobber_warning)
+		self.assertRegexpMatches(warning(lines), clobber_warning)
 
 		# doesn't notify on rebuild
 		lines = self.assertRebuilds('bad', lambda: self.touch('input'), built=True, include_logging=True)
@@ -203,7 +203,7 @@ class TestScripts(TestCase):
 
 		# does notify on explicit build
 		lines = self.build('bad', include_logging=True)
-		self.assertEquals(warning(lines), clobber_warning)
+		self.assertRegexpMatches(warning(lines), clobber_warning)
 
 
 class TestSymlinkScripts(TestCase):
@@ -216,7 +216,7 @@ class TestSymlinkScripts(TestCase):
 		self.mkdirp('dir')
 		os.symlink('dir', self.path('a'))
 
-		self.write("gup/a/b/c.gup", echo_to_target('$2'))
+		self.write("gup/dir/b/c.gup", echo_to_target('$2'))
 		self.build_assert('a/b/c', 'c')
 	
 	def test_rebuild_symlink_to_directory(self):
@@ -255,6 +255,13 @@ class TestSymlinkScripts(TestCase):
 		self.assertEquals(_tmp_output_files(self), [])
 
 	def test_builder_is_invoked_via_link(self):
+		# direct link to script
 		self.write('buildscript.sh', echo_to_target('$(basename "$0")'))
 		self.symlink('buildscript.sh', 'target.gup')
 		self.build_assert('target', 'target.gup')
+
+		# parent directory via symlink
+		self.write('gup/common/target.gup', echo_to_target('"$0"'))
+		self.symlink('common', 'gup/debug')
+		self.build_assert(self.path('debug/target'), self.path('gup/debug/target.gup'))
+

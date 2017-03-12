@@ -14,3 +14,4 @@ test/tmp
 # generated version modules
 python/gup/version.py
 ocaml/gup/version.ml
+_build

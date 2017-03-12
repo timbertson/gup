@@ -1,4 +1,46 @@
-## 0.3.0:
+This file lists breaking changes and major features (not each individual bug fix)
+
+## 0.8.x:
+
+ - Overhaul of path and symlink code to iron out a number of edge case bugs,
+   particularly in cases where `abspath(normpath(p)) != abspath(p)`.
+
+ - Changed `cwd` for indirect (Gupfile) build scripts. Now all buildscripts
+   are executed from the location of the `Gupfile` (without the `gup/`
+   component), not the buildscript. The description in the README was ambiguous
+   as to how this worked, so I chose to resolve this in favour of the approach that
+   is easier to both implement and explain.
+
+## 0.7.x:
+
+ - Warn (instead of failing) when actions like `--always` are used outside of a target
+
+ - Support `!exe` in Gupfile, to use `exe` from `$PATH`
+
+ - Add `gup-git-tree-builder`
+
+## 0.6.x:
+
+ - Add `--keep-failed` flag
+
+ - Warn when removing stale target
+
+ - Add `--leave` and `--dirty`
+
+ - Move suffix -> prefix (see #11 for rationale)
+
+## 0.5.x:
+
+Improvements dealing with symbolic links
+
+## 0.4.x:
+
+ - Breaking change: delete "$2" if it hasn't been `touched`, even if it's a
+directory.
+
+ - treat `#!/path/to/env foo` as `#!foo` if `/path/to/env` doesn't exist.
+
+## 0.3.x:
 
 - Replaced default jobserver implementation (anonymous pipe) with a named pipe,
 whose path is passed to children in $GUP_JOBSERVER.

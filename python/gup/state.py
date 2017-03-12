@@ -6,6 +6,7 @@ from .util import *
 from .log import getLogger
 from .gupfile import Builder
 from .parallel import Lock
+from .path import resolve_base
 from .var import RUN_ID
 _log = getLogger(__name__)
 
@@ -258,7 +259,7 @@ class FileDependency(Dependency):
 	
 	@classmethod
 	def relative_to(cls, rel_root, mtime, path):
-		rel_path = os.path.relpath(path, rel_root)
+		rel_path = os.path.relpath(resolve_base(path), rel_root)
 		return cls(mtime=mtime, checksum=None, path=rel_path)
 
 	@classmethod

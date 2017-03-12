@@ -191,6 +191,60 @@ def getLogger(*a):
 
 
 
+## --- path.py --- ##
+import os
+import errno
+
+
+def resolve_base(p):
+	return os.path.join(
+		os.path.realpath(os.path.dirname(p)),
+		os.path.basename(p)
+	)
+
+def traverse_from(base, rel):
+	if IS_WINDOWS:
+		# yeah, nah
+		return ([], os.path.join(base, rel))
+
+	if os.path.isabs(rel):
+		base = '/'
+
+	# _log.trace("traverse_from: %s, %s", base, rel)
+	links = []
+	parts = [part for part in rel.split(os.path.sep) if part]
+	path = base
+	if not parts:
+		return (links, path)
+
+	while True:
+		try:
+			# _log.trace("readlink: %s", path)
+			dest = os.readlink(path)
+		except OSError as e:
+			if e.errno == errno.EINVAL:
+				# not a symlink; continue along path
+				path = os.path.join(path, parts.pop(0))
+				if not parts:
+					return (links, path)
+			elif e.errno == errno.ENOENT:
+				# doesn't exist, return the entire
+				# remaining path
+				return (links, os.path.join(path, *parts))
+			else:
+				raise
+		else:
+			# _log.trace("->: %s", dest)
+			links.append(path)
+			if os.path.isabs(dest):
+				path = dest
+			else:
+				# relative dest
+				path = os.path.join(os.path.dirname(path), dest)
+
+
+
+
 ## --- version.py --- ##
 VERSION = "0.7.0"
 
@@ -764,16 +818,6 @@ def _gupfile_default_gup_files(filename):
 def _gupfile_up_path(n):
 	return os.path.sep.join(itertools.repeat('..',n))
 
-def _gupfile_suffix_length(suffix):
-	return len(suffix.split(os.path.sep))
-
-def _gupfile_goes_above(depth, path):
-	parts = path.split(os.path.sep)
-	if len(parts) <= depth: return False
-	parts = parts[:depth+1]
-	return all([part == '..' for part in parts])
-
-
 GUPFILE = 'Gupfile'
 
 class BuildCandidate(object):
@@ -822,11 +866,11 @@ class BuildCandidate(object):
 
 		_gupfile_log.trace("candidate exists: %s" % (path,))
 
-		target_base = os.path.join(*self._base_parts(False))
-		_gupfile_log.trace("target_base: %s" % (target_base,))
+		build_basedir = os.path.join(*self._base_parts(False))
+		_gupfile_log.trace("build_basedir: %s" % (build_basedir,))
 
 		if not self.indirect:
-			return Builder(path, self.target, target_base)
+			return Builder(path, self.target, build_basedir)
 		else:
 			target_name = os.path.basename(self.target)
 			if target_name == GUPFILE or os.path.splitext(target_name)[1].lower() == '.gup':
@@ -849,7 +893,7 @@ class BuildCandidate(object):
 
 		for script, ruleset in rules:
 			if ruleset.match(match_target):
-				base = target_base
+				base = os.path.realpath(build_basedir)
 
 				if script.startswith('!'):
 					script = script[1:]
@@ -862,16 +906,9 @@ class BuildCandidate(object):
 						raise SafeError("Build script not found: %s\n     %s(specified in %s)" % (script_path, INDENT, path))
 
 					script = os.path.normpath(script)
-					# if `Gupfile` lives inside a gup/ dir but `script` does not,
-					# we need to drop one `..` component to account for that
-					if self.suffix is not None:
-						if _gupfile_goes_above(_gupfile_suffix_length(self.suffix), script):
-							script = script.split(os.path.sep, 1)[1]
-					base = os.path.join(target_base, os.path.dirname(script))
-
 				return Builder(
 					script_path,
-					os.path.relpath(os.path.join(target_base, self.target), base),
+					os.path.relpath(os.path.join(build_basedir, self.target), base),
 					base)
 		return None
 
@@ -1328,7 +1365,7 @@ class FileDependency(Dependency):
 
 	@classmethod
 	def relative_to(cls, rel_root, mtime, path):
-		rel_path = os.path.relpath(path, rel_root)
+		rel_path = os.path.relpath(resolve_base(path), rel_root)
 		return cls(mtime=mtime, checksum=None, path=rel_path)
 
 	@classmethod
@@ -1499,6 +1536,7 @@ except ImportError:
 	from shlex import quote
 
 def prepare_build(p):
+	p = resolve_base(p)
 	builder = Builder.for_target(p)
 	_builder_log.trace('prepare_build(%r) -> %r' % (p, builder))
 	if builder is not None:
@@ -1778,7 +1816,7 @@ class Task(object):
 
 	def complete(self):
 		if self.parent_target is not None:
-			target_path = self.target_path
+			intermediate_paths, target_path = traverse_from(os.getcwd(), self.target_path)
 			mtime = get_mtime(target_path)
 
 			if self.target:
@@ -1786,7 +1824,16 @@ class Task(object):
 			else:
 				dep = FileDependency.relative_to_target(self.parent_target, mtime=mtime, path=self.target_path)
 
-			TargetState(self.parent_target).add_dependency(dep)
+			state = TargetState(self.parent_target)
+			state.add_dependency(dep)
+			if intermediate_paths or True:
+				_task_log.trace("adding intermediate paths: %r", intermediate_paths)
+				for intermediate in intermediate_paths:
+					dep = FileDependency.relative_to_target(
+							self.parent_target,
+							path=intermediate,
+							mtime=get_mtime(intermediate))
+					state.add_dependency(dep)
 
 	def handle_result(self, rv):
 		_task_log.trace("build process exited with status: %r" % (rv,))
@@ -2107,7 +2154,7 @@ def _cmd_build(opts, targets):
 
 	runner = TaskRunner()
 	for target_path in targets:
-		if os.path.abspath(target_path) == parent_target:
+		if resolve_base(target_path) == parent_target:
 			raise SafeError("Target `%s` attempted to build itself" % (target_path,))
 
 		next_task = Task(opts, parent_target, target_path)

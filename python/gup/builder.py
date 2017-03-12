@@ -11,6 +11,7 @@ from .util import *
 from .state import TargetState
 from .log import getLogger
 from .var import ROOT_CWD, XTRACE, IS_WINDOWS, keep_failed_outputs
+from .path import resolve_base
 from .parallel import extend_build_env
 _log = getLogger(__name__)
 
@@ -20,6 +21,7 @@ except ImportError:
 	from shlex import quote
 
 def prepare_build(p):
+	p = resolve_base(p)
 	builder = Builder.for_target(p)
 	_log.trace('prepare_build(%r) -> %r' % (p, builder))
 	if builder is not None:
