@@ -331,6 +331,11 @@ struct
 				Lwt.return_unit
 		end
 
+	let print_version args =
+		expect_no args;
+		print_endline Version.version;
+		Lwt.return_unit
+
 	let list_features args =
 		expect_no args;
 		let features = [
@@ -406,6 +411,7 @@ struct
 				"  --dirty        Check if one or more targets are out of date\n" ^
 				"  --targets/-t   List buildable targets in a directory\n" ^
 				"  --features     List the features of this gup version\n" ^
+				"  --version      Print the gup version\n" ^
 				"\n" ^
 				"Actions which can only be called from a buildscript:\n" ^
 				"  --always       Mark this target as always-dirty\n" ^
@@ -487,6 +493,12 @@ struct
 		action := Actions.list_features;
 		options
 	;;
+
+	let print_version () =
+		let options = OptParser.make ~usage: "Usage: gup --version" () in
+		action := Actions.print_version;
+		options
+	;;
 end
 
 let _init_logging verbosity =
@@ -532,6 +544,7 @@ let main () =
 		| Some "--buildable" -> Options.test_buildable ()
 		| Some "--dirty" -> Options.test_dirty ()
 		| Some "--features" -> Options.list_features ()
+		| Some "--version" -> Options.print_version ()
 		| _ -> firstarg := 1; Options.main ()
 		in
 

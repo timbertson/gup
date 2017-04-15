@@ -31,7 +31,7 @@ with open(dest, 'w') as output:
 		print(s % a, file=output)
 
 	for dir in sorted(dirs):
-		if is_hidden(dir) or dir == 'gup': continue
+		if is_hidden(dir) or dir == 'gup' or dir.startswith('xx-'): continue
 
 		dump("Processing dir: %s" % dir)
 		# when generating docs, we don't want to show built files

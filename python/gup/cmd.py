@@ -122,6 +122,9 @@ def _main(argv):
 		elif cmd == '--features':
 			p = optparse.OptionParser('Usage: gup --features')
 			action = _list_features
+		elif cmd == '--version':
+			p = optparse.OptionParser('Usage: gup --version')
+			action = _print_version
 	
 	if action is None:
 		# default parser
@@ -219,6 +222,10 @@ def _test_dirty(opts, args):
 		if target is None or target.is_dirty():
 			sys.exit(0)
 	sys.exit(1)
+
+def _print_version(opts, args):
+	assert len(args) == 0, "no arguments expected"
+	print(VERSION)
 
 def _list_features(opts, args):
 	assert len(args) == 0, "no arguments expected"

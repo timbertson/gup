@@ -9,6 +9,9 @@ class TestFeatures(TestCase):
 		lines = self._build(["--features"])
 		version_line = lines[0]
 		self.assertEqual(version_line, 'version ' + current_version)
+
+		lines = self._build(["--version"])
+		self.assertEqual(lines, [current_version])
 	
 	@skipPermutations
 	def test_ocaml_version_has_list_targets(self):
