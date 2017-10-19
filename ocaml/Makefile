@@ -1,18 +1,15 @@
 OCAMLBUILD = $(shell if which rainbow >/dev/null 2>&1; then echo "rainbow -- ocamlbuild"; else echo "ocamlbuild"; fi)
 
 all: bin
-bin: bin/gup
 
-unit-test-pre: test.byte
+unit-test-pre: test/test.exe
 integration-test-pre: bin
 
-bin/gup: main.byte phony
-	mkdir -p bin
-	cp main.byte bin/gup
+bin: gup.install
+	ln -sfn _build/install/default/bin bin
 
-native: main.native phony
-	mkdir -p bin
-	cp main.native bin/gup
+%.install: PREBUILD
+	jbuilder build $@
 
 test: unit-test-pre integration-test-pre phony
 	$(MAKE) unit-test
@@ -24,41 +21,26 @@ unit-test: unit-test-pre phony
 integration-test: integration-test-pre phony
 	../run_tests.py -i
 
-test.byte: test/test.byte phony ;
-test/test.byte: test.mlpack main.byte
-
-main.byte: gup.mlpack
-main.native: gup.mlpack
-
 PREBUILD: phony version
 version: phony gup/version.ml
 
-%.byte: PREBUILD
-	${OCAMLBUILD} -use-ocamlfind $@
-
-%.native: PREBUILD
-	${OCAMLBUILD} -use-ocamlfind $@
-
-%.cmo: PREBUILD
-	${OCAMLBUILD} -use-ocamlfind $@
+%.exe: PREBUILD
+	jbuilder build $@
 
 gup/version.ml: ../VERSION
 	echo "let version = \"$$(cat ../VERSION)\"" > $@
 
-install: phony native
+install: phony gup.install
 	[ -n "${DISTDIR}" ]
 	mkdir -p "${DISTDIR}/bin"
-	cp main.native "${DISTDIR}/bin/gup"
-	mkdir -p "${DISTDIR}/share/fish/completions"
-	cp -a ../share "${DISTDIR}/"
+	mkdir -p "${DISTDIR}/share"
+	cp -r --dereference bin/* "${DISTDIR}/bin/"
+	cp -a ../share/* "${DISTDIR}/share/"
 
 opam-test: phony
 	./test_opam_install.sh
 
 clean: phony
-	rm -rf _build *.mlpack *.byte *.native
-
-%.mlpack: phony
-	@python ./make-mlpack.py "$$(basename "$@" ".mlpack")"/ "$@"
+	rm -rf _build *.exe *.install
 
 .PHONY: phony

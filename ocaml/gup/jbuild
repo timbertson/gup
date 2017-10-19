@@ -1,0 +1,22 @@
+; vim: set syntax=lisp commentstring=;\ %s:
+(jbuild_version 1)
+
+(library (
+	(name gup)
+	(modules (:standard \ main))
+	(libraries (
+		batteries
+		unix
+		cryptokit
+		extunix
+		lwt
+		lwt.unix
+	))
+	(preprocess (pps (lwt.ppx)))
+))
+
+(executable (
+	(name main)
+	(public_name gup)
+	(libraries (gup))
+))

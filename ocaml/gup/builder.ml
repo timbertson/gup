@@ -60,7 +60,7 @@ let rec _is_dirty ?perform_build = (
 			let path = ConcreteBase.resolve_from path in
 			let open Lwt in
 			try
-				lwt () = PathMap.find path !built in
+				let%lwt () = PathMap.find path !built in
 				return_false
 			with Not_found -> (
 				let result : bool Lwt.t = (
@@ -71,7 +71,7 @@ let rec _is_dirty ?perform_build = (
 							return_false
 						| Some buildscript ->
 							let child_state = new State.target_state path in
-							lwt child_dirty = _is_dirty child_state buildscript in
+							let%lwt child_dirty = _is_dirty child_state buildscript in
 							if child_dirty then (
 								log#trace "_is_dirty(%s) -> True" (ConcreteBase.to_string path);
 								if allow_build
@@ -87,7 +87,7 @@ let rec _is_dirty ?perform_build = (
 			)
 		) in
 
-		lwt deps = state#deps in
+		let%lwt deps = state#deps in
 		match deps with
 			| None -> (
 				log#debug "DIRTY: %s (is buildable but has no stored deps)" state#path_repr;
@@ -106,8 +106,8 @@ let rec _is_dirty ?perform_build = (
 						 * may have been dirty *)
 						let open Lwt in
 						let child_dirty = ref false in
-						lwt dirty = deps#is_dirty buildscript (fun path ->
-							lwt child_built = build_child_if_dirty path in
+						let%lwt dirty = deps#is_dirty buildscript (fun path ->
+							let%lwt child_built = build_child_if_dirty path in
 							if child_built then child_dirty := true;
 							return_false
 						) in
@@ -139,7 +139,7 @@ class target (buildscript:Gupfile.buildscript) =
 			if not (Absolute.exists exe_path) then
 				Error.raise_safe "Build script does not exist: %s" (Absolute.to_string exe_path);
 
-			lwt needs_build = if update then (
+			let%lwt needs_build = if update then (
 				let perform_build buildscript = (new target buildscript)#build false in
 				_is_dirty ~perform_build state buildscript
 			) else Lwt.return_true in
@@ -177,7 +177,7 @@ class target (buildscript:Gupfile.buildscript) =
 
 					let do_build () =
 						log#infos target_relative_to_cwd;
-						lwt mtime = Util.get_mtime path_str in
+						let%lwt mtime = Util.get_mtime path_str in
 						let exe_path_str = Absolute.to_string exe_path in
 						let args = List.concat
 							[
@@ -194,7 +194,7 @@ class target (buildscript:Gupfile.buildscript) =
 							log#trace "executing: %a" (List.print String.print_quoted) args
 						end;
 
-						lwt ret = try_lwt in_dir basedir_str (fun () -> Lwt_process.exec
+						let%lwt ret = try%lwt in_dir basedir_str (fun () -> Lwt_process.exec
 								~env:env
 								((List.first args), (Array.of_list args))
 							)
@@ -203,9 +203,9 @@ class target (buildscript:Gupfile.buildscript) =
 								raise ex
 							end
 						in
-						lwt new_mtime = Util.get_mtime path_str in
+						let%lwt new_mtime = Util.get_mtime path_str in
 						let target_changed = neq (Option.compare ~cmp:Big_int.compare) mtime new_mtime in
-						lwt () = if target_changed then (
+						let%lwt () = if target_changed then (
 							let p = Option.print Big_int.print in
 							log#trace "old_mtime=%a, new_mtime=%a" p mtime p new_mtime;
 							if (Util.lisdir path_str) then Lwt.return_unit else (
@@ -222,7 +222,7 @@ class target (buildscript:Gupfile.buildscript) =
 
 						match ret with
 							| Unix.WEXITED 0 -> begin
-								lwt () = if Util.lexists output_file then (
+								let%lwt () = if Util.lexists output_file then (
 									(* If both old and new exist, and either is a directory,
 									 * remove the old dir before renaming *)
 									if (Util.lexists path_str &&
@@ -263,10 +263,12 @@ class target (buildscript:Gupfile.buildscript) =
 								raise @@ Target_failed (target_relative_to_cwd, None, None)
 							end
 					in
-					try_lwt
-						do_build ()
-					finally
+					(
+						try%lwt do_build ()
+						with e -> raise e
+					) [%lwt.finally
 						Lwt.return (cleanup ())
+					]
 				)
 			)
 	end

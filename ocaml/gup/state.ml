@@ -49,8 +49,8 @@ let version_marker = "version: "
 
 (* exceptionless helpers *)
 let readline f =
-	try_lwt
-		lwt line = Lwt_io.read_line f in
+	try%lwt
+		let%lwt line = Lwt_io.read_line f in
 		Lwt.return @@ Some line
 	with End_of_file -> Lwt.return None
 
@@ -124,9 +124,9 @@ let write_dependency output (tag,fields) =
 	Lwt_io.write_line output @@ (string_of_dependency_type tag) ^ ": " ^ (String.join " " fields)
 
 let dirty_check_with_dep ~(path:RelativeFrom.t) checker args =
-	lwt dirty = checker () in
+	let%lwt dirty = checker () in
 	if dirty then Lwt.return_true else (
-		lwt built = args.build path in
+		let%lwt built = args.build path in
 		if built
 			then (
 				log#trace "dirty_check_with_dep: path %s was built, rechecking" (RelativeFrom.to_string path);
@@ -162,7 +162,7 @@ and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:Re
 			let resolved_path = ConcreteBase.resolve_from path in
 			let state = new target_state resolved_path in
 			let checksum_mismatch () =
-				lwt deps = state#deps in
+				let%lwt deps = state#deps in
 				let latest_checksum = Option.bind deps (fun deps -> deps#checksum) in
 				let dirty = match latest_checksum with
 					| None -> true
@@ -178,7 +178,7 @@ and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:Re
 
 		method private is_dirty_mtime args =
 			let mtime_mismatch () =
-				lwt current_mtime = (RelativeFrom.lift Util.get_mtime) path in
+				let%lwt current_mtime = (RelativeFrom.lift Util.get_mtime) path in
 				log#trace "%s: comparing stored mtime %a against current %a"
 					(RelativeFrom.to_string path)
 					(Option.print Big_int.print) self#mtime
@@ -188,7 +188,7 @@ and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:Re
 			dirty_check_with_dep ~path mtime_mismatch args
 
 		method is_dirty args =
-			lwt mtime_dirty = self#is_dirty_mtime args in
+			let%lwt mtime_dirty = self#is_dirty_mtime args in
 			if mtime_dirty then (
 				match checksum with
 					| Some checksum -> self#is_dirty_cs checksum args
@@ -227,7 +227,7 @@ and build_time time =
 		method fields = [Big_int.to_string time]
 		method is_dirty args =
 			let path = args.path |> ConcreteBase.to_string in
-			lwt mtime = Util.get_mtime path >>= (return $ Option.get) in
+			let%lwt mtime = Util.get_mtime path >>= (return $ Option.get) in
 			Lwt.return (
 				if neq Big_int.compare mtime time then (
 					let log_method = ref log#warn in
@@ -278,7 +278,7 @@ and dependencies (target_path:ConcreteBase.t) (data:base_dependency intermediate
 							Lwt.return_false
 					| (rule::remaining_rules) ->
 						log#trace "calling %a#is_dirty for path %s" print_obj rule target_path_str;
-						lwt dirty = rule#is_dirty args in
+						let%lwt dirty = rule#is_dirty args in
 						if dirty then (
 							log#trace "is_dirty: %s returning true" target_path_str;
 							Lwt.return_true
@@ -333,7 +333,7 @@ and dependency_builder target_path (input:Lwt_io.input_channel) = object (self)
 					| (AlwaysRebuild, []) -> Some (new always_rebuild)
 					| _ -> Error.raise_safe "Invalid dependency line: %s" line
 			in
-			lwt rules = Lwt_io.read_lines input
+			let%lwt rules = Lwt_io.read_lines input
 				|> Lwt_stream.filter_map process_line
 				|> Lwt_stream.to_list
 			in
@@ -341,14 +341,14 @@ and dependency_builder target_path (input:Lwt_io.input_channel) = object (self)
 			Lwt.return rv
 		in
 
-		lwt (data : base_dependency intermediate_dependencies) =
+		let%lwt (data : base_dependency intermediate_dependencies) =
 			let rv = {
 				checksum = ref None;
 				run_id = ref None;
 				clobbers = ref false;
 				rules = ref [];
 			} in
-			lwt version_line = readline input in
+			let%lwt version_line = readline input in
 			log#trace "version_line: %a" (Option.print String.print) version_line;
 			let version_number = Option.bind version_line (fun line ->
 				if String.starts_with line version_marker then (
@@ -401,7 +401,7 @@ and target_state (target_path:ConcreteBase.t) =
 			log#trace "parse_deps %s" (target_path |> ConcreteBase.to_string);
 			let deps_path = self#meta_path deps_ext in
 			if Absolute.lexists deps_path then (
-				try_lwt
+				try%lwt
 					(Lazy.force deps_lock)#use Parallel.ReadLock (fun deps_path ->
 						with_file_in deps_path (fun f ->
 							(new dependency_builder target_path f)#build >>= (fun d -> Lwt.return (Some d))
@@ -427,7 +427,7 @@ and target_state (target_path:ConcreteBase.t) =
 				Lwt.return None
 
 		method deps =
-			lwt deps = self#parse_dependencies in
+			let%lwt deps = self#parse_dependencies in
 			log#trace "Loaded serialized state: %a" (Option.print print_obj) deps;
 			Lwt.return deps
 
@@ -457,12 +457,12 @@ and target_state (target_path:ConcreteBase.t) =
 			self#add_dependency (self#file_dependency_with ~mtime ~checksum path)
 
 		method add_file_dependency path =
-			lwt mtime = Util.get_mtime (ConcreteBase.to_string path) in
+			let%lwt mtime = Util.get_mtime (ConcreteBase.to_string path) in
 			self#add_file_dependency_with ~mtime ~checksum:None path
 
 		method add_file_dependencies paths =
-			lwt deps = Lwt_list.map_p (fun path ->
-				lwt mtime = ConcreteBase.lift Util.get_mtime path in
+			let%lwt deps = Lwt_list.map_p (fun path ->
+				let%lwt mtime = ConcreteBase.lift Util.get_mtime path in
 				Lwt.return (self#file_dependency_with ~mtime ~checksum:None path)
 			) paths in
 			self#add_dependencies deps
@@ -474,7 +474,7 @@ and target_state (target_path:ConcreteBase.t) =
 			self#add_dependency (serializable (new always_rebuild))
 
 		method private builder_dependency path =
-			lwt builder_mtime = (Absolute.lift Util.get_mtime) path in
+			let%lwt builder_mtime = (Absolute.lift Util.get_mtime) path in
 			return (new builder_dependency
 				~mtime:builder_mtime
 				~checksum: None
@@ -497,9 +497,9 @@ and target_state (target_path:ConcreteBase.t) =
 
 			let build = (fun deps_path ->
 				if (!builds_have_been_cancelled) then raise Error.BuildCancelled;
-				lwt deps = self#deps in
+				let%lwt deps = self#deps in
 				if still_needs_build deps then (
-					lwt builder_dep = self#builder_dependency exe in
+					let%lwt builder_dep = self#builder_dependency exe in
 					let temp = ensure_meta_path new_deps_ext |> Absolute.to_string in
 					with_file_out temp (fun file ->
 						Lwt_io.write_line file (version_marker ^ (string_of_int format_version)) >>
@@ -507,14 +507,14 @@ and target_state (target_path:ConcreteBase.t) =
 						write_dependency file (serializable builder_dep) >>
 						write_dependency file (serializable current_run_id)
 					) >>
-					lwt built = try_lwt
+					let%lwt built = try%lwt
 						block deps
 					with ex ->
-						Lwt_unix.unlink temp >>
-						raise_lwt ex
+						let%lwt () = Lwt_unix.unlink temp in
+						raise ex
 					in
-					lwt () = if built then (
-						lwt mtime = (ConcreteBase.lift Util.get_mtime) target_path in
+					let%lwt () = if built then (
+						let%lwt mtime = (ConcreteBase.lift Util.get_mtime) target_path in
 						mtime |> Lwt_option.may (fun time ->
 							with_file_out ~flags:[Unix.O_APPEND] temp (fun output ->
 								let timedep = new build_time time in
@@ -527,7 +527,7 @@ and target_state (target_path:ConcreteBase.t) =
 				) else Lwt.return false
 			) in
 
-			lwt built =
+			let%lwt built =
 				Jobserver.run_job (fun () ->
 					(Lazy.force deps_lock)#use Parallel.WriteLock build
 				)

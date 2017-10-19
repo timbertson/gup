@@ -1,2 +1,0 @@
-let () =
-	Gup.Cmd.main()

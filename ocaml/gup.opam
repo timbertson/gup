@@ -9,6 +9,7 @@ depends: [
   "lwt" { >= "2.5.1" }
   "ocamlfind" {build}
   "conf-python-2-7" {build}
+  "jbuilder" {build}
 ]
 build: [
   [ make "-C" "ocaml" "native"]

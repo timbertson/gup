@@ -1,2 +1,0 @@
-#!/bin/bash
-exec rlwrap ocaml -init ocamlinit "$@"

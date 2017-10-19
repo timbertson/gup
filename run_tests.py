@@ -55,7 +55,7 @@ try:
 		assert action == UNIT
 		add_to_env('PATH', os.path.join(root, 'test/bin'))
 		if kind == 'ocaml':
-			subprocess.check_call(['./test.byte', '-runner', 'sequential'] + args)
+			subprocess.check_call(['./_build/default/test/test.exe', '-runner', 'sequential'] + args)
 		else:
 			add_to_env('PYTHONPATH', os.path.join(root, 'python'))
 			run_nose(args)

@@ -62,7 +62,7 @@ class fd_jobserver (read_end, write_end) toplevel =
 
 	let _write_tokens n =
 		let buf = repeat_tokens n in
-		lwt written = Lwt_unix.write write_end buf 0 n in
+		let%lwt written = Lwt_unix.write write_end buf 0 n in
 		assert (written = n);
 		Lwt.return_unit
 	in
@@ -70,9 +70,9 @@ class fd_jobserver (read_end, write_end) toplevel =
 	let _read_token () =
 		let buf = " " in
 		let success = ref false in
-		while_lwt not !success do
+		while%lwt not !success do
 			(* XXX does this really return without reading sometimes? *)
-			lwt n = Lwt_unix.read read_end buf 0 1 in
+			let%lwt n = Lwt_unix.read read_end buf 0 1 in
 			let succ = n > 0 in
 			success := succ;
 			if not succ
@@ -111,7 +111,7 @@ class fd_jobserver (read_end, write_end) toplevel =
 			| Some t -> use_mine ()
 			| None ->
 				log#trace "waiting for token...";
-				lwt () = Lwt.pick [
+				let%lwt () = Lwt.pick [
 					Lwt_condition.wait _have_token >>= use_mine;
 					_read_token () >>= fun () ->
 						_free_tokens := !_free_tokens - 1;
@@ -131,24 +131,26 @@ object (self)
 				(* wait for outstanding tasks by comsuming the number of tokens we started with *)
 				let remaining = ref (tokens - 1) in
 				let buf = repeat_tokens !remaining in
-				while_lwt !remaining > 0 do
+				while%lwt !remaining > 0 do
 					log#debug "waiting for %d free tokens to be returned" !remaining;
-					lwt n = Lwt_unix.read read_end buf 0 !remaining in
+					let%lwt n = Lwt_unix.read read_end buf 0 !remaining in
 					remaining := !remaining - n;
 					Lwt.return_unit
 				done
 			| None -> Lwt.return_unit
 
 	method run_job : 'a. (unit -> 'a Lwt.t) -> 'a Lwt.t = fun fn ->
-		lwt () = _get_token () in
-		try_lwt
+		let%lwt () = _get_token () in
+		(try%lwt
 			fn ()
-		finally
+		with e -> raise e)
+		[%lwt.finally
 			_release 1
+		]
 
 	method with_process_mutex : 'a. Lwt_unix.file_descr -> (unit -> 'a Lwt.t) -> 'a Lwt.t =
 	fun fd fn ->
-		lwt stats = Lwt_unix.fstat fd in
+		let%lwt stats = Lwt_unix.fstat fd in
 		LockMap.with_lock (FileIdentity.create stats) fn
 end
 
@@ -166,12 +168,12 @@ class named_jobserver path toplevel =
 
 object (self)
 	method finish =
-		lwt () = server#finish in
+		let%lwt () = server#finish in
 		let (r, w) = fds in
-		lwt (_:unit list) = Lwt_list.map_p Lwt_unix.close [r;w] in
+		let%lwt (_:unit list) = Lwt_list.map_p Lwt_unix.close [r;w] in
 
 		(* delete jobserver file if we are the toplevel *)
-		lwt () = Lwt_option.may (fun _ -> Lwt_unix.unlink path) toplevel in
+		let%lwt () = Lwt_option.may (fun _ -> Lwt_unix.unlink path) toplevel in
 		Lwt.return_unit
 
 	method run_job : 'a. (unit -> 'a Lwt.t) -> 'a Lwt.t = fun fn ->
@@ -301,11 +303,13 @@ module Jobserver = struct
 			end
 		);
 
-		try_lwt
-			fn ()
-		finally (
+		(
+			try%lwt
+				fn ()
+			with e -> raise e
+		)[%lwt.finally 
 			!_impl#finish
-		)
+		]
 	)
 
 	let run_job fn = !_impl#run_job fn
@@ -348,7 +352,7 @@ class lock_file ~target lock_path =
 	let current_lock = ref None in
 
 	let do_lockf path fd flag =
-		try_lwt
+		try%lwt
 			Lwt_unix.lockf fd flag 0
 		with Unix.Unix_error (errno, _,_) ->
 			Error.raise_safe "Unable to lock file %s: %s" path (Unix.error_message errno)
@@ -356,19 +360,21 @@ class lock_file ~target lock_path =
 
 	let with_lock mode path f =
 		(* lock file *)
-		lwt fd = Lwt_unix.openfile path [Unix.O_RDWR; Unix.O_CREAT; Unix.O_CLOEXEC] 0o664 in
+		let%lwt fd = Lwt_unix.openfile path [Unix.O_RDWR; Unix.O_CREAT; Unix.O_CLOEXEC] 0o664 in
 		
 		(* ensure only one instance process-wide ever locks the given inode *)
 		
 		Jobserver.with_process_mutex fd (fun () ->
-			lwt () = do_lockf path fd (lock_flag mode) in
+			let%lwt () = do_lockf path fd (lock_flag mode) in
 			log#trace "--Lock[%s] %a" path print_lock_mode mode;
-			try_lwt
-				f ()
-			finally (
+			(
+				try%lwt
+					f ()
+				with e -> raise e
+			) [%lwt.finally (
 				log#trace "Unlock[%s]" path;
 				Lwt_unix.close fd
-			)
+			)]
 		)
 	in
 

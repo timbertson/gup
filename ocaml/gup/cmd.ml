@@ -71,7 +71,7 @@ struct
 	let build ~update ~jobs ~keep_failed posargs =
 		if Opt.get keep_failed then Var.set_keep_failed_outputs ();
 		let update = Opt.get update in
-		lwt () = _init_path () in
+		let%lwt () = _init_path () in
 
 		let jobs = match Opt.get jobs with
 			| 0 -> None
@@ -83,8 +83,8 @@ struct
 			let parent_target = _get_parent_target () in
 			let build_target (path:string) : unit Lwt.t =
 				let path = RelativeFrom.concat_from_cwd (PathString.parse path) in
-				try_lwt
-					lwt () = Lwt_option.may (fun parent ->
+				try%lwt
+					let%lwt () = Lwt_option.may (fun parent ->
 						let path = ConcreteBase.resolve_from path in
 						if ConcreteBase.eq path parent then
 							raise_safe "Target `%s` attempted to build itself" (ConcreteBase.to_string path);
@@ -109,7 +109,7 @@ struct
 						let traversed, path = ConcreteBase.traverse_from path in
 						join [
 							add_intermediate_link_deps traversed;
-							lwt target = (match Builder.prepare_build path with
+							let%lwt target = (match Builder.prepare_build path with
 								| Some (`Target target) ->
 									target#build update
 										|> Lwt.map (fun (_:bool) -> Some target)
@@ -117,7 +117,7 @@ struct
 									(* recurse on destination
 									 * (which will be added as a dep to parent_target)
 									 *)
-									lwt () = build path in
+									let%lwt () = build path in
 									Lwt.return_none
 								| None -> begin
 									if update && (ConcreteBase.lexists path) then (
@@ -129,7 +129,7 @@ struct
 								end
 							) in
 							parent_state |> Lwt_option.may (fun (parent_state:State.target_state) ->
-								lwt mtime = Util.get_mtime (ConcreteBase.to_string path)
+								let%lwt mtime = Util.get_mtime (ConcreteBase.to_string path)
 								and checksum = target |> Lwt_option.bind (fun target ->
 									target#state#deps |> Lwt.map (fun deps ->
 										Option.bind deps (fun deps -> deps#checksum)
@@ -319,16 +319,15 @@ struct
 						| Some (`Symlink_to dest) -> is_dirty (ConcreteBase.resolve_from dest)
 						| None -> Lwt.return_false
 				in
-				lwt dirty =
-					try_lwt
-						lwt (_dirty:string) = args |> Lwt_list.find_s (fun path ->
+				let%lwt dirty =
+					try%lwt
+						let%lwt (_dirty:string) = args |> Lwt_list.find_s (fun path ->
 							is_dirty (ConcreteBase.resolve path)
 						) in
 						Lwt.return_true
 					with Not_found -> Lwt.return_false
 				in
-				exit (if dirty then 0 else 1);
-				Lwt.return_unit
+				exit (if dirty then 0 else 1)
 		end
 
 	let print_version args =

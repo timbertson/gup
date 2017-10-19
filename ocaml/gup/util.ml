@@ -5,16 +5,16 @@ include Zeroinstall_utils
 
 let int_time (time:float) : Big_int.t = Big_int.of_float (floor (time *. 1000.0))
 let get_mtime (path:string) : Big_int.t option Lwt.t =
-	lwt stats = try_lwt
-		lwt rv = Lwt_unix.lstat path in
+	let%lwt stats = try%lwt
+		let%lwt rv = Lwt_unix.lstat path in
 		Lwt.return @@ Some rv
 	with Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return None
 	in
 	Lwt.return @@ Option.map (fun st -> int_time (st.Lwt_unix.st_mtime)) stats
 
 let isfile path =
-	try_lwt
-		lwt stat = Lwt_unix.lstat path in
+	try%lwt
+		let%lwt stat = Lwt_unix.lstat path in
 		Lwt.return (stat.Unix.st_kind <> Unix.S_DIR)
 	with Unix.Unix_error (Unix.ENOENT, _, _) -> Lwt.return false
 
