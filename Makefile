@@ -1,4 +1,11 @@
 PYTHON=python
+GUP_IMPL ?= python
+
+default: impl
+	@make ${GUP_IMPL}/all
+
+impl: phony
+	@echo "** Note: using implementation: ${GUP_IMPL}"
 
 all: python ocaml
 
@@ -7,10 +14,10 @@ ocaml: ocaml/all
 clean: ocaml/clean python/clean
 
 ocaml/%: phony
-	make -C ocaml "$$(basename "$@")"
+	@make -C ocaml "$$(basename "$@")"
 
 python/%: phony
-	make -C python "$$(basename "$@")" "PYTHON=${PYTHON}"
+	@make -C python "$$(basename "$@")" "PYTHON=${PYTHON}"
 
 test: phony
 	$(MAKE) unit-test
@@ -53,5 +60,21 @@ ci-permutation: phony
 		--run "make permutation-test"
 
 ci-all: phony ci-python2 ci-python3 ci-ocaml ci-opam ci-permutation
+
+install-base: phony
+	[ -n "${DISTDIR}" ]
+	mkdir -p "${DISTDIR}/bin"
+	mkdir -p "${DISTDIR}/share"
+	cp builders/* "${DISTDIR}/bin/"
+	cp -a share/* "${DISTDIR}/share/"
+
+install-python: install-base
+	make -C python install-bin DISTDIR="${DISTDIR}"
+
+install-ocaml: install-base
+	make -C ocaml install-bin DISTDIR="${DISTDIR}"
+
+install: impl
+	@make install-${GUP_IMPL}
 
 .PHONY: phony

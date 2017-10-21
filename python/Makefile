@@ -10,6 +10,10 @@ endif
 bin: phony bin/gup bin/gup.exe
 all: bin
 
+install-bin: bin
+	[ -n "${DISTDIR}" ]
+	cp -r --dereference bin/* "${DISTDIR}/bin/"
+
 unit-test-pre: phony $(SOURCES)
 integration-test-pre: phony bin
 

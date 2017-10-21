@@ -12,5 +12,8 @@ depends: [
   "jbuilder" {build}
 ]
 build: [
-  [ make "-C" "ocaml" "native"]
+  [ make "GUP_IMPL=ocaml" ]
+]
+install: [
+  [ make "install" "GUP_IMPL=ocaml DISTDIR=%{prefix}%" ]
 ]

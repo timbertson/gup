@@ -30,12 +30,9 @@ version: phony gup/version.ml
 gup/version.ml: ../VERSION
 	echo "let version = \"$$(cat ../VERSION)\"" > $@
 
-install: phony gup.install
+install-bin: phony gup.install
 	[ -n "${DISTDIR}" ]
-	mkdir -p "${DISTDIR}/bin"
-	mkdir -p "${DISTDIR}/share"
 	cp -r --dereference bin/* "${DISTDIR}/bin/"
-	cp -a ../share/* "${DISTDIR}/share/"
 
 opam-test: phony
 	./test_opam_install.sh

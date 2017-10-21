@@ -22,12 +22,10 @@ stdenv.mkDerivation {
     ++ (lib.optional usePychecker pychecker)
   ;
   SKIP_PYCHECKER = !usePychecker;
-  buildPhase = "make python";
   inherit pychecker;
   testPhase = if enableTests then "make test" else "true";
-  installPhase = ''
-    mkdir $out
-    cp -r python/bin $out/bin
-    cp builders/* $out/bin/
+  makeFlags = "GUP_IMPL=python";
+  preInstall = ''
+    export DISTDIR=$out
   '';
 }
