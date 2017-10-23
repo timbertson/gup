@@ -11,5 +11,5 @@ opam2nix.buildOpamPackage {
     (with pythonPackages; [ python whichcraft nose nose_progressive mocktest])
     ++ [ zlib ]
   ;
-  opamFile = ../ocaml/gup.opam;
+  opamFile = ../gup.opam;
 }
