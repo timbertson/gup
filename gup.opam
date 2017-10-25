@@ -10,6 +10,7 @@ depends: [
   "ocamlfind" {build}
   "conf-python-2-7" {build}
   "jbuilder" {build}
+  "ounit" {test}
 ]
 build: [
   [ make "GUP_IMPL=ocaml" ]

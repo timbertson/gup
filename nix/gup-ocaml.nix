@@ -3,13 +3,14 @@
 let
   opam2nix = callPackage ./opam2nix-packages.nix {};
 in
-opam2nix.buildOpamPackage {
+lib.overrideDerivation (opam2nix.buildOpamPackage {
   name = "gup-${version}";
   inherit src meta version;
   ocamlAttr = "ocaml_4_02";
-  buildInputs =
-    (with pythonPackages; [ python whichcraft nose nose_progressive mocktest])
+  opamFile = ../gup.opam;
+  extraPackages = [ "ounit" ];
+}) (o: {
+  buildInputs = (with pythonPackages; [ python whichcraft nose nose_progressive mocktest])
     ++ [ zlib ]
   ;
-  opamFile = ../gup.opam;
-}
+})

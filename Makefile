@@ -56,8 +56,7 @@ ci-opam: phony
 	./test/nix-shell -A opam --run "make -C ocaml opam-test"
 
 ci-permutation: phony
-	./test/nix-shell \
-		--run "make permutation-test"
+	./test/nix-shell -A development --run "make permutation-test"
 
 ci-all: phony ci-python2 ci-python3 ci-ocaml ci-opam ci-permutation
 

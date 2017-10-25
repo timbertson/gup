@@ -13,6 +13,7 @@ def fold(name, fn):
 		print('travis_fold:end:' + name)
 
 lines = []
+print('+ ' + ' '.join(cmd + init_args))
 proc = subprocess.Popen(cmd + init_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 def buffer_nix_lines():
 	print("Building nix-shell dependencies...")
@@ -34,4 +35,5 @@ if status != 0:
 		print(line, end='')
 	sys.exit(status)
 
+print('+ ' + ' '.join(cmd + args))
 os.execvp('nix-shell', cmd + args)

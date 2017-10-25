@@ -8,7 +8,7 @@ let
 	python2Impl = import ./default.nix { ocamlVersion = false; pythonVersion = 2; };
 	python3Impl = import ./default.nix { ocamlVersion = false; pythonVersion = 3; };
 	ocamlImpl = import ./default.nix { ocamlVersion = true; };
-	combinedImpl = withExtraDeps ocamlImpl (python2Impl.nativeBuildInputs);
+	combinedImpl = withExtraDeps ocamlImpl (python2Impl.buildInputs);
 in
 # default action gets the combined impl, but specific attrs can be selected for CI
 {
