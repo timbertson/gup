@@ -21,15 +21,15 @@ class _dirty_args(object):
 		self.builder_path = builder_path
 		self.build_dependency = build_dependency
 
-def dirty_check_with_dep(path, check_fn, args):
+def dirty_check_with_dep(path, check_fn, args): # -> (did_build, is_dirty)
 	dirty = check_fn()
-	if dirty: return True
+	if dirty: return (False, True)
 	built = args.build_dependency(path)
 	if built:
 		_log.trace("dirty_check_with_dep: path %s was built, rechecking", path);
-		return check_fn()
+		return (True, check_fn())
 	else:
-		return False
+		return (False, False)
 
 class TargetState(object):
 	_dep_lock = None
@@ -304,22 +304,27 @@ class FileDependency(Dependency):
 				return True
 			return False
 		
-		dirty = dirty_check_with_dep(path, mtime_dirty, args)
+		built, mtime_dirty = dirty_check_with_dep(path, mtime_dirty, args)
 
-		if dirty and self.checksum is not None:
-			def checksum_dirty():
-				_log.trace("%s: comparing using checksum %s", self.path, self.checksum)
-				state = TargetState(path)
-				deps = state.deps()
-				checksum = deps and deps.checksum
-				if checksum != self.checksum:
-					_log.debug("DIRTY: %s (stored checksum is %s, current is %s)", self.path, self.checksum, checksum)
-					return True
-				return False
+		if mtime_dirty or built:
+			if self.checksum is None:
+				return mtime_dirty
+			else:
+				# if mtime is unchanged after a build, try checksum anyway
+				def checksum_dirty():
+					_log.trace("%s: comparing using checksum %s", self.path, self.checksum)
+					state = TargetState(path)
+					deps = state.deps()
+					checksum = deps and deps.checksum
+					if checksum != self.checksum:
+						_log.debug("DIRTY: %s (stored checksum is %s, current is %s)", self.path, self.checksum, checksum)
+						return True
+					return False
 
-			return dirty_check_with_dep(path, checksum_dirty, args)
+				_built, checksum_dirty = dirty_check_with_dep(path, checksum_dirty, args)
+				return checksum_dirty
 		else:
-			return dirty
+			return False
 
 class BuilderDependency(FileDependency):
 	tag = 'builder:'

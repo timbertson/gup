@@ -202,7 +202,7 @@ def resolve_base(p):
 		os.path.basename(p)
 	)
 
-def traverse_from(base, rel):
+def traverse_from(base, rel, resolve_final=False):
 	if IS_WINDOWS:
 		# yeah, nah
 		return ([], os.path.join(base, rel))
@@ -225,7 +225,8 @@ def traverse_from(base, rel):
 			if e.errno == errno.EINVAL:
 				# not a symlink; continue along path
 				path = os.path.join(path, parts.pop(0))
-				if not parts:
+				if not (parts or resolve_final):
+					# _log.trace("returning because there's no parts left: %s, %s", links, path)
 					return (links, path)
 			elif e.errno == errno.ENOENT:
 				# doesn't exist, return the entire
@@ -241,8 +242,6 @@ def traverse_from(base, rel):
 			else:
 				# relative dest
 				path = os.path.join(os.path.dirname(path), dest)
-
-
 
 
 ## --- version.py --- ##
@@ -1127,15 +1126,15 @@ class _dirty_args(object):
 		self.builder_path = builder_path
 		self.build_dependency = build_dependency
 
-def dirty_check_with_dep(path, check_fn, args):
+def dirty_check_with_dep(path, check_fn, args): # -> (did_build, is_dirty)
 	dirty = check_fn()
-	if dirty: return True
+	if dirty: return (False, True)
 	built = args.build_dependency(path)
 	if built:
 		_state_log.trace("dirty_check_with_dep: path %s was built, rechecking", path);
-		return check_fn()
+		return (True, check_fn())
 	else:
-		return False
+		return (False, False)
 
 class TargetState(object):
 	_dep_lock = None
@@ -1410,22 +1409,27 @@ class FileDependency(Dependency):
 				return True
 			return False
 
-		dirty = dirty_check_with_dep(path, mtime_dirty, args)
+		built, mtime_dirty = dirty_check_with_dep(path, mtime_dirty, args)
 
-		if dirty and self.checksum is not None:
-			def checksum_dirty():
-				_state_log.trace("%s: comparing using checksum %s", self.path, self.checksum)
-				state = TargetState(path)
-				deps = state.deps()
-				checksum = deps and deps.checksum
-				if checksum != self.checksum:
-					_state_log.debug("DIRTY: %s (stored checksum is %s, current is %s)", self.path, self.checksum, checksum)
-					return True
-				return False
+		if mtime_dirty or built:
+			if self.checksum is None:
+				return mtime_dirty
+			else:
+				# if mtime is unchanged after a build, try checksum anyway
+				def checksum_dirty():
+					_state_log.trace("%s: comparing using checksum %s", self.path, self.checksum)
+					state = TargetState(path)
+					deps = state.deps()
+					checksum = deps and deps.checksum
+					if checksum != self.checksum:
+						_state_log.debug("DIRTY: %s (stored checksum is %s, current is %s)", self.path, self.checksum, checksum)
+						return True
+					return False
 
-			return dirty_check_with_dep(path, checksum_dirty, args)
+				_built, checksum_dirty = dirty_check_with_dep(path, checksum_dirty, args)
+				return checksum_dirty
 		else:
-			return dirty
+			return False
 
 class BuilderDependency(FileDependency):
 	tag = 'builder:'
@@ -2062,9 +2066,13 @@ def _cmd_mark_ifcreate(opts, files):
 	parent_target = _cmd_assert_parent_target('--ifcreate')
 	parent_state = TargetState(parent_target)
 	for filename in files:
-		if os.path.lexists(filename):
+		intermediate_paths, dest_path = traverse_from(os.getcwd(), filename, resolve_final=True)
+		if os.path.lexists(dest_path):
 			raise SafeError("File already exists: %s" % (filename,))
-		parent_state.add_dependency(FileDependency.relative_to_target(parent_target, mtime=None, path = filename))
+		for intermediate_path in intermediate_paths:
+			mtime = get_mtime(intermediate_path)
+			parent_state.add_dependency(FileDependency.relative_to_target(parent_target, mtime=mtime, path = intermediate_path))
+		parent_state.add_dependency(FileDependency.relative_to_target(parent_target, mtime=None, path = dest_path))
 
 def _cmd_test_buildable(opts, args):
 	assert len(args) == 1, "exactly one argument expected"
