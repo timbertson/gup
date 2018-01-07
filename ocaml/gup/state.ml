@@ -123,15 +123,23 @@ let write_dependency output (tag,fields) =
 	if List.length fields <> typ.num_fields then Error.raise_safe "invalid fields";
 	Lwt_io.write_line output @@ (string_of_dependency_type tag) ^ ": " ^ (String.join " " fields)
 
+type dep_dirty_state = [ `clean | `dirty | `clean_after_build ]
+let dirty_of_dep_state : dep_dirty_state -> bool = function
+	| `dirty -> true
+	| `clean | `clean_after_build -> false
+
 let dirty_check_with_dep ~(path:RelativeFrom.t) checker args =
 	let%lwt dirty = checker () in
-	if dirty then Lwt.return_true else (
+	if dirty then Lwt.return `dirty else (
 		let%lwt built = args.build path in
 		if built
 			then (
 				log#trace "dirty_check_with_dep: path %s was built, rechecking" (RelativeFrom.to_string path);
-				checker ()
-			) else Lwt.return_false
+				checker () |> Lwt.map (function
+					| true -> `dirty
+					| false -> `clean_after_build
+				)
+			) else Lwt.return `clean
 	)
 
 class virtual base_dependency = object (self)
@@ -174,7 +182,7 @@ and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:Re
 					(Option.print String.print) latest_checksum;
 				Lwt.return dirty
 			in
-			dirty_check_with_dep ~path checksum_mismatch args
+			dirty_check_with_dep ~path checksum_mismatch args |> Lwt.map dirty_of_dep_state
 
 		method private is_dirty_mtime args =
 			let mtime_mismatch () =
@@ -189,11 +197,14 @@ and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:Re
 
 		method is_dirty args =
 			let%lwt mtime_dirty = self#is_dirty_mtime args in
-			if mtime_dirty then (
-				match checksum with
-					| Some checksum -> self#is_dirty_cs checksum args
-					| None -> Lwt.return_true
-			) else Lwt.return_false
+			match mtime_dirty with
+				| `clean -> Lwt.return_false
+				| `dirty | `clean_after_build -> (
+					(* if mtime is unchanged after a build, try checksum anyway *)
+					match checksum with
+						| Some checksum -> self#is_dirty_cs checksum args
+						| None -> Lwt.return (dirty_of_dep_state mtime_dirty)
+				)
 	end
 
 and builder_dependency ~mtime ~checksum (path:RelativeFrom.t) =

@@ -538,6 +538,16 @@ class TestChecksums(TestCase):
 		for target in ['grandparent']:
 			self.assertEqual(times2[target], times[target], "expected target %s not to be rebuilt" % target)
 
+	def test_checksummed_target_with_no_output_causes_parent_to_rebuild(self):
+		self.write('parent.gup', BASH + 'gup -u child; echo ok > $1')
+		self.write('child.gup', BASH + 'gup --always; echo $$-$RANDOM | gup --contents')
+		self.assertRebuilds('parent', lambda: None)
+
+	def test_checksummed_target_with_no_output_but_consistent_checksum_does_not_cause_rebuild(self):
+		self.write('parent.gup', BASH + 'gup -u child; echo ok > $1')
+		self.write('child.gup', BASH + 'gup --always; echo 1 | gup --contents')
+		self.assertNotRebuilds('parent', lambda: None)
+
 class TestVersion(TestCase):
 	def write_deps(self, lines):
 		self.write('.gup/deps.target', '\n'.join(lines))
