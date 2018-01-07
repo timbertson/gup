@@ -311,27 +311,44 @@ module Make(Unix:UNIX) = struct
 				| `current -> `concrete base
 				| `name name -> `concrete_base (ConcreteBase_.make_named base (Some name))
 
-		let _make_traverse_from step traversed_link =
+		type _traverse_accumulator = ConcreteBase_.t -> unit
+		type 'result _traverser = _traverse_accumulator -> RelativeFrom_.t -> 'result
+
+		let _make_traverser step : 'result _traverser = fun traversed_link ->
 			let parse_rel path = Relative.split path |> List.map PathComponent.parse in
 			let rec continue = fun base name remaining ->
 				match push base name with
-				| `concrete path -> step continue path remaining
-				| `concrete_base path -> (match (ConcreteBase_.readlink path) with
-					| `concrete path -> step continue path remaining
-					| `link (base, rel) ->
-						traversed_link path;
-						step continue base ((parse_rel rel) @ remaining)
-				)
+				| `concrete path ->
+						step continue path remaining
+				| `concrete_base path ->
+					(match (ConcreteBase_.readlink path) with
+						| `concrete path ->
+							step continue path remaining
+						| `link (base, rel) ->
+							traversed_link path;
+							step continue base ((parse_rel rel) @ remaining)
+					)
 			in
 			fun (base, path) ->
 				step continue base (parse_rel path)
 
-		let _traverse_from = _make_traverse_from (fun continue base -> function
+		let _traverser : t _traverser = _make_traverser (fun continue base -> function
 			| [] -> base
 			| name :: remaining -> (continue base name remaining)
 		)
 
-		let resolve_from : RelativeFrom_.t -> t = _traverse_from (ignore)
+		let _make_traverse_from:
+				'result. ('result _traverser) -> RelativeFrom_.t -> (ConcreteBase_.t list * 'result) =
+			(fun traverser -> fun path ->
+				let links_rev = ref [] in
+				let accum = (fun path -> links_rev := path :: !links_rev) in
+				let dest = traverser accum path in
+				(List.rev !links_rev, dest)
+			)
+
+		let traverse_from : RelativeFrom_.t -> (ConcreteBase_.t list * t) = _make_traverse_from _traverser
+
+		let resolve_from : RelativeFrom_.t -> t = _traverser (ignore)
 
 		let resolve_abs : Absolute.t -> t = fun path ->
 			resolve_from (RelativeFrom_.make root (Absolute.rootless path))
@@ -352,19 +369,16 @@ module Make(Unix:UNIX) = struct
 		let eq : t -> t -> bool = (=)
 		let lexists = lift Util.lexists
 
-		let _traverse_from : (ConcreteBase_.t -> unit) -> RelativeFrom_.t -> t =
-			Concrete._make_traverse_from (fun continue base -> function
+		let _traverser : t Concrete._traverser =
+			Concrete._make_traverser (fun continue base -> function
 				| [] -> make base `current
 				| [name] -> make base name
 				| name :: remaining -> continue base name remaining
 			)
 
-		let traverse_from : RelativeFrom_.t -> (t list * t) = fun path ->
-			let links_rev = ref [] in
-			let dest = _traverse_from (fun path -> links_rev := path :: !links_rev) path in
-			(List.rev !links_rev, dest)
+		let traverse_from : RelativeFrom_.t -> (t list * t) = Concrete._make_traverse_from _traverser
 
-		let resolve_from : RelativeFrom_.t -> t = _traverse_from (ignore)
+		let resolve_from : RelativeFrom_.t -> t = _traverser (ignore)
 
 		let resolve : string -> t = fun path ->
 			let path = RelativeFrom_.concat_from_cwd (PathString.parse path) in
@@ -396,7 +410,7 @@ module Make(Unix:UNIX) = struct
 		let base : t -> Concrete.t = fun (base, _) -> base
 		let to_field : t -> string = fun path -> Relative.to_string (relative path)
 		let of_field ~basedir path =
-			log#trace "making RelativeFrom from %s, %s" (Concrete.to_string basedir) (path);
+			(* log#trace "making RelativeFrom from %s, %s" (Concrete.to_string basedir) (path); *)
 			make basedir (Relative.of_string path)
 
 		let absolute : t -> Absolute.t = fun (base, path) ->
@@ -407,6 +421,7 @@ module Make(Unix:UNIX) = struct
 		let lift : (string -> 'a) -> (t -> 'a) = fun fn -> fn % to_string
 
 		let lexists = lift Util.lexists
+		let exists = lift Sys.file_exists
 
 		let concat : t -> Relative.t -> t = fun (base,rel) path ->
 			(base, Relative.concat rel path)

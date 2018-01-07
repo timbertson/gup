@@ -374,6 +374,26 @@ class TestSymlinkDependencies(TestCase):
 			self.symlink('dep2', 'dep')
 		self.assertRebuilds('target', change_referent)
 		self.assertEqual(self.read('target'), '2')
+
+	IFCREATE_LINK_SCRIPT = '''
+			if [ ! -e link ]; then
+				gup --ifcreate link;
+			fi
+			echo 1 > "$1"
+	'''
+
+	def test_ifcreate_on_broken_link(self):
+		self.write('target.gup', BASH + self.IFCREATE_LINK_SCRIPT)
+		self.symlink('dest', 'link')
+		self.assertNotRebuilds('target', lambda: None)
+		self.assertRebuilds('target', lambda: self.touch('dest'))
+
+	def test_ifcreate_on_any_chain_in_broken_link(self):
+		self.write('target.gup', BASH + self.IFCREATE_LINK_SCRIPT)
+		self.symlink('link2', 'link')
+		self.symlink('dest', 'link2')
+		self.assertNotRebuilds('target', lambda: None)
+		self.assertRebuilds('target', lambda: self.touch('dest'))
 	
 class TestAlwaysRebuild(TestCase):
 	def test_always_rebuild(self):

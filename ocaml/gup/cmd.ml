@@ -171,13 +171,13 @@ struct
 		let parent_state = new State.target_state parent_target in
 		args |> Lwt_list.iter_s (fun path_str ->
 			let path = RelativeFrom.concat_from_cwd (PathString.parse path_str) in
-			if RelativeFrom.lexists path then
+			let traversed, final_path = Concrete.traverse_from path in
+			if Concrete.lexists final_path then
 				Error.raise_safe "File already exists: %s" (path_str)
 			;
-			let traversed, path = ConcreteBase.traverse_from path in
 			Lwt.join [
 				parent_state#add_file_dependencies traversed;
-				parent_state#add_file_dependency_with ~mtime:None ~checksum:None path;
+				parent_state#add_file_dependency_with ~mtime:None ~checksum:None (ConcreteBase.make final_path `current);
 			]
 		)
 	
