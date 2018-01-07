@@ -11,7 +11,7 @@ def resolve_base(p):
 		os.path.basename(p)
 	)
 
-def traverse_from(base, rel):
+def traverse_from(base, rel, resolve_final=False):
 	if IS_WINDOWS:
 		# yeah, nah
 		return ([], os.path.join(base, rel))
@@ -34,7 +34,8 @@ def traverse_from(base, rel):
 			if e.errno == errno.EINVAL:
 				# not a symlink; continue along path
 				path = os.path.join(path, parts.pop(0))
-				if not parts:
+				if not (parts or resolve_final):
+					# _log.trace("returning because there's no parts left: %s, %s", links, path)
 					return (links, path)
 			elif e.errno == errno.ENOENT:
 				# doesn't exist, return the entire
@@ -50,6 +51,4 @@ def traverse_from(base, rel):
 			else:
 				# relative dest
 				path = os.path.join(os.path.dirname(path), dest)
-
-
 

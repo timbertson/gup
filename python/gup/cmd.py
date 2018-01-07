@@ -14,7 +14,7 @@ from .var import INDENT, set_verbosity, set_keep_failed_outputs, DEFAULT_VERBOSI
 from .parallel import setup_jobserver
 from .task import Task, TaskRunner
 from .version import VERSION
-from .path import resolve_base
+from .path import resolve_base, traverse_from
 
 _log = getLogger(__name__)
 
@@ -205,9 +205,13 @@ def _mark_ifcreate(opts, files):
 	parent_target = _assert_parent_target('--ifcreate')
 	parent_state = TargetState(parent_target)
 	for filename in files:
-		if os.path.lexists(filename):
+		intermediate_paths, dest_path = traverse_from(os.getcwd(), filename, resolve_final=True)
+		if os.path.lexists(dest_path):
 			raise SafeError("File already exists: %s" % (filename,))
-		parent_state.add_dependency(FileDependency.relative_to_target(parent_target, mtime=None, path = filename))
+		for intermediate_path in intermediate_paths:
+			mtime = get_mtime(intermediate_path)
+			parent_state.add_dependency(FileDependency.relative_to_target(parent_target, mtime=mtime, path = intermediate_path))
+		parent_state.add_dependency(FileDependency.relative_to_target(parent_target, mtime=None, path = dest_path))
 
 def _test_buildable(opts, args):
 	assert len(args) == 1, "exactly one argument expected"
