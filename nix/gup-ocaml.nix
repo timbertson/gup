@@ -1,11 +1,11 @@
 { callPackage, stdenv, lib, fetchurl, pythonPackages, zlib, ncurses }:
-{ src, version, meta ? {}, forceTests ? false }:
+{ src, version }:
 let
   opam2nix = callPackage ./opam2nix-packages.nix {};
 in
 lib.overrideDerivation (opam2nix.buildOpamPackage {
   name = "gup-${version}";
-  inherit src meta version;
+  inherit src version;
   ocamlAttr = "ocaml_4_02";
   opamFile = ../gup.opam;
   extraPackages = [ "ounit" ];

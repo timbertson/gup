@@ -1,4 +1,4 @@
-{ pkgs ? import <nixpkgs> {}, ocamlVersion ? false, pythonVersion ? 2 }:
+{ pkgs ? import <nixpkgs> {}, ocamlVersion ? false, pythonVersion ? 3 }:
 let
 	usePython2 = pythonVersion == 2;
 	pythonPackages = if usePython2
@@ -14,8 +14,13 @@ let
 
 	mocktest = callPackage ./nix/mocktest.nix {};
 	pychecker = pkgs.callPackage ./nix/pychecker.nix {};
-	builder = if ocamlVersion
-		then callPackage ./nix/gup-ocaml.nix {}
-		else callPackage ./nix/gup-python.nix {};
+
+	pythonImpl = callPackage ./nix/gup-python.nix {};
+	src = pythonImpl.drvAttrs.src;
+
+	ocamlImpl = (callPackage ./nix/gup-ocaml.nix {}) {
+		inherit (pythonImpl.drvAttrs) src version;
+	};
+
 in
-builder { src = ./nix/local.tgz; version = "development"; forceTests = true; }
+if ocamlVersion then ocamlImpl else pythonImpl
