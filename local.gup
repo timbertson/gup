@@ -1,5 +1,0 @@
-#!bash -eu
-gup -u nix/local.tgz
-gup --always
-nix-build --out-link "$1" local.nix
-readlink "$1" | gup --contents

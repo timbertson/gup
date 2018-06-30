@@ -513,11 +513,11 @@ and target_state (target_path:ConcreteBase.t) =
 					let%lwt builder_dep = self#builder_dependency exe in
 					let temp = ensure_meta_path new_deps_ext |> Absolute.to_string in
 					with_file_out temp (fun file ->
-						Lwt_io.write_line file (version_marker ^ (string_of_int format_version)) >>
+						Lwt_io.write_line file (version_marker ^ (string_of_int format_version)) >>= fun () ->
 						(* TODO: make Dependencies module to store init stuff *)
-						write_dependency file (serializable builder_dep) >>
+						write_dependency file (serializable builder_dep) >>= fun () ->
 						write_dependency file (serializable current_run_id)
-					) >>
+					) >>= fun () ->
 					let%lwt built = try%lwt
 						block deps
 					with ex ->
@@ -531,7 +531,7 @@ and target_state (target_path:ConcreteBase.t) =
 								let timedep = new build_time time in
 								write_dependency output (serializable timedep)
 							)
-						) >>
+						) >>= fun () ->
 						Lwt_unix.rename temp deps_path
 					) else return_unit in
 					return built

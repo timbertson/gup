@@ -10,5 +10,4 @@ env:
 notifications:
   email: false
 script:
-  - git archive HEAD --format=tar.gz --prefix=git-export/ > nix/local.tgz
   - make "$target"

@@ -7,6 +7,7 @@ depends: [
   "cryptokit"
   "extunix"
   "lwt" { >= "2.5.1" }
+  "lwt_ppx"
   "ocamlfind" {build}
   "conf-python-2-7" {build}
   "jbuilder" {build}
@@ -14,6 +15,9 @@ depends: [
 ]
 build: [
   [ make "GUP_IMPL=ocaml" ]
+]
+depexts: [
+  [["nixpkgs"] ["zlib"]]
 ]
 install: [
   [ make "install" "GUP_IMPL=ocaml DISTDIR=%{prefix}%" ]

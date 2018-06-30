@@ -7,13 +7,14 @@ let
 	});
 	python2Impl = import ./default.nix { ocamlVersion = false; pythonVersion = 2; };
 	python3Impl = import ./default.nix { ocamlVersion = false; pythonVersion = 3; };
-	ocamlImpl = import ./default.nix { ocamlVersion = true; };
+	ocamlImpl = import ./default.nix { ocamlVersion = true; pythonVersion = 3; };
 	combinedImpl = withExtraDeps ocamlImpl (python2Impl.buildInputs);
 in
 # default action gets the combined impl, but specific attrs can be selected for CI
 {
 	python2 = python2Impl;
 	python3 = python3Impl;
+	pychecker = pkgs.callPackage ./nix/pychecker.nix {};
 	ocaml = ocamlImpl;
 	development = combinedImpl;
 	opam = stdenv.mkDerivation {

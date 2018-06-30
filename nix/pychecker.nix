@@ -1,4 +1,4 @@
-{ pkgs ? import <nixpkgs> {}, pythonPackages ? pkgs.pythonPackages }:
+{ pkgs ? import <nixpkgs> {}, python2Packages ? pkgs.python2Packages }:
 let
 attrs = rec {
   version = "0.8.19";
@@ -12,13 +12,13 @@ attrs = rec {
   # pychecker tries to be fancy about detecting its installation
   # prefix, but concludes it's being installed to `/`
   postFixup = ''
-    sed -i -e "s| /pychecker/| $out/${pythonPackages.python.sitePackages}/pychecker/|" $out/bin/pychecker
+    sed -i -e "s| /pychecker/| $out/${python2Packages.python.sitePackages}/pychecker/|" $out/bin/pychecker
   '';
 };
-lib = pythonPackages.buildPythonApplication attrs;
+lib = python2Packages.buildPythonApplication attrs;
 in
 # Wrap the lib in a derivation exposing only `bin/`, so that
-# the tool can be used in a python3 project
+# it can be used in a python3 project
 pkgs.stdenv.mkDerivation {
   inherit (attrs) name version;
   buildCommand = ''

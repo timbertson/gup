@@ -6,21 +6,19 @@ let
 		else pkgs.python3Packages;
 	python = pythonPackages.python;
 
-	callPackage = pkgs.newScope (pkgs // {
-		pythonPackages = pythonPackages // {
-			inherit mocktest pychecker;
-		};
+	addTestDeps = pythonPackages: drv: pkgs.lib.overrideDerivation drv (o: {
+		buildInputs = o.buildInputs ++ (with pythonPackages; [ python nose nose_progressive mocktest whichcraft ]);
 	});
 
-	mocktest = callPackage ./nix/mocktest.nix {};
+	callPackage = pkgs.callPackage;
+
+	mocktest = callPackage ./nix/mocktest.nix { inherit pythonPackages; };
 	pychecker = pkgs.callPackage ./nix/pychecker.nix {};
 
-	pythonImpl = callPackage ./nix/gup-python.nix {};
-	src = pythonImpl.drvAttrs.src;
-
-	ocamlImpl = (callPackage ./nix/gup-ocaml.nix {}) {
+	pythonImpl = addTestDeps pythonPackages (callPackage ./nix/gup-python.nix { inherit python pychecker; });
+	ocamlImpl = addTestDeps pkgs.python2Packages (callPackage ./nix/gup-ocaml.nix { inherit python; } {
 		inherit (pythonImpl.drvAttrs) src version;
-	};
+	});
 
 in
 if ocamlVersion then ocamlImpl else pythonImpl

@@ -1,19 +1,19 @@
 { pkgs ? import <nixpkgs> {}}:
 with pkgs;
 let
-		src = fetchgit {
-			"url" = "https://github.com/timbertson/opam2nix-packages.git";
-			"fetchSubmodules" = true;
-			"sha256" = "166nxnvlijh5lpnmvjnf7h0yfzbd6ymqgnsbxmzzajbbfzkfn35a";
-			"rev" = "71787ddab5b92032637d63bd017dd130764edd92";
+		src = fetchFromGitHub {
+			"owner" = "timbertson";
+			"repo" = "opam2nix-packages";
+			"sha256" = "060h422rbvbh2mkmfp04rljssxp9ppf8g38jyl6dvby2r8if9fb9";
+			"rev" = "7d30aa408d91467f78498ed21999d23fca37500e";
 		};
-		opam2nixSrc = fetchgit {
-			"url" = "https://github.com/timbertson/opam2nix.git";
-			"fetchSubmodules" = true;
-			"sha256" = "03myq1yhcfi0dilzrm43gzyiy3pqxpl2ja0hw8wma5yzxf40hlhj";
-			"rev" = "db3228a5c49c184530f11f65a20621567135c327";
+		opam2nixSrc = fetchFromGitHub {
+			"owner" = "timbertson";
+			"repo" = "opam2nix";
+			"sha256" = "1khq1b0c7ry8854nwl0qkfq0kddf4g49xmj1yp2bifk8kh2waqb7";
+			"rev" = "version-0.3.1";
 		};
-	in
-	callPackage "${src}/nix" {
 		opam2nixBin = callPackage "${opam2nixSrc}/nix" {};
-	}
+	in
+	callPackage "${src}/nix" { inherit opam2nixBin; }
+
