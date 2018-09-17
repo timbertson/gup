@@ -6,7 +6,7 @@ let
 		else pkgs.python3Packages;
 	python = pythonPackages.python;
 
-	addTestDeps = pythonPackages: drv: pkgs.lib.overrideDerivation drv (o: {
+	addTestDeps = pythonPackages: drv: drv.overrideAttrs (o: {
 		buildInputs = o.buildInputs ++ (with pythonPackages; [ python nose nose_progressive mocktest whichcraft ]);
 	});
 
@@ -16,9 +16,7 @@ let
 	pychecker = pkgs.callPackage ./nix/pychecker.nix {};
 
 	pythonImpl = addTestDeps pythonPackages (callPackage ./nix/gup-python.nix { inherit python pychecker; });
-	ocamlImpl = addTestDeps pkgs.python2Packages (callPackage ./nix/gup-ocaml.nix { inherit python; } {
-		inherit (pythonImpl.drvAttrs) src version;
-	});
+	ocamlImpl = addTestDeps pkgs.python2Packages (callPackage ./nix/gup-ocaml.nix { inherit python; });
 
 in
 if ocamlVersion then ocamlImpl else pythonImpl
