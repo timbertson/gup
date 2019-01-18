@@ -1,0 +1,16 @@
+{
+  "fetch": {
+    "args": {
+      "owner": "timbertson",
+      "repo": "opam2nix-packages",
+      "rev": "39f983b13ad5c9f6a9285fa52fff9a4761d6bbda",
+      "sha256": "0qw0bbqw3q08m3pq4xp9ds74pxcgz00qx4sblnq4lqi8c5x3kw9l"
+    },
+    "fn": "fetchFromGitHub",
+    "localRepo": "/Users/tcuthbertson/Code/ocaml/opam2nix-packages",
+    "owner": "timbertson",
+    "repo": "opam2nix-packages",
+    "rev": "39f983b13ad5c9f6a9285fa52fff9a4761d6bbda",
+    "type": "fetchFromGitHub"
+  }
+}
