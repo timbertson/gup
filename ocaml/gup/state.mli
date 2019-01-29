@@ -16,7 +16,7 @@ class target_state : ConcreteBase.t ->
 		method path_repr : string
 
 		(* async methods *)
-		method perform_build : Gupfile.buildscript -> (dependencies option -> bool Lwt.t) -> bool Lwt.t
+		method perform_build : Buildable.t -> (dependencies option -> bool Lwt.t) -> bool Lwt.t
 		method deps : dependencies option Lwt.t
 		method add_file_dependency : ConcreteBase.t -> unit Lwt.t
 		method add_file_dependencies : ConcreteBase.t list -> unit Lwt.t
@@ -28,9 +28,11 @@ class target_state : ConcreteBase.t ->
 
 and dependencies : ConcreteBase.t -> base_dependency intermediate_dependencies ->
 	object
-		method is_dirty : Gupfile.buildscript -> (RelativeFrom.t -> bool Lwt.t) -> bool Lwt.t
+		method is_dirty : Buildable.t -> (RelativeFrom.t -> bool Lwt.t) -> bool Lwt.t
 		method checksum : string option
 		method clobbers : bool
 		method already_built : bool
 		method print : unit IO.output -> unit
 	end
+
+val of_buildable : Buildable.t -> target_state

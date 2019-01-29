@@ -21,12 +21,20 @@ from gup.log import TRACE_LVL
 logging.basicConfig(level=TRACE_LVL)
 log = logging.getLogger('TEST')
 
+def expand_exe(exe):
+	if not os.path.isabs(exe):
+		from whichcraft import which
+		exe = which(exe)
+	return exe
+
 os.environ['OCAMLRUNPARAM'] = 'b' # make ocaml print backtraces
 
 GUP_EXES = os.environ.get('GUP_EXE', 'gup').split(os.pathsep)
+print(repr(GUP_EXES), file=sys.stderr)
 LAME_MTIME = sys.platform == 'darwin'
 IS_WINDOWS = sys.platform == 'win32'
 if IS_WINDOWS: GUP_EXES = [e + '.cmd' for e in GUP_EXES]
+IS_OCAML = all([os.path.join("ocaml", "bin") in expand_exe(exe) for exe in GUP_EXES])
 initial_exes = iter(itertools.repeat(GUP_EXES[0]))
 
 def mkdirp(p):
@@ -204,7 +212,7 @@ class TestCase(mocktest.TestCase):
 
 	def mtime(self, p):
 		mtime = os.lstat(os.path.join(self.ROOT, p)).st_mtime
-		logging.debug("mtime %s for %s" % (mtime,p))
+		logging.debug("mtime for %s is %s" % (p, mtime))
 		return mtime
 
 	def build_u(self, *targets, **k):

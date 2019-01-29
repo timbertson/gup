@@ -68,8 +68,24 @@ class TestDependencies(TestCase):
 	
 	def test_trying_to_build_source_fails(self):
 		self.assertRaises(SafeError, lambda: self.build("dep"))
-	
-	def test_Gupfile_and_gup_scripts_are_not_buildable_by_indirect_gupfiles(self):
+
+	@unittest.skipIf(not IS_OCAML, 'TODO: python implementation')
+	def test_builder_listed_in_gupfile_is_buildable_explicitly(self):
+		self.write('actual_builder', echo_to_target("built"))
+		self.write('builder.gup', BASH + 'cp actual_builder "$1"')
+		self.write('Gupfile', 'builder:\n\ttarget\nbuilder.gup:\n\tbuilder')
+		self.build_u('target')
+
+		self.assertEqual(self.read('target'), 'built')
+
+	def test_Gupfile_and_gup_scripts_are_not_buildable_by_gup_scripts(self):
+		self.write('Gupfile.gup', echo_to_target('you shouldn\'t be here!'))
+		self.write('target.gup.gup', echo_to_target('you shouldn\'t be here!'))
+
+		self.assertRaises(Unbuildable, lambda: self.build("Gupfile"))
+		self.assertRaises(Unbuildable, lambda: self.build("target.gup"))
+
+	def test_Gupfile_and_gup_scripts_are_not_buildable_by_wildcard_rules(self):
 		gupfile_contents = 'build-anything:\n\t*'
 		gupscript_contents = echo_to_target('ok')
 		self.write('Gupfile', gupfile_contents)

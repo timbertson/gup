@@ -142,12 +142,24 @@ let dirty_check_with_dep ~(path:RelativeFrom.t) checker args =
 			) else Lwt.return `clean
 	)
 
+let is_mtime_mismatch ~stored path =
+	let%lwt current_mtime = (RelativeFrom.lift Util.get_mtime) path in
+	log#trace "%s: comparing stored mtime %a against current %a"
+		(RelativeFrom.to_string path)
+		(Option.print Big_int.print) stored
+		(Option.print Big_int.print) current_mtime;
+	Lwt.return @@ not @@ eq (Option.compare ~cmp:Big_int.compare) stored current_mtime
+
+let file_fields ~mtime ~checksum path =
+	let mtime_str = Option.default empty_field (Option.map Big_int.to_string mtime) in
+	let checksum_str = Option.default empty_field checksum in
+	[mtime_str; checksum_str; RelativeFrom.to_field path]
+
 class virtual base_dependency = object (self)
 	method virtual tag : dependency_type
 	method virtual fields : string list
 	method virtual is_dirty : dirty_args -> bool Lwt.t
 
-	(* method child : string option = None *)
 	method print out =
 		Printf.fprintf out "<#%s: %a>"
 			(string_of_dependency_type self#tag)
@@ -158,10 +170,7 @@ and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:Re
 	object (self)
 		inherit base_dependency
 		method tag = FileDependency
-		method fields =
-			let mtime_str = Option.default empty_field (Option.map Big_int.to_string mtime) in
-			let checksum_str = Option.default empty_field checksum in
-			[mtime_str; checksum_str; RelativeFrom.to_field path]
+		method fields = file_fields ~mtime ~checksum path
 
 		method private mtime = mtime
 		method private is_dirty_cs checksum args =
@@ -184,16 +193,9 @@ and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:Re
 			in
 			dirty_check_with_dep ~path checksum_mismatch args |> Lwt.map dirty_of_dep_state
 
-		method private is_dirty_mtime args =
-			let mtime_mismatch () =
-				let%lwt current_mtime = (RelativeFrom.lift Util.get_mtime) path in
-				log#trace "%s: comparing stored mtime %a against current %a"
-					(RelativeFrom.to_string path)
-					(Option.print Big_int.print) self#mtime
-					(Option.print Big_int.print) current_mtime;
-				Lwt.return @@ not @@ eq (Option.compare ~cmp:Big_int.compare) current_mtime self#mtime
-			in
-			dirty_check_with_dep ~path mtime_mismatch args
+		method private is_dirty_mtime = dirty_check_with_dep ~path (fun () ->
+			is_mtime_mismatch ~stored:self#mtime path
+		)
 
 		method is_dirty args =
 			let%lwt mtime_dirty = self#is_dirty_mtime args in
@@ -207,11 +209,11 @@ and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:Re
 				)
 	end
 
-and builder_dependency ~mtime ~checksum (path:RelativeFrom.t) =
+and builder_dependency ~mtime (path:RelativeFrom.t) =
 	object (self)
-		inherit file_dependency ~mtime ~checksum path as super
-		(* method child : string option = None *)
+		inherit base_dependency
 		method tag = Builder
+		method fields = file_fields ~mtime ~checksum:None path
 		method is_dirty args =
 			let relative_path = path |> RelativeFrom.relative in
 			let builder_path = args.builder_path |> RelativeFrom.relative in
@@ -220,7 +222,7 @@ and builder_dependency ~mtime ~checksum (path:RelativeFrom.t) =
 					(Relative.to_string relative_path)
 					(Relative.to_string builder_path);
 				Lwt.return_true
-			) else super#is_dirty args
+			) else is_mtime_mismatch ~stored:mtime path
 	end
 
 and always_rebuild =
@@ -241,6 +243,9 @@ and build_time time =
 			let%lwt mtime = Util.get_mtime path >>= (return $ Option.get) in
 			Lwt.return (
 				if neq Big_int.compare mtime time then (
+					log#debug "%s mtime (%a) differs from build time (%a)" path
+						Big_int.print mtime
+						Big_int.print time;
 					let log_method = ref log#warn in
 					if Util.lisdir path then
 						(* dirs are modified externally for various reasons, not worth warning *)
@@ -270,28 +275,29 @@ and dependencies (target_path:ConcreteBase.t) (data:base_dependency intermediate
 
 		method clobbers = !(data.clobbers)
 
-		method is_dirty (buildscript: Gupfile.buildscript) (build:RelativeFrom.t -> bool Lwt.t) : bool Lwt.t =
+		method is_dirty (buildable: Buildable.t) (build:RelativeFrom.t -> bool Lwt.t) : bool Lwt.t =
 			let target_path_str = ConcreteBase.to_string target_path in
 			if not (Util.lexists target_path_str) then (
 				log#debug "DIRTY: %s (target does not exist)" target_path_str;
 				return true
 			) else (
+				let script_path = Buildable.script buildable in
 				let args = {
 					path = target_path;
-					builder_path = resolve_builder_path ~target:target_path buildscript#script_path;
+					builder_path = resolve_builder_path ~target:target_path script_path;
 					build = build
 				} in
 
 				let rec iter rules =
 					match rules with
 					| [] ->
-							log#trace "is_dirty: %s returning false" target_path_str;
+							log#trace "dependencies#is_dirty: %s returning false" target_path_str;
 							Lwt.return_false
 					| (rule::remaining_rules) ->
-						log#trace "calling %a#is_dirty for path %s" print_obj rule target_path_str;
+						log#trace "dependencies#is_dirty checking %a for path %s" print_obj rule target_path_str;
 						let%lwt dirty = rule#is_dirty args in
 						if dirty then (
-							log#trace "is_dirty: %s returning true" target_path_str;
+							log#trace "dependencies#is_dirty: %s returning true" target_path_str;
 							Lwt.return_true
 						) else iter remaining_rules
 				in
@@ -335,10 +341,9 @@ and dependency_builder target_path (input:Lwt_io.input_channel) = object (self)
 								~checksum:(parse_cs cs)
 								(RelativeFrom.of_field ~basedir path)
 							)
-					| (Builder, [mtime; cs; path;]) ->
+					| (Builder, [mtime; _cs; path;]) ->
 							Some (new builder_dependency
 								~mtime:(parse_mtime mtime)
-								~checksum:(parse_cs cs)
 								(RelativeFrom.of_field ~basedir path))
 					| (BuildTime, [time]) -> Some (new build_time (Big_int.of_string time))
 					| (AlwaysRebuild, []) -> Some (new always_rebuild)
@@ -488,12 +493,11 @@ and target_state (target_path:ConcreteBase.t) =
 			let%lwt builder_mtime = (Absolute.lift Util.get_mtime) path in
 			return (new builder_dependency
 				~mtime:builder_mtime
-				~checksum: None
 				(resolve_builder_path ~target:target_path path)
 			)
 
-		method perform_build (buildscript:Gupfile.buildscript) block : bool Lwt.t =
-			let exe = buildscript#script_path in
+		method perform_build (buildable:Buildable.t) block : bool Lwt.t =
+			let exe = Buildable.script buildable in
 			assert (Sys.file_exists (Absolute.to_string exe));
 			log#trace "perform_build %s" (ConcreteBase.to_string target_path);
 
@@ -546,3 +550,4 @@ and target_state (target_path:ConcreteBase.t) =
 			return built
 	end
 
+let of_buildable b = new target_state (Buildable.target_path b)

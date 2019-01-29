@@ -5,5 +5,5 @@ opam2nix.buildOpamPackage rec {
   name = "gup-${version}";
   ocamlAttr = "ocaml-ng.ocamlPackages_4_05.ocaml";
   opamFile = ../gup.opam;
-  specs = [ { name = "ounit"; } ];
+  specs = [ { name = "ounit"; } { name = "merlin"; } ];
 }

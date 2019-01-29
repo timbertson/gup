@@ -101,6 +101,7 @@ let suite = "Gupfile" >:::
 	);
 
 	"rule parsing" >:: (fun _ ->
+		let regexp_of_rule r = regexp_of_rule_parts ~original_text:"(none)" (parts_of_rule_pattern r) in
 		assert_equal ~printer:identity "^[^/]*$"         (regexp_of_rule "*");
 		assert_equal ~printer:identity "^.*$"            (regexp_of_rule "**");
 		assert_equal ~printer:identity "^foo.*bar[^/]*$" (regexp_of_rule "foo**bar*");

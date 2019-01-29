@@ -191,15 +191,15 @@ class TestScripts(TestCase):
 		clobber_warning = re.compile('# WARNING bad\.gup modified (.*/)?bad directly')
 
 		def warning(lines):
-			return next(iter(filter(lambda line: line.startswith('# WARN'), lines)), None)
+			return next(iter(filter(lambda line: line.startswith('# WARN'), lines)), "")
 
 		# initial build should have the warning
 		lines = self.build_u('bad', include_logging=True)
-		self.assertRegexpMatches(warning(lines), clobber_warning)
+		self.assertRegex(warning(lines), clobber_warning)
 
 		# doesn't notify on rebuild
 		lines = self.assertRebuilds('bad', lambda: self.touch('input'), built=True, include_logging=True)
-		self.assertEquals(warning(lines), None)
+		self.assertEquals(warning(lines), "")
 
 		# does notify on explicit build
 		lines = self.build('bad', include_logging=True)

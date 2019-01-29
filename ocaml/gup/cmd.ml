@@ -111,8 +111,8 @@ struct
 							add_intermediate_link_deps traversed;
 							let%lwt target = (match Builder.prepare_build path with
 								| Some (`Target target) ->
-									target#build update
-										|> Lwt.map (fun (_:bool) -> Some target)
+									Builder.build ~update target
+										|> Lwt.map (fun (_:bool) -> Some (Recursive.leaf target))
 								| Some (`Symlink_to path) ->
 									(* recurse on destination
 									 * (which will be added as a dep to parent_target)
@@ -131,7 +131,7 @@ struct
 							parent_state |> Lwt_option.may (fun (parent_state:State.target_state) ->
 								let%lwt mtime = Util.get_mtime (ConcreteBase.to_string path)
 								and checksum = target |> Lwt_option.bind (fun target ->
-									target#state#deps |> Lwt.map (fun deps ->
+									(State.of_buildable target)#deps |> Lwt.map (fun deps ->
 										Option.bind deps (fun deps -> deps#checksum)
 									)
 								) in
@@ -260,7 +260,7 @@ struct
 						built_targets |> List.iter (fun dep ->
 							let dep_name = PathComponent.string_of_name dep in
 							let path = (Filename.concat base dep_name) in
-							let buildscript = Gupfile.find_buildscript (ConcreteBase.resolve path) in
+							let buildscript = Gupfile.find_builder (ConcreteBase.resolve path) in
 							buildscript |> Option.may (fun _ ->
 								if List.mem dep files then
 									rm ~isfile:true path
@@ -303,7 +303,7 @@ struct
 		begin match args with
 			| [target] ->
 					let target = ConcreteBase.resolve target in
-					let builder = Gupfile.find_buildscript target in
+					let builder = Gupfile.find_builder target in
 					exit (if (Option.is_some builder) then 0 else 1)
 			| _ -> raise_safe "Exactly one argument expected"
 		end
@@ -315,7 +315,7 @@ struct
 				let rec is_dirty path =
 					let target = Builder.prepare_build path in
 					match target with
-						| Some (`Target target) -> target#is_dirty
+						| Some (`Target target) -> Builder.is_dirty target
 						| Some (`Symlink_to dest) -> is_dirty (ConcreteBase.resolve_from dest)
 						| None -> Lwt.return_false
 				in

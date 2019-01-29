@@ -1,14 +1,13 @@
-{ pkgs ? import <nixpkgs> {} }:
+{ pkgs  }:
 with pkgs;
 let
-	withExtraDeps = base: extraDeps: lib.overrideDerivation base (base: {
-		nativeBuildInputs = base.nativeBuildInputs ++ extraDeps;
+	withExtraDeps = base: extraDeps: base.overrideAttrs (base: {
 		buildInputs = base.buildInputs ++ extraDeps;
 	});
-	python2Impl = import ./default.nix { ocamlVersion = false; pythonVersion = 2; };
-	python3Impl = import ./default.nix { ocamlVersion = false; pythonVersion = 3; };
-	ocamlImpl = import ./default.nix { ocamlVersion = true; pythonVersion = 3; };
-	combinedImpl = withExtraDeps ocamlImpl (python2Impl.buildInputs);
+	python2Impl = import ./default.nix { inherit pkgs; ocamlVersion = false; pythonVersion = 2; };
+	python3Impl = import ./default.nix { inherit pkgs; ocamlVersion = false; pythonVersion = 3; };
+	ocamlImpl = import ./default.nix { inherit pkgs; ocamlVersion = true; pythonVersion = 3; };
+	combinedImpl = withExtraDeps ocamlImpl (python3Impl.buildInputs);
 in
 # default action gets the combined impl, but specific attrs can be selected for CI
 {

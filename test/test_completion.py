@@ -53,7 +53,7 @@ class TestCompletion(TestCase):
 			self.completionTargets(),
 			['file1','file2','file3'])
 
-	def test_inverted_gupfile_matches(self):
+	def test_excluded_gupfile_matches(self):
 		self.touch('file1')
 		self.touch('file2')
 		self.write('Gupfile', '''script:

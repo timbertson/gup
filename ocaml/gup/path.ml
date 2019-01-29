@@ -142,9 +142,13 @@ module Make(Unix:UNIX) = struct
 		val relative_of_name : name -> Relative.t
 		val relative_of_name_opt : name option -> Relative.t
 		val relative : t -> Relative.t
+		val join : t list -> Relative.t
+		val join_names : name list -> Relative.t
+		val direct_of_names : name list -> Direct.t option
 		val _cast : string -> name
 		val parse : string -> t
 		val lift : (string -> 'a) -> (name -> 'a)
+		val name : name -> t
 	end = struct
 		type name = string
 		type t = [
@@ -157,6 +161,8 @@ module Make(Unix:UNIX) = struct
 			| `current -> Filename.current_dir_name
 			| `name n -> n
 
+		let name n = `name n
+
 		let string_of_name s = s
 		let string_of_name_opt s = s |> Option.map string_of_name |> Option.default ""
 		let _cast s = s
@@ -164,6 +170,12 @@ module Make(Unix:UNIX) = struct
 		let relative = Relative._cast % to_string
 		let relative_of_name = Relative._cast
 		let relative_of_name_opt n = n |> Option.map relative_of_name |> Option.default Relative.empty
+
+		let join components = Relative._cast (PathString_.join (components |> List.map to_string))
+		let join_names names = Relative._cast (PathString_.join (names |> List.map string_of_name))
+		let direct_of_names = function
+			| [] -> None
+			| names -> Some (Direct._cast (PathString_.join (names |> List.map string_of_name)))
 
 		let _any_sep = Str.regexp (".*" ^ (Str.quote Filename.dir_sep))
 		let name_of_string name =
@@ -193,7 +205,10 @@ module Make(Unix:UNIX) = struct
 				let cwd = Absolute._cast (Lazy.force cwd) in
 				Absolute.concat cwd p
 
-		let join = Relative.of_string % PathString_.join
+		(* let join = Relative.of_string % PathString_.join *)
+		let relative : t -> Relative.t option = function
+			| `absolute _ -> None
+			| `relative p -> Some p
 
 		let readdir path = Sys.readdir path |> Array.map PathComponent.name_of_string
 
@@ -226,6 +241,11 @@ module Make(Unix:UNIX) = struct
 		let root = _cast PathString.root
 		let cwd () = _cast (Lazy.force PathString.cwd)
 		let dirname : t -> t = _map (Filename.dirname)
+		let split : t -> PathComponent.name list = fun path ->
+			(* cast is safe since concrete path cannot have . or .. components,
+			 * and str.split removes ignores leading slash *)
+			Super.split path |> List.map (PathComponent._cast)
+
 		let concat : t -> Relative.t -> Absolute.t = fun base rel ->
 			Absolute._cast (Filename.concat (to_string base) (Relative.to_string rel))
 
@@ -235,6 +255,10 @@ module Make(Unix:UNIX) = struct
 
 	module RelativeFrom_ = struct
 		type t = Concrete_.t * Relative.t
+		let concat_from : Concrete_.t ->  PathString.t -> t = fun base -> function
+			| `absolute path -> (Concrete_.root, Absolute.rootless path)
+			| `relative path -> (base, path)
+
 		let concat_from_cwd : PathString.t -> t = function
 			| `absolute path -> (Concrete_.root, Absolute.rootless path)
 			| `relative path -> (Concrete_.cwd (), path)
@@ -394,14 +418,14 @@ module Make(Unix:UNIX) = struct
 			let common = Enum.count @@ Enum.take_while (fun (a,b) -> a = b) zipped in
 
 			let depth_from_common_prefix = (List.length newbase_list - common) in
-			let base_from_common_prefix = List.drop common base_list in
+			let base_from_common_prefix = List.drop common base_list |> List.map PathComponent.name in
 
 			let rel_list =
-				List.of_enum (Enum.repeat ~times:depth_from_common_prefix Filename.parent_dir_name)
+				List.of_enum (Enum.repeat ~times:depth_from_common_prefix `parent)
 				@ base_from_common_prefix
-				@ (match name with Some name -> [PathComponent.string_of_name name] | None -> [])
+				@ (match name with Some name -> [PathComponent.name name] | None -> [])
 			in
-			(newbase, PathString.join (rel_list))
+			(newbase, PathComponent.join (rel_list))
 	end
 
 	module RelativeFrom = struct

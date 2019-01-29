@@ -16,7 +16,7 @@ let
 	pychecker = pkgs.callPackage ./nix/pychecker.nix {};
 
 	pythonImpl = addTestDeps pythonPackages (callPackage ./nix/gup-python.nix { inherit python pychecker; });
-	ocamlImpl = addTestDeps pkgs.python2Packages (callPackage ./nix/gup-ocaml.nix { inherit python; });
+	ocamlImpl = addTestDeps pkgs.python3Packages (callPackage ./nix/gup-ocaml.nix { inherit python; });
 
 in
 if ocamlVersion then ocamlImpl else pythonImpl

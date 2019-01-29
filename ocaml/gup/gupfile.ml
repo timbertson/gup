@@ -53,45 +53,58 @@ let canonicalize_target_name target =
 	else String.concat canonical_sep (PathString.split target)
 
 (* join` prefix` to `target` using canonical_sep *)
-let join_target prefix = begin match prefix with
+let join_target prefix = match prefix with
 	| "" -> identity
 	| prefix -> (^) (prefix ^ canonical_sep)
-end
 
+let rule_literal = function
+	| [ Str.Text t] -> Some t
+	| _ -> None
 
-let regexp_of_rule text =
-	let re_parts = Str.full_split _match_rule_splitter text |> List.map (fun part ->
+let parts_of_rule_pattern = Str.full_split _match_rule_splitter
+
+let regexp_of_rule_parts ~original_text parts =
+	let re_parts = parts |> List.map (fun part ->
 		match part with
 		| Str.Text t -> Str.quote t
 		| Str.Delim "*" -> "[^/]*"
 		| Str.Delim "**" -> ".*"
-		| _ -> Error.raise_safe "Invalid pattern: %s" text
+		| _ -> Error.raise_safe "Invalid pattern: %s" original_text
 	) in
 	("^" ^ (String.concat "" re_parts) ^ "$")
 
-class match_rule (text:string) =
-	let invert = String.left text 1 = "!" in
-	let pattern_text = if invert then String.tail text 1 else text in
-	let regexp = lazy (Str.regexp @@ regexp_of_rule pattern_text) in
-	object (self)
-		method matches (str:string) =
-			Str.string_match (Lazy.force regexp) str 0
-		method invert = invert
-		method text = text
-		method is_wildcard =
-			try
-				let (_:int) = Str.search_forward _match_rule_splitter pattern_text 0 in
-				true
-			with Not_found -> false
+class match_rule (original_text:string) =
+	let exclude = String.left original_text 1 = "!" in
+	let pattern_text = if exclude then String.tail original_text 1 else original_text in
+	let rule_parts = parts_of_rule_pattern pattern_text in
+	let rule_literal = rule_literal rule_parts in
+	let match_fn = match rule_literal with
+		| Some lit -> fun candidate -> lit = candidate
+		| None ->
+			let regexp = (Str.regexp (regexp_of_rule_parts ~original_text rule_parts)) in
+			fun candidate -> Str.string_match regexp candidate 0
+	in
 
+	object (self)
+		method matches (candidate:string) = match_fn candidate
+
+		method matches_exactly (candidate:string) =
+			match rule_literal with
+				| Some lit -> lit = candidate
+				| None -> false
+
+		method repr = pattern_text
+		method exclude = exclude
+		method text = original_text
+		method is_wildcard = rule_literal |> Option.is_none
 		method definite_targets_in prefix existing_files =
-			if invert then assert false;
+			if exclude then assert false;
 			let nothing = Enum.empty () in
 			let full_target = join_target prefix in
 			let declared_targets = begin match prefix with
 				| "" ->
-					if self#is_wildcard then nothing
-					else Enum.singleton pattern_text (* rule defines an exact match for a file *)
+					(* return a string if the rule defines an exact match for a file *)
+					rule_literal |> Option.map Enum.singleton |> Option.default nothing
 				| prefix ->
 					try
 						let dir_match, file_match = String.split pattern_text canonical_sep in
@@ -114,7 +127,7 @@ let print_match_rule out r =
 	Printf.fprintf out "match_rule(%a)" String.print_quoted r#text
 
 class match_rules (rules:match_rule list) =
-	let (excludes, includes) = rules |> List.partition (fun rule -> rule#invert) in
+	let (excludes, includes) = rules |> List.partition (fun rule -> rule#exclude) in
 	object
 		method matches (str:string) =
 			let any = List.exists (fun r ->
@@ -122,6 +135,9 @@ class match_rules (rules:match_rule list) =
 			) in
 			(any includes) && not (any excludes)
 		method rules = rules
+
+		method matches_exactly (str:string) =
+			List.exists (fun r -> r#matches_exactly str) includes
 
 		(* return targets which *must* be buildable under `prefix`, based on either:
 		 * - a non-wildcard match within the target prefix
@@ -199,38 +215,12 @@ let parse_gupfile_at path =
 	with Invalid_gupfile (line, reason) ->
 		Error.raise_safe "Invalid gupfile - %s:%d (%s)" path line reason
 
-class buildscript
-	(script_path:Absolute.t)
-	(target:RelativeFrom.t)
-	(target_path:ConcreteBase.t)
-	=
-	let basedir = RelativeFrom.base target in
-	object (self)
-		method repr = Printf.sprintf "buildscript(%s, %s)"
-			(Absolute.to_string script_path)
-			(RelativeFrom.to_string target)
-
-		(* used for: $1 to exe_script. Must be relative, non-resolved *)
-		method target = RelativeFrom.relative target
-
-		(* must not be fully concrete, as we don't want to resolve a symlink target *)
-		method target_path = target_path
-
-		method target_path_repr = ConcreteBase.to_string target_path
-
-		(* the actual file to execv. *not* concrete, because build scripts may be accesed via symlink *)
-		method script_path = script_path
-
-		method basedir = basedir
-	end
-
 class build_candidate
 	(root:Concrete.t)
 	(suffix:builder_suffix option) =
 	object (self)
 		method _base_path include_gup : Absolute.t =
 			let path = root |> Concrete.absolute in
-
 			(match suffix with
 				| Some suff ->
 					begin
@@ -249,58 +239,76 @@ class build_candidate
 		method guppath (gupfile:gupfile) =
 			Absolute.concat self#base_path (relative_of_gupfile gupfile)
 
-		method builder_for gupfile (target:Relative.t) : (Absolute.t * RelativeFrom.t) option =
-			let path = self#guppath gupfile |> extant_file_path in
-			let target_from basedir = RelativeFrom.make basedir target in
-			Option.bind path (fun path ->
-				log#trace "candidate exists: %s" (Absolute.to_string path);
-				let build_basedir = self#_base_path false in
-				match gupfile with
-					| Gupscript _ ->
-							let basedir = Concrete.resolve_abs build_basedir in
-							Some (path, (target_from basedir))
-					| Gupfile ->
-						let target_name = Relative.basename target
-							|> Option.default_delayed (fun() -> Error.raise_safe "target.basename is empty") in
-						if
-							target_name = string_of_gupfile Gupfile || has_gup_extension target_name
-						then
-							begin
-								(* gupfiles cannot be built by implicit targets *)
-								log#debug "indirect build not supported for target %s" target_name;
-								None
-							end
-						else
-							begin
-								let rules = parse_gupfile_at path in
-								log#trace "Parsed gupfile -> %a" print_gupfile rules;
-								(* always use `/` as path sep in gupfile patterns *)
-								let match_target = canonicalize_target_name target in
-								(List.enum rules) |> Enum.filter_map (fun (script_name, ruleset) ->
-									if ruleset#matches match_target then (
-										let basedir = Concrete.resolve_abs build_basedir in
-										let target = target_from basedir in
+		method builder_for gupfile (target:Relative.t) : Buildable.t Recursive.t option =
+			let target_name = Relative.basename target in
+			let build_basedir = self#_base_path false in
+			let with_extant_guppath fn =
+				Option.bind (self#guppath gupfile |> extant_file_path) (fun path ->
+					log#trace "candidate exists: %s" (Absolute.to_string path);
+					fn path
+				)
+			in
 
-										if String.starts_with script_name "!" then (
-											let script_name = String.lchop ~n:1 script_name in
-											let script_path = match Util.which script_name with
-												| Some script_path -> script_path |> PathString.parse |> PathString.to_absolute
-												| None -> Error.raise_safe "Build command not found on PATH: %s\n     %s(specified in %s)"
-													script_name Var.indent (Absolute.to_string path)
-											in
-											Some (script_path, target)
-										) else (
-											let script_name = PathString.parse script_name in
-											let script_path = Absolute.concat_from_dir path script_name in
-											if not (Absolute.exists script_path) then
-												Error.raise_safe "Build script not found: %s\n     %s(specified in %s)"
-													(Absolute.to_string script_path) Var.indent (Absolute.to_string path);
-											Some (script_path, target)
-										)
-									) else
+			let target_is_builder target_name = (target_name = string_of_gupfile Gupfile) || (has_gup_extension target_name) in
+			(match (gupfile, target_name) with
+				| Gupscript _, Some target_name when target_is_builder target_name ->
+					(* gupfiles & scripts can only be built by Gupfile targets, not .gup scripts *)
+					None
+				| Gupfile, None ->
+					Error.raise_safe "target.basename is empty"
+
+				| Gupscript _, _ ->
+					with_extant_guppath (fun path ->
+						let basedir = Concrete.resolve_abs build_basedir in
+						Some (Recursive.Terminal (Buildable.make ~script:path ~target:(RelativeFrom.make basedir target)))
+					)
+
+				| Gupfile, Some target_name ->
+					with_extant_guppath (fun path ->
+						let rules = parse_gupfile_at path in
+						log#trace "Parsed gupfile -> %a" print_gupfile rules;
+						(* always use `/` as path sep in gupfile patterns *)
+						let match_target = canonicalize_target_name target in
+
+						let rec resolve_builder ~basedir ~script_name ~target : Buildable.t Recursive.t = (
+							if String.starts_with script_name "!" then (
+								let script_name = String.lchop ~n:1 script_name in
+								let script = match Util.which script_name with
+									| Some script_path -> script_path |> PathString.parse |> PathString.to_absolute
+									| None -> Error.raise_safe "Build command not found on PATH: %s\n     %s(specified in %s)"
+										script_name Var.indent (Absolute.to_string path)
+								in
+								Recursive.Terminal (Buildable.make ~script ~target)
+							) else (
+								let script_path = PathString.parse script_name in
+								let concrete = Buildable.make ~script:(Absolute.concat_from_dir path script_path) ~target in
+								let buildscript_builder = (List.enum rules) |> Enum.filter_map (fun (builder_name, ruleset) ->
+									if ruleset#matches_exactly script_name then
+										let target = RelativeFrom.concat_from basedir script_path in
+										Some (resolve_builder ~basedir ~script_name:builder_name ~target)
+									else
 										None
-								) |> Enum.get
-							end
+								) |> Enum.get in
+								match buildscript_builder with
+									| Some builder -> Recursive.connect ~parent:builder concrete
+									| None -> Recursive.terminal concrete
+							)
+						) in
+
+						let matches = if target_is_builder target_name
+							then fun ruleset -> ruleset#matches_exactly match_target
+							else fun ruleset -> ruleset#matches match_target
+						in
+
+						(List.enum rules) |> Enum.filter_map (fun (script_name, ruleset) ->
+							if matches ruleset then (
+								let basedir = Concrete.resolve_abs build_basedir in
+								let target = RelativeFrom.make basedir target in
+								Some (resolve_builder ~basedir ~script_name ~target)
+							) else
+								None
+						) |> Enum.get
+					)
 			)
 	end
 
@@ -308,15 +316,14 @@ type build_source =
 	| Direct of Concrete.t * builder_suffix option
 	| Indirect of Concrete.t * builder_suffix option * Relative.t
 
-
 let build_sources (dir:Concrete.t) : build_source Enum.t =
 	(* we need a concrete path to tell how far up the tree we should go *)
 	let dirparts = Concrete.split dir in
 	let dirdepth = len dirparts in
 
-	let make_suffix parts = match parts with
-			| [] -> Empty
-			| _ -> Suffix (Direct.of_list parts) in
+	let make_suffix parts = match PathComponent.direct_of_names parts with
+			| None -> Empty
+			| Some suffix -> Suffix suffix in
 
 	(* /path/to/filename.gup *)
 	let direct_target = Enum.singleton @@ Direct (dir, None) in
@@ -336,7 +343,7 @@ let build_sources (dir:Concrete.t) : build_source Enum.t =
 		let parent_base = _up_path up dir in
 		(* base_suff is the path back to our target after stripping off `up` components
 		 * - used to match against the gupfile rule *)
-		let base_suff = PathString.join (Util.slice ~start:(dirdepth - up) dirparts) in
+		let base_suff = PathComponent.join_names (Util.slice ~start:(dirdepth - up) dirparts) in
 		Enum.concat @@ List.enum [
 			(Enum.singleton @@ Indirect (parent_base, None, base_suff));
 			(Enum.range 0 ~until:(dirdepth - up)) |> Enum.map (fun i ->
@@ -419,11 +426,8 @@ let buildable_files_in (dir:Concrete.t) : string Enum.t =
 		with Not_found -> raise Enum.No_more_elements
 	)
 
-let find_buildscript path : buildscript option =
+let find_builder path : Buildable.t Recursive.t option =
 	possible_builders path |> Enum.filter_map (fun (candidate, gupfile, target) ->
 		candidate#builder_for gupfile target
 	)
 	|> Enum.get
-	|> Option.map (fun (script_path, target) ->
-		new buildscript script_path target (ConcreteBase.resolve_from target)
-	)
