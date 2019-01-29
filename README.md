@@ -163,13 +163,12 @@ generate a target. If you change the build script (or add a new build script
 with a higher precedence for a given target), that target will be rebuilt.
 
 
-## Build script executaion:
+## Build script execution:
 
-`gup` invokes
-your build script as `scriptname output_path target`. Wherever possible, your
-build script should generate its result in `output_path`. This is an absolute path
-to a temporary file that, once your buildscript has completed successfully, will
-replace the current `target` file. There are a few benefits to this approach:
+`gup` invokes your build script as `scriptname output_path target`. Wherever possible,
+your build script should generate its result in `output_path`. This is an absolute
+path to a temporary file that, once your buildscript has completed successfully,
+will replace the current `target` file. There are a few benefits to this approach:
 
 1. By generating this file instead of writing to `target` directly, you can
    ensure that `target` is always the result of a successful build,
@@ -273,8 +272,8 @@ script, just like it rebuilds a target when the build script is modified.
 
 ### Running build scripts
 
-Once `gup` has found the script to build a given target, it runs it as a
-script.
+Once `gup` has found the script to build a given target, it runs it as
+an executable. More concretely:
 
 It will interpret shebang lines so that you don't actually have to
 make your script executable, but you can also use an actual executable (with
@@ -291,38 +290,6 @@ be searched for in `$PATH`, making this a terse equivalent of `#!/usr/bin/env py
 On windows, UNIX-y paths like `/bin/bash` may not be present, so you should either
 use `#!bash` or `#!/usr/bin/env bash` (gup has special support for `/usr/bin/env`
 in shebang lines, even if that path doesn't exist locally).
-
-Every build script gets executed with two arguments:
-
-  - `output_path` - the (absolute) path to a temporary output location
-  - `target` - the (relative) path to the target, from $PWD
-
-The built file should be saved to the file named in `output_path`, rather than
-the `target` being built. If your build script succeeds, gup will replace the
-current `target` file with the file you just created in `output_path`. There
-are a few benefits to this approach:
-
-1. By generating this file instead of writing to `target` directly, you can
-   ensure that `target` is always the result of a successful build,
-   and not a partially-created file from a build script that failed halfway through.
-
-2. If your script _does not_ generate anything in `output_path`, `gup` will automatically
-   delete `target` for you. This means that you won't get left with stale built files
-   if your build script changes to no longer produce any output.
-
-3. When building a directory, you can be assured that `output_path` does not yet
-   exist. This means you can create it via `mkdir`, and not have to worry about
-   cleaning up a previous version (`gup` will completely replace a previous `target`
-   on successful build, regardless of whether it's a file, symlink or directory).
-
-If your build script cannot create `output_path`, it's OK to write to `target` instead.
-Often this is necessary when shelling out to other tools where it's not easy to direct
-their output to a specific file. **Note**: If you write your results to `target` directly
-and there's a chance that the build won't actually modify `target` (because it turns out to be a
-no-op), you must `touch target` in your build script. If you don't modify the `mtime`
-of `target`, `gup` will think that your build script produced no output, and delete
-`target` (due to point #2 above).
-
 
 When a build script is run, its working directory (`$PWD`) is typically set to the directory
 containing the Gupfile (for indirect targets), or the script itself (for direct `<name>.gup` targets).
