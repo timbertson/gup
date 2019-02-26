@@ -343,6 +343,9 @@ def main():
 		_main(sys.argv[1:])
 	except KeyboardInterrupt:
 		sys.exit(2)
+	except AssertionError as e:
+		_log.error("%s", e, exc_info=True)
+		sys.exit(2)
 	except SafeError as e:
 		if len(e.args) > 0:
 			_log.error("%s" % (str(e),))
