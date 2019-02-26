@@ -1,4 +1,4 @@
-{ pkgs  }:
+{ pkgs ? import <nixpkgs> {} }:
 with pkgs;
 let
 	withExtraDeps = base: extraDeps: base.overrideAttrs (base: {
