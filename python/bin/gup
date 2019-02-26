@@ -865,17 +865,18 @@ class BuildCandidate(object):
 
 		_gupfile_log.trace("candidate exists: %s" % (path,))
 
+		def target_is_builder():
+			target_name = os.path.basename(self.target)
+			return target_name == GUPFILE or os.path.splitext(target_name)[1].lower() == '.gup'
+
 		build_basedir = os.path.join(*self._base_parts(False))
 		_gupfile_log.trace("build_basedir: %s" % (build_basedir,))
 
 		if not self.indirect:
-			return Builder(path, self.target, build_basedir)
-		else:
-			target_name = os.path.basename(self.target)
-			if target_name == GUPFILE or os.path.splitext(target_name)[1].lower() == '.gup':
-				# gupfiles cannot be built by implicit targets
-				_gupfile_log.debug("indirect build not supported for target %s", target_name)
+			if target_is_builder():
+				# gupfiles & scripts can only be built by Gupfile targets, not .gup scripts
 				return None
+			return Builder(path, self.target, build_basedir, parent=None)
 
 		with open(path) as f:
 			try:
@@ -890,26 +891,32 @@ class BuildCandidate(object):
 		if os.path.sep != '/':
 			match_target = self.target.replace(os.path.sep, '/')
 
-		for script, ruleset in rules:
-			if ruleset.match(match_target):
-				base = os.path.realpath(build_basedir)
+		def find_matching_rule(matchfn, match_target):
+			for script, ruleset in rules:
+				if matchfn(ruleset, match_target):
+					base = os.path.realpath(build_basedir)
+					parent = None
 
-				if script.startswith('!'):
-					script = script[1:]
-					script_path = which(script)
-					if script_path is None:
-						raise SafeError("Build command not found on PATH: %s\n     %s(specified in %s)" % (script, INDENT, path))
-				else:
-					script_path = os.path.join(os.path.dirname(path), script)
-					if not os.path.exists(script_path):
-						raise SafeError("Build script not found: %s\n     %s(specified in %s)" % (script_path, INDENT, path))
+					if script.startswith('!'):
+						script = script[1:]
+						script_path = which(script)
+						if script_path is None:
+							raise SafeError("Build command not found on PATH: %s\n     %s(specified in %s)" % (script, INDENT, path))
+					else:
+						script_path = os.path.join(os.path.dirname(path), script)
+						if not os.path.exists(script_path):
+							raise SafeError("Build script not found: %s\n     %s(specified in %s)" % (script_path, INDENT, path))
 
-					script = os.path.normpath(script)
-				return Builder(
-					script_path,
-					os.path.relpath(os.path.join(build_basedir, self.target), base),
-					base)
-		return None
+						parent = find_matching_rule(Guprules.match_exactly, script)
+						script = os.path.normpath(script)
+					return Builder(
+						script_path,
+						os.path.relpath(os.path.join(build_basedir, self.target), base),
+						base, parent)
+			return None
+
+		match_fn = Guprules.match_exactly if target_is_builder() else Guprules.match
+		return find_matching_rule(match_fn, match_target)
 
 class Builder(object):
 	'''
@@ -917,12 +924,13 @@ class Builder(object):
 	`path` is the path to the build script, even if this
 	builder was obtained indirectly (via a Gupfile match)
 	'''
-	def __init__(self, script_path, target, basedir):
+	def __init__(self, script_path, target, basedir, parent):
 		self.path = script_path
 		self.realpath = os.path.realpath(self.path)
 		self.target = target
 		self.basedir = basedir
 		self.target_path = os.path.join(self.basedir, self.target)
+		self.parent = parent
 
 	def __repr__(self):
 		return "Builder(path=%r, target=%r, basedir=%r)" % (self.path, self.target, self.basedir)
@@ -1022,6 +1030,11 @@ class Guprules(object):
 			any((rule.match(p) for rule in self.excludes))
 		)
 
+	def match_exactly(self, p):
+		return (
+			any((rule.match_exactly(p) for rule in self.includes))
+		)
+
 	def __repr__(self):
 		return repr(self.includes + self.excludes)
 
@@ -1078,6 +1091,9 @@ class MatchRule(object):
 	def __call__(self, f):
 		return self.match(f)
 
+	def match_exactly(self, f):
+		return self.text == f
+
 	def match(self, f):
 		regexp = '^'
 		for i, part in enumerate(re.split(self._splitter, self.text)):
@@ -1129,6 +1145,7 @@ class _dirty_args(object):
 def dirty_check_with_dep(path, check_fn, args): # -> (did_build, is_dirty)
 	dirty = check_fn()
 	if dirty: return (False, True)
+	_state_log.trace("dirty_check_with_dep: path %s may be dirty built, rechecking", path);
 	built = args.build_dependency(path)
 	if built:
 		_state_log.trace("dirty_check_with_dep: path %s was built, rechecking", path);
@@ -1352,15 +1369,8 @@ class AlwaysRebuild(Dependency):
 		_state_log.debug('DIRTY: always rebuild')
 		return True
 
-class FileDependency(Dependency):
+class BaseFileDependency(Dependency):
 	num_fields = 3
-	tag = 'file:'
-	recursive = True
-
-	def __init__(self, mtime, checksum, path):
-		self.path = path
-		self.checksum = checksum
-		self.mtime = mtime
 
 	@classmethod
 	def relative_to(cls, rel_root, mtime, path):
@@ -1397,19 +1407,31 @@ class FileDependency(Dependency):
 		if os.path.isabs(self.path): return self.path
 		return os.path.normpath(os.path.join(base, self.path))
 
+	def mtime_mismatch(self, path):
+		current_mtime = get_mtime(path)
+		if current_mtime != self.mtime:
+			_state_log.debug("DIRTY: %s (stored mtime is %r, current is %r)" % (self.path, self.mtime, current_mtime))
+			return True
+		return False
+
+
+class FileDependency(BaseFileDependency):
+	tag = 'file:'
+	recursive = True
+
+	def __init__(self, mtime, checksum, path):
+		self.path = path
+		self.checksum = checksum
+		self.mtime = mtime
+
 	def is_dirty(self, args):
 		base = args.base
 		path = self.full_path(base)
-		self._target = path
 
-		def mtime_dirty():
-			current_mtime = get_mtime(path)
-			if current_mtime != self.mtime:
-				_state_log.debug("DIRTY: %s (stored mtime is %r, current is %r)" % (self.path, self.mtime, current_mtime))
-				return True
-			return False
+		def is_dirty_mtime():
+			return self.mtime_mismatch(path)
 
-		built, mtime_dirty = dirty_check_with_dep(path, mtime_dirty, args)
+		built, mtime_dirty = dirty_check_with_dep(path, is_dirty_mtime, args)
 
 		if mtime_dirty or built:
 			if self.checksum is None:
@@ -1431,11 +1453,26 @@ class FileDependency(Dependency):
 		else:
 			return False
 
-class BuilderDependency(FileDependency):
+class BuilderDependency(BaseFileDependency):
 	tag = 'builder:'
 	recursive = False
 
+	def __init__(self, mtime, checksum, path):
+		self.path = path
+		# _checksum is present to remain consistent with FileDependency,
+		# but not currently supported
+		self.checksum = None
+		self.mtime = mtime
+
+	@classmethod
+	def relative_to_target(cls, target, mtime, path):
+		return cls.relative_to(os.path.dirname(target), mtime=mtime, path=path)
+
 	def is_dirty(self, args):
+		# Builder dependency doesn't do a full recursive check like a FileDependency does,
+		# we simply treat the mtime as a static file rather than a possible target.
+		# The logic for rebuilding builders is dealt with in builder.py before it
+		# checks the state.
 		builder_path = args.builder_path
 
 		assert not os.path.isabs(builder_path)
@@ -1443,7 +1480,8 @@ class BuilderDependency(FileDependency):
 		if builder_path != self.path:
 			_state_log.debug("DIRTY: builder changed from %s -> %s" % (self.path, builder_path))
 			return True
-		return super(BuilderDependency, self).is_dirty(args)
+
+		return self.mtime_mismatch(self.full_path(args.base))
 
 class Checksum(Dependency):
 	tag = 'checksum:'
@@ -1547,57 +1585,63 @@ def prepare_build(p):
 		return Target(builder)
 	return None
 
-def _builder_is_dirty(state, allow_build):
+def _builder_build_if_dirty(target, allow_build):
 	'''
-	Returns whether the dependency is dirty.
-	Builds any targets required to check dirtiness
+	Returns whether the dependency was built (or would be).
+	Also builds any targets required to check dirtiness.
 	'''
-	deps = state.deps()
-	builder = Builder.for_target(state.path)
 
-	if deps is None:
-		if builder is None:
-			# not a target
+	def perform_build(target):
+		if allow_build:
+			target.perform_build(from_update=True)
+		return True
+
+	def build_target_if_dirty(target):
+		if target.builder.parent is not None:
+			if build_target_if_dirty(Target(target.builder.parent)):
+				_builder_log.debug("DIRTY: builder was rebuilt")
+				return perform_build(target)
+
+		deps = target.state.deps()
+		if deps is None:
+			_builder_log.debug("DIRTY: %s (is buildable but has no stored deps)", target.path)
+			return perform_build(target)
+
+		if deps.already_built():
+			_builder_log.trace("CLEAN: %s has already been built in this invocation", target.path)
 			return False
-		else:
-			_builder_log.debug("DIRTY: %s (is buildable but has no stored deps)", state.path)
-			return True
 
-	if deps.already_built():
-		_builder_log.trace("CLEAN: %s has already been built in this invocation", state.path)
+		built_children = set()
+		def build_child_if_dirty(path):
+			if path in built_children:
+				return False
+			else:
+				built_children.add(path)
+				_builder_log.trace("Recursing over dependency: %s -> %s", target.path, path)
+				child = prepare_build(path)
+				if child is not None:
+					child_dirty = build_target_if_dirty(child)
+					_builder_log.trace("_is_dirty(%s) -> %s", child, child_dirty)
+					return child_dirty
+				return False
+
+		if not allow_build:
+			child_dirty = []
+			def wrapped_build(path):
+				built = build_child_if_dirty(path)
+				if built:
+					child_dirty.append(True)
+				return False
+			dirty = deps.is_dirty(target.builder, wrapped_build)
+			dirty = dirty or bool(child_dirty)
+		else:
+			dirty = deps.is_dirty(target.builder, build_child_if_dirty)
+		_builder_log.trace("deps.is_dirty(%r) -> %r", target.path, dirty)
+		if dirty:
+			return perform_build(target)
 		return False
 
-	built_children = set()
-	def build_child_if_dirty(path):
-		if path in built_children:
-			return False
-		else:
-			built_children.add(path)
-			_builder_log.trace("Recursing over dependency: %s -> %s", state.path, path)
-			child = prepare_build(path)
-			if child is not None:
-				child_dirty = _builder_is_dirty(child.state, allow_build)
-				if child_dirty:
-					_builder_log.trace("_builder_is_dirty(%s) -> True", path)
-					if allow_build:
-						child.build(update=False)
-					return True
-			_builder_log.trace("_builder_is_dirty(%s) -> False", path)
-			return False
-
-	if not allow_build:
-		child_dirty = []
-		def wrapped_build(path):
-			built = build_child_if_dirty(path)
-			if built:
-				child_dirty.append(True)
-			return False
-		dirty = deps.is_dirty(builder, wrapped_build)
-		dirty = dirty or bool(child_dirty)
-	else:
-		dirty = deps.is_dirty(builder, build_child_if_dirty)
-	_builder_log.trace("deps.is_dirty(%r) -> %r", state.path, dirty)
-	return dirty
+	return build_target_if_dirty(target)
 
 class Target(object):
 	def __init__(self, builder):
@@ -1608,22 +1652,29 @@ class Target(object):
 	def __repr__(self):
 		return 'Target(%r)' % (self.path,)
 
-	def build(self, update):
-		return self.state.perform_build(self.builder, lambda deps: self._perform_build(update, deps))
+	def build_or_update(self, update):
+		if update:
+			built = _builder_build_if_dirty(self, True)
+			if not built:
+				_builder_log.trace("no build needed")
+		else:
+			self.perform_build(False)
+			built = True
+
+		return built
 
 	def is_dirty(self):
-		return _builder_is_dirty(self.state, False)
+		return _builder_build_if_dirty(self, allow_build = False)
 
-	def _perform_build(self, update, deps):
+	def perform_build(self, from_update):
+		self.state.perform_build(self.builder, lambda deps: self._perform_build(deps, from_update))
+
+	def _perform_build(self, deps, from_update):
 		'''
 		Assumes locks are held (by state.perform_build)
 		'''
 		assert self.builder is not None
 		assert os.path.exists(self.builder.path)
-		if update:
-			if not _builder_is_dirty(self.state, True):
-				_builder_log.trace("no build needed")
-				return False
 		exe_path = path.abspath(self.builder.path)
 		exe_path_relative_to_cwd = os.path.relpath(exe_path,ROOT_CWD)
 
@@ -1672,7 +1723,7 @@ class Target(object):
 					# directories often need to be created directly
 					self.state.mark_clobbers()
 					expect_clobber = False if deps is None else deps.clobbers
-					if not (update and expect_clobber):
+					if not (from_update and expect_clobber):
 						_builder_log.warn("%s modified %s directly" % (exe_path_relative_to_cwd, self.path))
 			if ret == 0:
 				if os.path.lexists(output_file):
@@ -1815,7 +1866,7 @@ class Task(object):
 		'''
 		run in a child process
 		'''
-		self.built = self.target.build(update=self.opts.update)
+		self.built = self.target.build_or_update(update=self.opts.update)
 		self.complete()
 
 	def complete(self):

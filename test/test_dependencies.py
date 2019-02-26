@@ -69,7 +69,6 @@ class TestDependencies(TestCase):
 	def test_trying_to_build_source_fails(self):
 		self.assertRaises(SafeError, lambda: self.build("dep"))
 
-	@unittest.skipIf(not IS_OCAML, 'TODO: python implementation')
 	def test_builder_listed_in_gupfile_is_buildable_explicitly(self):
 		self.write('actual_builder', echo_to_target("built"))
 		self.write('builder.gup', BASH + 'cp actual_builder "$1"')

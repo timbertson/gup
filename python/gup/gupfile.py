@@ -70,18 +70,20 @@ class BuildCandidate(object):
 			return None
 
 		_log.trace("candidate exists: %s" % (path,))
+
+		def target_is_builder():
+			target_name = os.path.basename(self.target)
+			return target_name == GUPFILE or os.path.splitext(target_name)[1].lower() == '.gup'
 		
 		build_basedir = os.path.join(*self._base_parts(False))
 		_log.trace("build_basedir: %s" % (build_basedir,))
 
 		if not self.indirect:
-			return Builder(path, self.target, build_basedir)
-		else:
-			target_name = os.path.basename(self.target)
-			if target_name == GUPFILE or os.path.splitext(target_name)[1].lower() == '.gup':
-				# gupfiles cannot be built by implicit targets
-				_log.debug("indirect build not supported for target %s", target_name)
+			if target_is_builder():
+				_log.debug("ignoring direct builder for target %s", path)
+				# gupfiles & scripts can only be built by Gupfile targets, not .gup scripts
 				return None
+			return Builder(path, self.target, build_basedir, parent=None)
 
 		with open(path) as f:
 			try:
@@ -96,26 +98,29 @@ class BuildCandidate(object):
 		if os.path.sep != '/':
 			match_target = self.target.replace(os.path.sep, '/')
 
-		for script, ruleset in rules:
-			if ruleset.match(match_target):
-				base = os.path.realpath(build_basedir)
+		def find_matching_rule(matchfn, target, match_target):
+			for script, ruleset in rules:
+				if matchfn(ruleset, match_target):
+					base = os.path.realpath(build_basedir)
+					parent = None
 
-				if script.startswith('!'):
-					script = script[1:]
-					script_path = which(script)
-					if script_path is None:
-						raise SafeError("Build command not found on PATH: %s\n     %s(specified in %s)" % (script, INDENT, path))
-				else:
-					script_path = os.path.join(os.path.dirname(path), script)
-					if not os.path.exists(script_path):
-						raise SafeError("Build script not found: %s\n     %s(specified in %s)" % (script_path, INDENT, path))
+					if script.startswith('!'):
+						script = script[1:]
+						script_path = which(script)
+						if script_path is None:
+							raise SafeError("Build command not found on PATH: %s\n     %s(specified in %s)" % (script, INDENT, path))
+					else:
+						script_path = os.path.join(os.path.dirname(path), script)
+						parent = find_matching_rule(Guprules.match_exactly, script, script)
+						script = os.path.normpath(script)
+					return Builder(
+						script_path,
+						os.path.relpath(os.path.join(build_basedir, target), base),
+						base, parent)
+			return None
 
-					script = os.path.normpath(script)
-				return Builder(
-					script_path,
-					os.path.relpath(os.path.join(build_basedir, self.target), base),
-					base)
-		return None
+		match_fn = Guprules.match_exactly if target_is_builder() else Guprules.match
+		return find_matching_rule(match_fn, self.target, match_target)
 
 class Builder(object):
 	'''
@@ -123,15 +128,16 @@ class Builder(object):
 	`path` is the path to the build script, even if this
 	builder was obtained indirectly (via a Gupfile match)
 	'''
-	def __init__(self, script_path, target, basedir):
+	def __init__(self, script_path, target, basedir, parent):
 		self.path = script_path
 		self.realpath = os.path.realpath(self.path)
 		self.target = target
 		self.basedir = basedir
 		self.target_path = os.path.join(self.basedir, self.target)
+		self.parent = parent
 	
 	def __repr__(self):
-		return "Builder(path=%r, target=%r, basedir=%r)" % (self.path, self.target, self.basedir)
+		return "Builder(path=%r, target=%r, basedir=%r, parent=%r)" % (self.path, self.target, self.basedir, self.parent)
 
 	@staticmethod
 	def for_target(path):
@@ -227,6 +233,11 @@ class Guprules(object):
 				and not
 			any((rule.match(p) for rule in self.excludes))
 		)
+
+	def match_exactly(self, p):
+		return (
+			any((rule.match_exactly(p) for rule in self.includes))
+		)
 	
 	def __repr__(self):
 		return repr(self.includes + self.excludes)
@@ -283,6 +294,9 @@ class MatchRule(object):
 
 	def __call__(self, f):
 		return self.match(f)
+
+	def match_exactly(self, f):
+		return self.text == f
 
 	def match(self, f):
 		regexp = '^'

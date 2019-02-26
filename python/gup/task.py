@@ -61,7 +61,7 @@ class Task(object):
 		'''
 		run in a child process
 		'''
-		self.built = self.target.build(update=self.opts.update)
+		self.built = self.target.build_or_update(update=self.opts.update)
 		self.complete()
 
 	def complete(self):

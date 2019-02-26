@@ -8,6 +8,7 @@ from .gupfile import Builder
 from .parallel import Lock
 from .path import resolve_base
 from .var import RUN_ID
+from .error import SafeError
 _log = getLogger(__name__)
 
 META_DIR = '.gup'
@@ -24,6 +25,7 @@ class _dirty_args(object):
 def dirty_check_with_dep(path, check_fn, args): # -> (did_build, is_dirty)
 	dirty = check_fn()
 	if dirty: return (False, True)
+	_log.trace("dirty_check_with_dep: path %s may be dirty built, rechecking", path);
 	built = args.build_dependency(path)
 	if built:
 		_log.trace("dirty_check_with_dep: path %s was built, rechecking", path);
@@ -106,7 +108,8 @@ class TargetState(object):
 	
 	def perform_build(self, builder, do_build):
 		exe = builder.path
-		assert os.path.exists(exe)
+		if not os.path.exists(exe):
+			raise SafeError("Build script not found: %s" % (exe))
 		def still_needs_build(deps):
 			_log.trace("checking if %s still needs build after releasing lock" % self.path)
 			return deps is None or (not deps.already_built())
@@ -247,16 +250,9 @@ class AlwaysRebuild(Dependency):
 		_log.debug('DIRTY: always rebuild')
 		return True
 
-class FileDependency(Dependency):
+class BaseFileDependency(Dependency):
 	num_fields = 3
-	tag = 'file:'
-	recursive = True
 
-	def __init__(self, mtime, checksum, path):
-		self.path = path
-		self.checksum = checksum
-		self.mtime = mtime
-	
 	@classmethod
 	def relative_to(cls, rel_root, mtime, path):
 		rel_path = os.path.relpath(resolve_base(path), rel_root)
@@ -292,19 +288,31 @@ class FileDependency(Dependency):
 		if os.path.isabs(self.path): return self.path
 		return os.path.normpath(os.path.join(base, self.path))
 
+	def mtime_mismatch(self, path):
+		current_mtime = get_mtime(path)
+		if current_mtime != self.mtime:
+			_log.debug("DIRTY: %s (stored mtime is %r, current is %r)" % (self.path, self.mtime, current_mtime))
+			return True
+		return False
+
+
+class FileDependency(BaseFileDependency):
+	tag = 'file:'
+	recursive = True
+
+	def __init__(self, mtime, checksum, path):
+		self.path = path
+		self.checksum = checksum
+		self.mtime = mtime
+
 	def is_dirty(self, args):
 		base = args.base
 		path = self.full_path(base)
-		self._target = path
 
-		def mtime_dirty():
-			current_mtime = get_mtime(path)
-			if current_mtime != self.mtime:
-				_log.debug("DIRTY: %s (stored mtime is %r, current is %r)" % (self.path, self.mtime, current_mtime))
-				return True
-			return False
-		
-		built, mtime_dirty = dirty_check_with_dep(path, mtime_dirty, args)
+		def is_dirty_mtime():
+			return self.mtime_mismatch(path)
+
+		built, mtime_dirty = dirty_check_with_dep(path, is_dirty_mtime, args)
 
 		if mtime_dirty or built:
 			if self.checksum is None:
@@ -326,11 +334,26 @@ class FileDependency(Dependency):
 		else:
 			return False
 
-class BuilderDependency(FileDependency):
+class BuilderDependency(BaseFileDependency):
 	tag = 'builder:'
 	recursive = False
 
+	def __init__(self, mtime, checksum, path):
+		self.path = path
+		# checksum is present to remain consistent with FileDependency,
+		# but not currently supported
+		self.checksum = None
+		self.mtime = mtime
+
+	@classmethod
+	def relative_to_target(cls, target, mtime, path):
+		return cls.relative_to(os.path.dirname(target), mtime=mtime, path=path)
+
 	def is_dirty(self, args):
+		# Builder dependency doesn't do a full recursive check like a FileDependency does,
+		# we simply treat the mtime as a static file rather than a possible target.
+		# The logic for rebuilding builders is dealt with in builder.py before it
+		# checks the state.
 		builder_path = args.builder_path
 
 		assert not os.path.isabs(builder_path)
@@ -338,7 +361,8 @@ class BuilderDependency(FileDependency):
 		if builder_path != self.path:
 			_log.debug("DIRTY: builder changed from %s -> %s" % (self.path, builder_path))
 			return True
-		return super(BuilderDependency, self).is_dirty(args)
+
+		return self.mtime_mismatch(self.full_path(args.base))
 
 class Checksum(Dependency):
 	tag = 'checksum:'

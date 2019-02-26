@@ -28,57 +28,63 @@ def prepare_build(p):
 		return Target(builder)
 	return None
 
-def _is_dirty(state, allow_build):
+def _build_if_dirty(target, allow_build):
 	'''
-	Returns whether the dependency is dirty.
-	Builds any targets required to check dirtiness
+	Returns whether the dependency was built (or would be).
+	Also builds any targets required to check dirtiness.
 	'''
-	deps = state.deps()
-	builder = Builder.for_target(state.path)
 
-	if deps is None:
-		if builder is None:
-			# not a target
+	def perform_build(target):
+		if allow_build:
+			target.perform_build(from_update=True)
+		return True
+
+	def build_target_if_dirty(target):
+		if target.builder.parent is not None:
+			if build_target_if_dirty(Target(target.builder.parent)):
+				_log.debug("DIRTY: builder was rebuilt")
+				return perform_build(target)
+
+		deps = target.state.deps()
+		if deps is None:
+			_log.debug("DIRTY: %s (is buildable but has no stored deps)", target.path)
+			return perform_build(target)
+
+		if deps.already_built():
+			_log.trace("CLEAN: %s has already been built in this invocation", target.path)
 			return False
-		else:
-			_log.debug("DIRTY: %s (is buildable but has no stored deps)", state.path)
-			return True
 
-	if deps.already_built():
-		_log.trace("CLEAN: %s has already been built in this invocation", state.path)
+		built_children = set()
+		def build_child_if_dirty(path):
+			if path in built_children:
+				return False
+			else:
+				built_children.add(path)
+				_log.trace("Recursing over dependency: %s -> %s", target.path, path)
+				child = prepare_build(path)
+				if child is not None:
+					child_dirty = build_target_if_dirty(child)
+					_log.trace("_is_dirty(%s) -> %s", child, child_dirty)
+					return child_dirty
+				return False
+
+		if not allow_build:
+			child_dirty = []
+			def wrapped_build(path):
+				built = build_child_if_dirty(path)
+				if built:
+					child_dirty.append(True)
+				return False
+			dirty = deps.is_dirty(target.builder, wrapped_build)
+			dirty = dirty or bool(child_dirty)
+		else:
+			dirty = deps.is_dirty(target.builder, build_child_if_dirty)
+		_log.trace("deps.is_dirty(%r) -> %r", target.path, dirty)
+		if dirty:
+			return perform_build(target)
 		return False
 
-	built_children = set()
-	def build_child_if_dirty(path):
-		if path in built_children:
-			return False
-		else:
-			built_children.add(path)
-			_log.trace("Recursing over dependency: %s -> %s", state.path, path)
-			child = prepare_build(path)
-			if child is not None:
-				child_dirty = _is_dirty(child.state, allow_build)
-				if child_dirty:
-					_log.trace("_is_dirty(%s) -> True", path)
-					if allow_build:
-						child.build(update=False)
-					return True
-			_log.trace("_is_dirty(%s) -> False", path)
-			return False
-
-	if not allow_build:
-		child_dirty = []
-		def wrapped_build(path):
-			built = build_child_if_dirty(path)
-			if built:
-				child_dirty.append(True)
-			return False
-		dirty = deps.is_dirty(builder, wrapped_build)
-		dirty = dirty or bool(child_dirty)
-	else:
-		dirty = deps.is_dirty(builder, build_child_if_dirty)
-	_log.trace("deps.is_dirty(%r) -> %r", state.path, dirty)
-	return dirty
+	return build_target_if_dirty(target)
 
 class Target(object):
 	def __init__(self, builder):
@@ -89,22 +95,29 @@ class Target(object):
 	def __repr__(self):
 		return 'Target(%r)' % (self.path,)
 	
-	def build(self, update):
-		return self.state.perform_build(self.builder, lambda deps: self._perform_build(update, deps))
+	def build_or_update(self, update):
+		if update:
+			built = _build_if_dirty(self, True)
+			if not built:
+				_log.trace("no build needed")
+		else:
+			self.perform_build(False)
+			built = True
+
+		return built
 
 	def is_dirty(self):
-		return _is_dirty(self.state, False)
+		return _build_if_dirty(self, allow_build = False)
 
-	def _perform_build(self, update, deps):
+	def perform_build(self, from_update):
+		self.state.perform_build(self.builder, lambda deps: self._perform_build(deps, from_update))
+
+	def _perform_build(self, deps, from_update):
 		'''
 		Assumes locks are held (by state.perform_build)
 		'''
 		assert self.builder is not None
 		assert os.path.exists(self.builder.path)
-		if update:
-			if not _is_dirty(self.state, True):
-				_log.trace("no build needed")
-				return False
 		exe_path = path.abspath(self.builder.path)
 		exe_path_relative_to_cwd = os.path.relpath(exe_path,ROOT_CWD)
 
@@ -153,7 +166,7 @@ class Target(object):
 					# directories often need to be created directly
 					self.state.mark_clobbers()
 					expect_clobber = False if deps is None else deps.clobbers
-					if not (update and expect_clobber):
+					if not (from_update and expect_clobber):
 						_log.warn("%s modified %s directly" % (exe_path_relative_to_cwd, self.path))
 			if ret == 0:
 				if os.path.lexists(output_file):
