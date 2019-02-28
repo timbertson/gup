@@ -195,7 +195,7 @@ class TestScripts(TestCase):
 
 		# initial build should have the warning
 		lines = self.build_u('bad', include_logging=True)
-		self.assertRegex(warning(lines), clobber_warning)
+		self.assertRegexpMatches(warning(lines), clobber_warning)
 
 		# doesn't notify on rebuild
 		lines = self.assertRebuilds('bad', lambda: self.touch('input'), built=True, include_logging=True)

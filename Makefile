@@ -53,7 +53,7 @@ ci-ocaml: phony
 	./test/nix-shell -A ocaml --run "make -C ocaml test"
 
 ci-opam: phony
-	./test/nix-shell -A opam --run "make -C ocaml opam-test"
+	./test/nix-shell -A opam --run "env TRAVIS=${TRAVIS} make -C ocaml opam-test"
 
 ci-permutation: phony
 	./test/nix-shell -A development --run "make permutation-test"

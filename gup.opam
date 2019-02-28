@@ -2,6 +2,7 @@ opam-version: "2.0"
 authors: [ "tim@gfxmonk.net" ]
 homepage: "https://github.com/timbertson/gup"
 maintainer: "tim@gfxmonk.net"
+synopsis: "A better Make"
 depends: [
   "batteries"
   "cryptokit"
@@ -11,7 +12,7 @@ depends: [
   "ocamlfind" {build}
   "conf-python-2-7" {build}
   "jbuilder" {build}
-  "ounit" {test}
+  "ounit" {with-test}
 ]
 build: [
   [ make "GUP_IMPL=ocaml" ]

@@ -40,17 +40,22 @@ if [ -n "${SCRATCH_OPAM:-}" ]; then
 	OPAMYES=1 opam uninstall gup || true
 	export OPAMROOT="$SCRATCH_OPAM"
 else
-	tempdir="$(mktemp -d)"
+	if [ "${TRAVIS:-false}" = true ]; then
+		# travis' /tmp is woefully small, put it in $HOME
+		tempdir="$(mktemp -p "$HOME" -d)"
+	else
+		tempdir="$(mktemp -d)"
+	fi
 	export OPAMROOT="$tempdir"
 	opam init --no-setup
 fi
 
 unset OCAMLPATH OCAMLFIND_DESTDIR
-BASE_SWITCH="4.02.3"
+BASE_SWITCH="ocaml-base-compiler.4.06.1"
 # BASE_SWITCH="system" # quicker
 
 export OPAMYES=1
-opam switch list | grep -q gup-test || opam switch install gup-test --alias-of "$BASE_SWITCH"
+opam switch list | grep -q gup-test || opam switch install gup-test "$BASE_SWITCH"
 unset OPAMYES
 
 opam config exec --switch=gup-test -- bash -eux <<"EOF"
