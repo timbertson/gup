@@ -60,7 +60,7 @@ let built_targets dir =
 	let contents = Sys.readdir dir in
 	contents |> Array.filter_map (fun f ->
 		if String.starts_with f (deps_ext ^ ".")
-			then Some (PathComponent.name_of_string (Tuple.Tuple2.second (String.split f ".")))
+			then Some (PathComponent.name_of_string (Tuple.Tuple2.second (String.split f ~by:".")))
 			else None
 	) |> Array.to_list
 
@@ -69,7 +69,7 @@ let resolve_builder_path ~(target:ConcreteBase.t) (path:Absolute.t) : RelativeFr
 	Concrete.resolve_abs path |> ConcreteBase.of_concrete |> ConcreteBase.rebase_to newbase
 
 class run_id id =
-	object (self)
+	object
 		method is_current = id = Var.run_id
 		method repr = "run_id(" ^ id ^ ")"
 		method fields = [id]
@@ -210,7 +210,7 @@ and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:Re
 	end
 
 and builder_dependency ~mtime (path:RelativeFrom.t) =
-	object (self)
+	object
 		inherit base_dependency
 		method tag = Builder
 		method fields = file_fields ~mtime ~checksum:None path
@@ -226,7 +226,7 @@ and builder_dependency ~mtime (path:RelativeFrom.t) =
 	end
 
 and always_rebuild =
-	object (self)
+	object
 		inherit base_dependency
 		method tag = AlwaysRebuild
 		method fields = []
@@ -234,7 +234,7 @@ and always_rebuild =
 	end
 
 and build_time time =
-	object (self)
+	object
 		inherit base_dependency
 		method tag = BuildTime
 		method fields = [Big_int.to_string time]
@@ -259,7 +259,7 @@ and build_time time =
 	end
 
 and dependencies (target_path:ConcreteBase.t) (data:base_dependency intermediate_dependencies) =
-	object (self)
+	object
 		method already_built = match !(data.run_id) with
 			| None -> false
 			| Some r -> r#is_current
@@ -305,7 +305,7 @@ and dependencies (target_path:ConcreteBase.t) (data:base_dependency intermediate
 			)
 end
 
-and dependency_builder target_path (input:Lwt_io.input_channel) = object (self)
+and dependency_builder target_path (input:Lwt_io.input_channel) = object
 	(* extracted into its own object because we can't use lwt in an object consutrctor
 	 * syntax *)
 	method build =
@@ -317,9 +317,9 @@ and dependency_builder target_path (input:Lwt_io.input_channel) = object (self)
 		in
 
 		let parse_line line : (dependency_class * string list) =
-			let tag, content = String.split line ":" in
+			let tag, content = String.split line ~by:":" in
 			let (_, typ) =
-				try List.find (fun (prefix, typ) -> prefix = tag) tag_assoc_str
+				try List.find (fun (prefix, _typ) -> prefix = tag) tag_assoc_str
 				with Not_found -> Error.raise_safe "invalid dep line: %s" line
 			in
 			let fields = Str.bounded_split (Str.regexp " ") (String.lchop content) typ.num_fields in
@@ -368,7 +368,7 @@ and dependency_builder target_path (input:Lwt_io.input_channel) = object (self)
 			log#trace "version_line: %a" (Option.print String.print) version_line;
 			let version_number = Option.bind version_line (fun line ->
 				if String.starts_with line version_marker then (
-					let (_, version_string) = String.split line " " in
+					let (_, version_string) = String.split line ~by:" " in
 					int_option_of_string version_string
 				) else None
 			) in

@@ -2,7 +2,6 @@ open Batteries
 open Std
 open Path
 module PathMap = Map.Make(ConcreteBase)
-open Lwt.Infix
 
 let log = Logging.get_logger "gup.builder"
 
@@ -172,7 +171,7 @@ let perform_build ~toplevel (buildable: Buildable.t) = (
 	)
 )
 
-let rec _build_if_dirty ~cache ~dry = (
+let _build_if_dirty ~cache ~dry = (
 	(*
 	* Returns whether the dependency was built.
 	* If `dry` is true, does not build but returns
@@ -197,12 +196,11 @@ let rec _build_if_dirty ~cache ~dry = (
 		then (fun _ -> Lwt.return_true)
 		else perform_build ~toplevel:false in
 
-	let with_cached_build key arg fn = (
-		let open Lwt in
+	let with_cached_build key fn = (
 		try
 			PathMap.find key !cache
 		with Not_found -> (
-			let result : bool Lwt.t = fn arg in
+			let result : bool Lwt.t = fn () in
 			cache := PathMap.add key result !cache;
 			result
 		)
@@ -249,11 +247,11 @@ let rec _build_if_dirty ~cache ~dry = (
 	(* builds a single _path_ if dirty (used by deps#is_dirty), fronted
 	 * by a cache in case we see the same dep twice *)
 	and build_path_if_dirty path = (
-		let key = ConcreteBase.resolve_from path in
-		with_cached_build key path (fun path ->
-			match Gupfile.find_builder key with
+		let path = ConcreteBase.resolve_from path in
+		with_cached_build path (fun () ->
+			match Gupfile.find_builder path with
 				| None ->
-					log#trace "CLEAN: %s (not a target)" (ConcreteBase.to_string key);
+					log#trace "CLEAN: %s (not a target)" (ConcreteBase.to_string path);
 					Lwt.return_false
 				| Some buildable -> build_recursive_if_dirty buildable
 		)

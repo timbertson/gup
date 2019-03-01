@@ -1,8 +1,8 @@
 open Batteries
 
 class disallowed = object end
-let (==) (a:disallowed) (b:disallowed) = assert false
-let (!=) (a:disallowed) (b:disallowed) = assert false
+let (==) (_:disallowed) (_:disallowed) = assert false
+let (!=) (_:disallowed) (_:disallowed) = assert false
 
 let ($) a b c = a (b c)
 
@@ -20,7 +20,7 @@ end
 module Unix = struct
 	include Batteries.Unix
 	let environment_map () = (Array.enum @@ Unix.environment ()) |>
-		Enum.map (fun v -> String.split v "=") |>
+		Enum.map (fun v -> String.split ~by:"=" v) |>
 		EnvironmentMap.of_enum
 end
 

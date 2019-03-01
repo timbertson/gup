@@ -2,14 +2,17 @@ OCAMLBUILD = $(shell if which rainbow >/dev/null 2>&1; then echo "rainbow -- oca
 
 all: bin
 
+release:
+	dune build -p gup
+
 unit-test-pre: test/test.exe
 integration-test-pre: bin
 
 bin: gup.install
 	ln -sfn _build/install/default/bin bin
 
-%.install: PREBUILD
-	jbuilder build $@
+%.install %.exe: PREBUILD
+	dune build $@
 
 test: unit-test-pre integration-test-pre phony
 	$(MAKE) unit-test
@@ -23,9 +26,6 @@ integration-test: integration-test-pre phony
 
 PREBUILD: phony version
 version: phony gup/version.ml
-
-%.exe: PREBUILD
-	jbuilder build $@
 
 gup/version.ml: ../VERSION
 	echo "let version = \"$$(cat ../VERSION)\"" > $@

@@ -11,11 +11,11 @@ depends: [
   "lwt_ppx"
   "ocamlfind" {build}
   "conf-python-2-7" {build}
-  "jbuilder" {build}
+  "dune" {build & >= "1.0"}
   "ounit" {with-test}
 ]
 build: [
-  [ make "GUP_IMPL=ocaml" ]
+  [ make -C ocaml release ]
 ]
 depexts: [
   [["nixpkgs"] ["zlib"]]

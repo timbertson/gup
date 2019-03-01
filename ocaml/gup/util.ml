@@ -54,7 +54,7 @@ let lisdir path =
 
 let which exe =
 	try Some (
-		String.nsplit (Unix.getenv "PATH") ":"
+		String.nsplit (Unix.getenv "PATH") ~by:":"
 			|> List.enum
 			|> Enum.filter ((<>) "")
 			|> Enum.map (fun p -> Filename.concat p exe)

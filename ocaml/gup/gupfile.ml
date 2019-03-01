@@ -1,13 +1,12 @@
 open Batteries
 open Std
 open Path
-open Lwt.Infix
 
 let len = List.length
 let file_extension path =
 	let filename = Filename.basename path in
 	try (
-		let _, ext = String.rsplit filename "." in
+		let _, ext = String.rsplit filename ~by:"." in
 		"." ^ ext
 	) with Not_found -> ""
 
@@ -107,7 +106,7 @@ class match_rule (original_text:string) =
 					rule_literal |> Option.map Enum.singleton |> Option.default nothing
 				| prefix ->
 					try
-						let dir_match, file_match = String.split pattern_text canonical_sep in
+						let dir_match, file_match = String.split pattern_text ~by:canonical_sep in
 						let dir_match = new match_rule dir_match in
 						if dir_match#matches prefix then (
 							(new match_rule file_match)#definite_targets_in "" existing_files

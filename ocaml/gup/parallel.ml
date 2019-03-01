@@ -108,7 +108,7 @@ class fd_jobserver (read_end, write_end) toplevel =
 		in
 
 		match !_mytoken with
-			| Some t -> use_mine ()
+			| Some _ -> use_mine ()
 			| None ->
 				log#trace "waiting for token...";
 				let%lwt () = Lwt.pick [
@@ -124,7 +124,7 @@ class fd_jobserver (read_end, write_end) toplevel =
 
 	let () = Option.may (fun tokens -> Lwt_main.run (_release (tokens - 1))) toplevel in
 
-object (self)
+object
 	method finish =
 		match toplevel with
 			| Some tokens ->
@@ -166,7 +166,7 @@ class named_jobserver path toplevel =
 
 	let server = new fd_jobserver fds toplevel in
 
-object (self)
+object
 	method finish =
 		let%lwt () = server#finish in
 		let (r, w) = fds in
@@ -185,7 +185,7 @@ end
 
 class serial_jobserver =
 	let lock = Lwt_mutex.create () in
-object (self)
+object
 	method run_job : 'a. (unit -> 'a Lwt.t) -> 'a Lwt.t = fun fn ->
 		Lwt_mutex.with_lock lock fn
 
@@ -378,7 +378,7 @@ class lock_file ~target lock_path =
 		)
 	in
 
-object (self)
+object
 	method use : 'a. lock_mode -> (string -> 'a Lwt.t) -> 'a Lwt.t = fun mode f ->
 		match !current_lock with
 

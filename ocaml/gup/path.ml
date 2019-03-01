@@ -278,7 +278,7 @@ module Make(Unix:UNIX) = struct
 		let lift : (string -> 'a) -> (t -> 'a) = fun fn -> fn % to_string
 
 		let make : Concrete_.t -> PathComponent.t -> t =
-			let rec shift base =
+			let shift base =
 				let newbase = Concrete_.dirname base in
 				let name = Concrete_.basename base in
 				(newbase, name)

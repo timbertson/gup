@@ -45,9 +45,9 @@ let color_for lvl =
 	| Info  -> !green
 	| _ -> no_color
 
-let default_formatter name lvl = ("","")
+let default_formatter _name _lvl = ("","")
 
-let info_formatter name lvl =
+let info_formatter _name lvl =
 	(
 		(color_for lvl) ^ "gup " ^ indent ^ (!bold),
 		!plain
@@ -60,7 +60,7 @@ let trace_formatter name lvl =
 		!plain
 	)
 
-let test_formatter name lvl =
+let test_formatter _name lvl =
 	(
 		"# " ^ (color_for lvl) ^ (string_of_level lvl) ^ " " ^ indent ^ !bold,
 		!plain

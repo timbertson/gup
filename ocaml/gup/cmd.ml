@@ -2,7 +2,6 @@ open Batteries
 open Std
 open Extlib
 open Path
-open Lwt.Infix
 open Error
 
 let log = Logging.get_logger "gup.cmd"
@@ -350,7 +349,7 @@ struct
 
 		let get_dir arg =
 			try
-				let (dir, _) = String.rsplit arg Filename.dir_sep in
+				let (dir, _) = String.rsplit arg ~by:Filename.dir_sep in
 				Some dir
 			with Not_found -> None
 		in
@@ -562,7 +561,7 @@ let main () =
 		| Builder.Target_failed _ -> (
 				exit_error ()
 		)
-		| Error.Safe_exception (msg, ctx) -> (
+		| Error.Safe_exception (msg, _ctx) -> (
 				(* TODO: context?*)
 				log#error "%s" msg;
 				exit_error ()
