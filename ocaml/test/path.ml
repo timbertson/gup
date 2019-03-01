@@ -1,8 +1,6 @@
 open Batteries
 open OUnit2
 
-open Gup
-
 module Path = Gup.Path.Make(Mock.Fake_unix)
 open Path
 

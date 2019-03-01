@@ -1,7 +1,5 @@
 open Batteries
 open OUnit2
-open Gup.Gupfile
-open Gup
 open Gup.Util
 
 let suite = "Util" >:::

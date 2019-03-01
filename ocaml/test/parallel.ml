@@ -1,7 +1,6 @@
 open Batteries
 open OUnit2
 open Gup.Parallel
-open Gup
 
 let print_opt_int_pair p =
 	Printf.sprintf2 "%a" (Option.print (Tuple.Tuple2.print Int.print Int.print)) p
