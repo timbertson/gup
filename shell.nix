@@ -1,2 +1,2 @@
 { pkgs ? import <nixpkgs> {} }:
-((pkgs.nix-pin.api {}).callPackage ./ci.nix {}).ocaml
+((pkgs.nix-pin.api {}).callPackage ./ci.nix {}).development
