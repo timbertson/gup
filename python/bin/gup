@@ -874,6 +874,7 @@ class BuildCandidate(object):
 
 		if not self.indirect:
 			if target_is_builder():
+				_gupfile_log.debug("ignoring direct builder for target %s", path)
 				# gupfiles & scripts can only be built by Gupfile targets, not .gup scripts
 				return None
 			return Builder(path, self.target, build_basedir, parent=None)
@@ -891,7 +892,7 @@ class BuildCandidate(object):
 		if os.path.sep != '/':
 			match_target = self.target.replace(os.path.sep, '/')
 
-		def find_matching_rule(matchfn, match_target):
+		def find_matching_rule(matchfn, target, match_target):
 			for script, ruleset in rules:
 				if matchfn(ruleset, match_target):
 					base = os.path.realpath(build_basedir)
@@ -904,19 +905,16 @@ class BuildCandidate(object):
 							raise SafeError("Build command not found on PATH: %s\n     %s(specified in %s)" % (script, INDENT, path))
 					else:
 						script_path = os.path.join(os.path.dirname(path), script)
-						if not os.path.exists(script_path):
-							raise SafeError("Build script not found: %s\n     %s(specified in %s)" % (script_path, INDENT, path))
-
-						parent = find_matching_rule(Guprules.match_exactly, script)
+						parent = find_matching_rule(Guprules.match_exactly, script, script)
 						script = os.path.normpath(script)
 					return Builder(
 						script_path,
-						os.path.relpath(os.path.join(build_basedir, self.target), base),
+						os.path.relpath(os.path.join(build_basedir, target), base),
 						base, parent)
 			return None
 
 		match_fn = Guprules.match_exactly if target_is_builder() else Guprules.match
-		return find_matching_rule(match_fn, match_target)
+		return find_matching_rule(match_fn, self.target, match_target)
 
 class Builder(object):
 	'''
@@ -933,7 +931,7 @@ class Builder(object):
 		self.parent = parent
 
 	def __repr__(self):
-		return "Builder(path=%r, target=%r, basedir=%r)" % (self.path, self.target, self.basedir)
+		return "Builder(path=%r, target=%r, basedir=%r, parent=%r)" % (self.path, self.target, self.basedir, self.parent)
 
 	@staticmethod
 	def for_target(path):
@@ -1228,7 +1226,8 @@ class TargetState(object):
 
 	def perform_build(self, builder, do_build):
 		exe = builder.path
-		assert os.path.exists(exe)
+		if not os.path.exists(exe):
+			raise SafeError("Build script not found: %s" % (exe))
 		def still_needs_build(deps):
 			_state_log.trace("checking if %s still needs build after releasing lock" % self.path)
 			return deps is None or (not deps.already_built())
@@ -1459,7 +1458,7 @@ class BuilderDependency(BaseFileDependency):
 
 	def __init__(self, mtime, checksum, path):
 		self.path = path
-		# _checksum is present to remain consistent with FileDependency,
+		# checksum is present to remain consistent with FileDependency,
 		# but not currently supported
 		self.checksum = None
 		self.mtime = mtime
@@ -2254,6 +2253,9 @@ def main():
 	try:
 		_cmd_main(sys.argv[1:])
 	except KeyboardInterrupt:
+		sys.exit(2)
+	except AssertionError as e:
+		_cmd_log.error("%s", e, exc_info=True)
 		sys.exit(2)
 	except SafeError as e:
 		if len(e.args) > 0:
