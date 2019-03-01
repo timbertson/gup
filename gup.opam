@@ -15,7 +15,7 @@ depends: [
   "ounit" {with-test}
 ]
 build: [
-  [ make -C ocaml release ]
+  [ make "-C" "ocaml" "release" ]
 ]
 depexts: [
   [["nixpkgs"] ["zlib"]]
