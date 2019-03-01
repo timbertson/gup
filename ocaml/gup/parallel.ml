@@ -55,7 +55,7 @@ class fd_jobserver (read_end, write_end) toplevel =
 
 	(* initial token held by this process *)
 	let _mytoken = ref (Some ()) in
-	let repeat_tokens len = String.make len token in
+	let repeat_tokens len = Bytes.make len token in
 
 	(* for debugging only *)
 	let _free_tokens = ref 0 in
@@ -68,7 +68,7 @@ class fd_jobserver (read_end, write_end) toplevel =
 	in
 
 	let _read_token () =
-		let buf = " " in
+		let buf = Bytes.make 1 ' ' in
 		let success = ref false in
 		while%lwt not !success do
 			(* XXX does this really return without reading sometimes? *)
