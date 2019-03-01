@@ -57,6 +57,14 @@ class TestScripts(TestCase):
 		self.assertEquals(self.read('a/b/c'), os.path.join('b', 'c'))
 		self.assertEquals(self.read('a/b/d'), 'nested: ' + os.path.join('b', 'd'))
 
+	def test_gupfile_referencing_a_script_outside_the_gup_dir(self):
+		mkdirp(self.path('gup'))
+		self.write("gup/Gupfile", '../default.gup:\n\ttarget')
+		self.write("default.gup", echo_to_target('$2, built from $(pwd)'))
+
+		self.build('target')
+		self.assertEquals(self.read('target'), 'target, built from ' + self.ROOT)
+
 	def test_cwd_is_relative_to_target(self):
 		self.write('gup/all.gup', BASH + 'mkdir -p foo; cd foo; gup -u bar')
 		self.write('gup/foo/bar.gup', echo_to_target('ok'))
