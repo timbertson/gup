@@ -1,5 +1,3 @@
-let indent_str = String.make (Var_global.indent) ' '
-
 type log_level =
 	| Error
 	| Warn
@@ -35,31 +33,31 @@ let color_for colors lvl =
 let report colors apply ~over k user_msgf =
 	let k (_:Format.formatter) = over (); k () in
 	let k ppf = Format.kfprintf k ppf "%s\n" colors.reset in
-	user_msgf @@ (fun ?header:_ ?tags:_ fmt -> apply k fmt)
+	user_msgf @@ (fun ?header ?tags:_ fmt -> apply ~indent:(header |> CCOpt.get_or ~default:"") k fmt)
 
 let default_formatter colors ppf =
 	{ Logs.report = (fun _src level ->
-		report colors (fun k fmt ->
+		report colors (fun ~indent k fmt ->
 			Format.kfprintf k ppf ("%sgup %s%s" ^^ fmt)
-				(color_for colors level) indent_str (colors.bold)
+				(color_for colors level) indent (colors.bold)
 		)
 	)}
 
 let trace_formatter colors ppf =
 	let pid = Unix.getpid () in
 	{ Logs.report = (fun src level ->
-		report colors (fun k fmt ->
+		report colors (fun ~indent k fmt ->
 			Format.kfprintf k ppf ("%s[%d %-11s|%5s] %s%s" ^^ fmt)
 				(color_for colors level) pid (Logs.Src.name src)
-				(Logs.level_to_string (Some level)) indent_str colors.bold
+				(Logs.level_to_string (Some level)) indent colors.bold
 		)
 	)}
 
 let test_formatter colors ppf =
 	{ Logs.report = (fun _src level ->
-		report colors (fun k fmt ->
+		report colors (fun ~indent k fmt ->
 			Format.kfprintf k ppf ("# %s%a %s%s" ^^ fmt)
-				(color_for colors level) Logs.pp_level level indent_str colors.bold
+				(color_for colors level) Logs.pp_level level indent colors.bold
 		)
 	)}
 

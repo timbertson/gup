@@ -58,7 +58,7 @@ module VarLog = struct
 		let module Base: Logging.LogsExt.LOG = (val Logging.LogsExt.src_log src) in
 		let module Log = struct
 			let wrap logfn var : 'a Logs.log = fun fn ->
-				logfn (fun m -> fn (fun ?header ?tags fmt -> m ?header ?tags ("%s" ^^ fmt) var.indent_str))
+				logfn (fun m -> fn (fun ?header:_ ?tags fmt -> m ?header:(Some var.indent_str) ?tags fmt))
 
 			let err var = wrap Base.err var
 			let warn var = wrap Base.warn var
@@ -71,4 +71,3 @@ module VarLog = struct
 end
 
 let log_module name = VarLog.src_log (Logs.Src.create name)
-

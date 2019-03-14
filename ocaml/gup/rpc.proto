@@ -10,7 +10,7 @@ message build {
   required string parent = 5;
 }
 
-// gup/rpc.ml:39
+// gup/rpc.ml:52
 message request {
   enum _tag {
     Build_tag = 1;
@@ -22,7 +22,7 @@ message request {
   }
 }
 
-// gup/rpc.ml:43
+// gup/rpc.ml:56
 message response {
   enum _tag {
     Exn_tag = 1;
@@ -36,7 +36,7 @@ message response {
   }
 }
 
-// gup/rpc.ml:48
+// gup/rpc.ml:61
 message packet {
   required int64 id = 1;
   optional request request = 2;
