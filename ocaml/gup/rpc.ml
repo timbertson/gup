@@ -36,6 +36,19 @@ module Protocol = struct
 		parent: string [@key 5];
 	} [@@deriving protobuf { protoc = "../../../gup/rpc.proto" }]
 
+	let pp_build fmt { targets; update; cwd; indent; parent } = (
+		let open CCFormat.Dump in
+		Format.fprintf fmt (
+			"build {"
+			^^ " targets = %a;"
+			^^ " update = %b;"
+			^^ " cwd = %s;"
+			^^ " indent = %d;"
+			^^ " parent = %s;"
+			^^ "}")
+			(list string) targets update cwd indent parent
+	)
+
 	type request =
 		| Build of build [@key 1]
 	[@@deriving protobuf { protoc = "../../../gup/rpc.proto" }]
@@ -235,6 +248,7 @@ module Server = struct
 					match request with
 						| Build build -> (
 							let open Protocol in
+							Log.info var (fun m->m "got build request: %a" pp_build build);
 
 							Jobpool.use jobs ~var ~parent:parent_lease (fun lease ->
 								let var = Var.{

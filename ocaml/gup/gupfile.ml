@@ -279,7 +279,7 @@ class build_candidate
 								let script = match Util.which script_name with
 									| Some script_path -> script_path |> PathString.parse |> PathString.to_absolute ~cwd:var.Var.cwd
 									| None -> Error.raise_safe "Build command not found on PATH: %s\n     %s(specified in %s)"
-										script_name Logging.indent_str (Absolute.to_string path)
+										script_name var.Var.indent_str (Absolute.to_string path)
 								in
 								Recursive.Terminal (Buildable.make ~script ~target)
 							) else (
