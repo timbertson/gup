@@ -1,5 +1,3 @@
-open Batteries
-
 let indent_str = String.make (Var_global.indent) ' '
 
 type log_level =
@@ -9,90 +7,97 @@ type log_level =
 	| Debug
 	| Trace
 
-let ord lvl =
-	match lvl with
-	| Error -> 50
-	| Warn  -> 40
-	| Info  -> 30
-	| Debug -> 20
-	| Trace -> 10
-
-let string_of_level lvl =
-	match lvl with
-	| Error -> "ERROR"
-	| Warn  -> "WARNING"
-	| Info  -> "INFO"
-	| Debug -> "DEBUG"
-	| Trace -> "TRACE"
-
-let current_level = ref (ord Warn)
+type colors = {
+	red : string;
+	green : string;
+	yellow : string;
+	bold : string;
+	reset : string;
+}
 
 (* By default, no output colouring. *)
-let red    = ref ""
-let green  = ref ""
-let yellow = ref ""
-let bold   = ref ""
-let plain  = ref ""
-let no_color = ""
+let no_colors = {
+	red    = "";
+	green  = "";
+	yellow = "";
+	bold   = "";
+	reset  = "";
+}
 
-let color_for lvl =
+let color_for colors lvl =
+	let open Logs in
 	match lvl with
-	| Error -> !red
-	| Warn  -> !yellow
-	| Info  -> !green
-	| _ -> no_color
+	| Error   -> colors.red
+	| Warning -> colors.yellow
+	| Info    -> colors.green
+	| _ -> ""
 
-let default_formatter (_name:string) (_lvl:log_level) = ("","")
+let report colors apply ~over k user_msgf =
+	let k (_:Format.formatter) = over (); k () in
+	let k ppf = Format.kfprintf k ppf "%s\n" colors.reset in
+	user_msgf @@ (fun ?header:_ ?tags:_ fmt -> apply k fmt)
 
-let info_formatter _name lvl =
-	(
-		(color_for lvl) ^ "gup " ^ indent_str ^ (!bold),
-		!plain
-	)
-
-let trace_formatter name lvl =
-	let pid = Unix.getpid () in
-	(
-		Printf.sprintf "%s[%d %-11s|%5s] %s%s" (color_for lvl) pid name (string_of_level lvl) indent_str !bold,
-		!plain
-	)
-
-let test_formatter _name lvl =
-	(
-		"# " ^ (color_for lvl) ^ (string_of_level lvl) ^ " " ^ indent_str ^ !bold,
-		!plain
-	)
-
-let current_formatter = ref default_formatter
-
-(* TODO: make formatting Logs compatible *)
-
-(* let get_logger name = new logger name *)
-let set_level new_lvl =
-	current_level := ord new_lvl
-let set_formatter fn =
-	current_formatter := fn
-
-(* initialization *)
-
-let want_color =
-	try Sys.getenv "GUP_COLOR"
-	with Not_found -> "auto"
-
-let () =
-	if want_color = "1" || (
-			want_color = "auto" &&
-			Unix.isatty Unix.stderr &&
-			(try Sys.getenv("TERM") with Not_found -> "dumb") <> "dumb"
+let default_formatter colors ppf =
+	{ Logs.report = (fun _src level ->
+		report colors (fun k fmt ->
+			Format.kfprintf k ppf ("%sgup %s%s" ^^ fmt)
+				(color_for colors level) indent_str (colors.bold)
 		)
-	then begin
-		(* ...use ANSI formatting codes. *)
-		red    := "\x1b[31m";
-		green  := "\x1b[32m";
-		yellow := "\x1b[33m";
-		bold   := "\x1b[1m";
-		plain  := "\x1b[m";
-	end
+	)}
+
+let trace_formatter colors ppf =
+	let pid = Unix.getpid () in
+	{ Logs.report = (fun src level ->
+		report colors (fun k fmt ->
+			Format.kfprintf k ppf ("%s[%d %-11s|%5s] %s%s" ^^ fmt)
+				(color_for colors level) pid (Logs.Src.name src)
+				(Logs.level_to_string (Some level)) indent_str colors.bold
+		)
+	)}
+
+let test_formatter colors ppf =
+	{ Logs.report = (fun _src level ->
+		report colors (fun k fmt ->
+			Format.kfprintf k ppf ("# %s%a %s%s" ^^ fmt)
+				(color_for colors level) Logs.pp_level level indent_str colors.bold
+		)
+	)}
+
+let internal_level = ref Info
+
+let set_level new_lvl =
+	internal_level := new_lvl;
+	Logs.set_level (Some (match new_lvl with
+	| Error -> Logs.Error
+	| Warn -> Logs.Warning
+	| Info -> Logs.Info
+	| Debug -> Logs.Debug
+	| Trace -> Logs.Debug
+	))
+
+let set_formatter r =
+	let want_color =
+		try Sys.getenv "GUP_COLOR"
+		with Not_found -> "auto"
+	in
+
+	(* TODO: proper... *)
+	let colors =
+		if want_color = "1" || (
+				want_color = "auto" &&
+				Unix.isatty Unix.stderr &&
+				(try Sys.getenv("TERM") with Not_found -> "dumb") <> "dumb"
+			)
+		then {
+			(* ...use ANSI formatting codes. *)
+			red    = "\x1b[31m";
+			green  = "\x1b[32m";
+			yellow = "\x1b[33m";
+			bold   = "\x1b[1m";
+			reset  = "\x1b[m";
+		} else no_colors
+	in
+	Logs.set_reporter (r colors Format.err_formatter)
 
 (* upstream Logs compat, with added TRACE level *)
 module LogsExt = struct
@@ -105,7 +110,7 @@ module LogsExt = struct
 		let module Log = struct
 			include Super
 			let trace msgf =
-				if !current_level <= (ord Trace) then
+				if !internal_level = Trace then
 					Super.debug msgf
 				else
 					()
