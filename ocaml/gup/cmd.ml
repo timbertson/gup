@@ -431,7 +431,7 @@ end
 
 let _init_logging verbosity =
 	let lvl = ref Logging.Info in
-	let fmt = ref Logging.info_formatter in
+	let fmt = ref Logging.default_formatter in
 
 	if verbosity < 0 then
 		lvl := Logging.Error
