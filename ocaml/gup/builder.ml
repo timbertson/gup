@@ -1,11 +1,9 @@
 open Batteries
 open Std
 open Path
+open Error
 module PathMap = Map.Make(ConcreteBase)
-
-let log = Logging.get_logger "gup.builder"
-
-exception Target_failed of string * int option * string option
+module Log = (val Var.log_module "gup.builder")
 
 let _guess_executable path =
 	File.with_file_in path (fun file ->
@@ -32,14 +30,14 @@ let _guess_executable path =
 	)
 
 let in_dir wd action =
-	let initial_wd = Sys.getcwd () in
+	let initial_wd = Lazy.force Var_global.cwd in
 	Unix.chdir wd;
 	Util.finally_do (fun _ -> Unix.chdir initial_wd) () action
 
-let perform_build ~toplevel (buildable: Buildable.t) = (
+let perform_build ~lease ~var ~toplevel (buildable: Buildable.t) = (
 	(* actually perform a build *)
 	let path = Buildable.target_path buildable in
-	let state = new State.target_state path in
+	let state = new State.target_state ~var path in
 	let exe_path = Buildable.script buildable in
 	if not (Absolute.exists exe_path) then
 		Error.raise_safe "Build script does not exist: %s" (Absolute.to_string exe_path);
@@ -53,16 +51,16 @@ let perform_build ~toplevel (buildable: Buildable.t) = (
 
 		let env = Unix.environment_map ()
 			|> EnvironmentMap.add "GUP_TARGET" path_str
-			|> Parallel.Jobserver.extend_env
+			|> Parallel.Jobpool.extend_env ~lease
 			|> EnvironmentMap.array
 		in
 
-		let relative_to_root_cwd path =
+		let relative_to_root_cwd : ConcreteBase.t -> string = fun path ->
 			ConcreteBase.rebase_to Var.root_cwd path
 			|> RelativeFrom.relative |> Relative.to_string
 		in
 
-		let target_relative_to_cwd = relative_to_root_cwd path in
+		let target_relstr = relative_to_root_cwd path in
 
 		let output_file = Concrete.resolve_abs (state#meta_path "out") |> Concrete.to_string in
 		Util.try_remove output_file;
@@ -73,7 +71,7 @@ let perform_build ~toplevel (buildable: Buildable.t) = (
 		in
 
 		let do_build () =
-			log#infos target_relative_to_cwd;
+			Log.info var (fun m->m"%s" target_relstr);
 			let%lwt mtime = Util.get_mtime path_str in
 			let exe_path_str = Absolute.to_string exe_path in
 			let args = List.concat
@@ -85,12 +83,12 @@ let perform_build ~toplevel (buildable: Buildable.t) = (
 				]
 			in
 
-			if !Var.trace then begin
-				log#info " # %s" basedir_str;
-				log#info " + %a" (List.print String.print_quoted) args
+			if !Var_global.trace then begin
+				Log.info var (fun m->m " # %s" basedir_str);
+				Log.info var (fun m->m " + %a" CCFormat.Dump.(list string) args)
 			end else begin
-				log#trace " from cwd: %s" basedir_str;
-				log#trace "executing: %a" (List.print String.print_quoted) args
+				Log.trace var (fun m->m " from cwd: %s" basedir_str);
+				Log.trace var (fun m->m "executing: %a" CCFormat.Dump.(list string) args)
 			end;
 
 			let%lwt ret = try%lwt in_dir basedir_str (fun () -> Lwt_process.exec
@@ -98,22 +96,22 @@ let perform_build ~toplevel (buildable: Buildable.t) = (
 					((List.first args), (Array.of_list args))
 				)
 				with ex -> begin
-					log#error "%s is not executable and has no shebang line" exe_path_str;
+					Log.err var (fun m -> m"%s is not executable and has no shebang line" exe_path_str);
 					raise ex
 				end
 			in
 			let%lwt new_mtime = Util.get_mtime path_str in
 			let target_changed = neq (Option.compare ~cmp:Big_int.compare) mtime new_mtime in
 			let%lwt () = if target_changed then (
-				let p = Option.print Big_int.print in
-				log#trace "old_mtime=%a, new_mtime=%a" p mtime p new_mtime;
+				let p = CCOpt.pp Util.big_int_pp in
+				Log.trace var (fun m->m "old_mtime=%a, new_mtime=%a" p mtime p new_mtime);
 				if (Util.lisdir path_str) then Lwt.return_unit else (
 					(* directories often need to be created directly *)
 					let expect_clobber = match deps with None -> false | Some d -> d#clobbers in
 					if (toplevel || (not expect_clobber)) then (
-						log#warn "%s modified %s directly"
+						Log.warn var (fun m->m "%s modified %s directly"
 							(relative_to_root_cwd (ConcreteBase.resolve_abs exe_path))
-							target_relative_to_cwd
+							target_relstr)
 					);
 					state#mark_clobbers
 				)
@@ -127,16 +125,16 @@ let perform_build ~toplevel (buildable: Buildable.t) = (
 						if (Util.lexists path_str &&
 							(Util.lisdir path_str || Util.lisdir output_file)
 						) then (
-							log#trace "removing previous %s" path_str;
+							Log.trace var (fun m->m "removing previous %s" path_str);
 							Util.rmtree path_str
 						);
-						log#trace "renaming %s -> %s" output_file path_str;
+						Log.trace var (fun m->m "renaming %s -> %s" output_file path_str);
 						Lwt_unix.rename output_file path_str
 					) else (
-						log#trace "output file %s did not get created" output_file;
+						Log.trace var (fun m->m "output file %s did not get created" output_file);
 						if (not target_changed) && (Util.lexists path_str) && (not (Util.islink path_str)) then (
 							if Util.lexists path_str; then (
-								log#warn "Removing stale target: %s" target_relative_to_cwd
+								Log.warn var (fun m->m "Removing stale target: %s" target_relstr)
 							);
 							(* TODO make this an lwt.t *)
 							Util.try_remove path_str;
@@ -147,19 +145,19 @@ let perform_build ~toplevel (buildable: Buildable.t) = (
 					Lwt.return true
 				end
 				| Unix.WEXITED code -> begin
-					log#trace "builder exited with status %d" code;
-					let temp_file = if Var.keep_failed_outputs () && Util.lexists output_file
+					Log.trace var (fun m->m "builder exited with status %d" code);
+					let temp_file = if Var_global.keep_failed_outputs () && Util.lexists output_file
 						then (
 							cleanup_output_file := false; (* not wanted *)
-							Some (relative_to_root_cwd (ConcreteBase.resolve output_file))
+							Some (relative_to_root_cwd (ConcreteBase.resolve ~cwd:var.Var.cwd output_file))
 						)
 						else None
 					in
-					raise @@ Target_failed (target_relative_to_cwd, Some code, temp_file)
+					raise @@ Target_failed (target_relstr, Some code, temp_file)
 				end
 				| _ -> begin
-					log#trace "builder was terminated";
-					raise @@ Target_failed (target_relative_to_cwd, None, None)
+					Log.trace var (fun m->m "builder was terminated");
+					raise @@ Target_failed (target_relstr, None, None)
 				end
 		in
 		(
@@ -171,7 +169,7 @@ let perform_build ~toplevel (buildable: Buildable.t) = (
 	)
 )
 
-let _build_if_dirty ~cache ~dry = (
+let _build_if_dirty ~lease ~var ~cache ~dry = (
 	(*
 	* Returns whether the dependency was built.
 	* If `dry` is true, does not build but returns
@@ -194,7 +192,7 @@ let _build_if_dirty ~cache ~dry = (
 	*)
 	let perform_build = if dry
 		then (fun _ -> Lwt.return_true)
-		else perform_build ~toplevel:false in
+		else perform_build ~lease ~var ~toplevel:false in
 
 	let with_cached_build key fn = (
 		try
@@ -208,17 +206,17 @@ let _build_if_dirty ~cache ~dry = (
 
 	(* builds a single buildable if its state is dirty *)
 	let rec build_target_if_dirty buildable = (
-		let state = State.of_buildable buildable in
-		log#trace "checking whether %s is dirty" state#path_repr;
+		let state = State.of_buildable ~var buildable in
+		Log.trace var (fun m->m "checking whether %s is dirty" state#path_repr);
 		let%lwt deps = state#deps in
 		match deps with
 			| None -> (
-				log#debug "DIRTY: %s (is buildable but has no stored deps)" state#path_repr;
+				Log.debug var (fun m->m "DIRTY: %s (is buildable but has no stored deps)" state#path_repr);
 				perform_build buildable
 			)
 			| Some deps -> (
 				if deps#already_built then (
-					log#trace "CLEAN: %s has already been built in this invocation" state#path_repr;
+					Log.trace var (fun m->m "CLEAN: %s has already been built in this invocation" state#path_repr);
 					Lwt.return_false
 				) else (
 					if dry then (
@@ -227,7 +225,7 @@ let _build_if_dirty ~cache ~dry = (
 						 * if any possibly-dirty dependency needs a build. *)
 						let open Lwt in
 						let child_dirty = ref false in
-						let%lwt dirty = deps#is_dirty buildable (fun path ->
+						let%lwt dirty = deps#is_dirty ~var buildable (fun path ->
 							let%lwt child_built = build_path_if_dirty path in
 							if child_built then child_dirty := true;
 							return_false (* short-circuit any further checking *)
@@ -235,7 +233,7 @@ let _build_if_dirty ~cache ~dry = (
 						return (dirty || !child_dirty)
 					)
 					else (
-						Lwt.bind (deps#is_dirty buildable build_path_if_dirty) (function
+						Lwt.bind (deps#is_dirty ~var buildable build_path_if_dirty) (function
 							| true -> perform_build buildable
 							| false -> Lwt.return_false
 						)
@@ -247,18 +245,18 @@ let _build_if_dirty ~cache ~dry = (
 	(* builds a single _path_ if dirty (used by deps#is_dirty), fronted
 	 * by a cache in case we see the same dep twice *)
 	and build_path_if_dirty path = (
-		let path = ConcreteBase.resolve_from path in
+		let path = ConcreteBase.resolve_relfrom path in
 		with_cached_build path (fun () ->
-			match Gupfile.find_builder path with
+			match Gupfile.find_builder ~var path with
 				| None ->
-					log#trace "CLEAN: %s (not a target)" (ConcreteBase.to_string path);
+					Log.trace var (fun m->m "CLEAN: %s (not a target)" (ConcreteBase.to_string path));
 					Lwt.return_false
 				| Some buildable -> build_recursive_if_dirty buildable
 		)
 	)
 
 	and build_recursive_if_dirty (buildable: Buildable.t Recursive.t) = (
-		log#debug "checking if %a needs to be built" (Recursive.print Buildable.print) buildable;
+		Log.debug var (fun m->m "checking if %a needs to be built" (Recursive.print Buildable.print) buildable);
 		match buildable with
 			| Recursive.Recurse { parent; child = self } ->
 				Lwt.bind (build_recursive_if_dirty parent) (function
@@ -271,21 +269,21 @@ let _build_if_dirty ~cache ~dry = (
 	build_recursive_if_dirty
 )
 
-let is_dirty buildable : bool Lwt.t =
-	_build_if_dirty ~cache:(ref PathMap.empty) ~dry:true buildable
+let is_dirty ~var buildable : bool Lwt.t =
+	_build_if_dirty ~lease:None ~var ~cache:(ref PathMap.empty) ~dry:true buildable
 
 let _build_cache = ref PathMap.empty
 
-let rec build ~update (buildable: Buildable.t Recursive.t) : bool Lwt.t =
+let rec build ~lease ~var ~update (buildable: Buildable.t Recursive.t) : bool Lwt.t =
 	if update then (
-		_build_if_dirty ~cache:_build_cache ~dry:false buildable
+		_build_if_dirty ~lease ~var ~cache:_build_cache ~dry:false buildable
 	) else (
 		match buildable with
 			| Recursive.Recurse { parent; child } ->
-				Lwt.bind (build ~update:true parent) (fun (_:bool) ->
-					perform_build ~toplevel:true child
+				Lwt.bind (build ~lease ~var ~update:true parent) (fun (_:bool) ->
+					perform_build ~lease ~var ~toplevel:true child
 				)
-			| Recursive.Terminal child -> perform_build ~toplevel:true child
+			| Recursive.Terminal child -> perform_build ~lease ~var ~toplevel:true child
 	)
 
 type prepared_build = [
@@ -293,8 +291,8 @@ type prepared_build = [
 	| `Symlink_to of RelativeFrom.t
 ]
 
-let prepare_build (path: ConcreteBase.t) : prepared_build option =
-	match Gupfile.find_builder path with
+let prepare_build ~var (path: ConcreteBase.t) : prepared_build option =
+	match Gupfile.find_builder ~var path with
 		| Some buildable -> Some (`Target buildable)
 		| None -> (match ConcreteBase.readlink path with
 			(* # this target isn't buildable, but its symlink destination might be *)

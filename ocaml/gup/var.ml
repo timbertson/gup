@@ -1,27 +1,74 @@
 open Batteries
-open Std
+open Path
 
-let indent = Logging.indent
+(* vars which vary by build *)
+type t = {
+	indent : int;
+	indent_str : string;
+	cwd: Path.Concrete.t;
+	parent_target: Path.ConcreteBase.t option;
+}
 
-let get k = try (Some (Sys.getenv k)) with Not_found -> None
-let get_or k default = try (Sys.getenv k) with Not_found -> default
-let has_env k = match get k with Some _ -> true | None -> false
+let extend_env var env =
+	(* always add 2 spaces to indent *)
+	StringMap.add Var_global.Key.indent (var.indent_str ^ "  ") env
 
-let is_test_mode = has_env "GUP_IN_TESTS"
-let is_root = not @@ has_env "GUP_ROOT"
-
-let default_verbosity = Option.default 0 (Option.map int_of_string (get "GUP_VERBOSE"))
-let set_verbosity v = Unix.putenv "GUP_VERBOSE" (string_of_int v)
-
-let trace = ref (get_or "GUP_XTRACE" "0" = "1")
-
-let set_trace t =
-	(* Note: we ignore set_trace if trace is already true -
-	 * you cannot turn trace off *)
-	if (!trace) = false then (
-		trace := t;
-		Unix.putenv "GUP_XTRACE" (if t then "1" else "0")
+let resolve_parent_target var =
+	var |> Option.map PathString.parse |> Option.map (function
+		| `relative rel ->
+			let msg = "relative path in $GUP_TARGET: " ^ (Relative.to_string rel) in
+			raise (Invalid_argument msg)
+		| `absolute p -> ConcreteBase._cast (Absolute.to_string p)
 	)
 
-let set_keep_failed_outputs () = Unix.putenv "GUP_KEEP_FAILED" "1"
-let keep_failed_outputs () = (get_or "GUP_KEEP_FAILED" "0") = "1"
+let indent_str n = String.make n ' '
+
+let global () =
+	let open Var_global in
+	{
+		indent;
+		indent_str = indent_str indent;
+		parent_target = resolve_parent_target (Var_global.parent_target ());
+		cwd = Lazy.force cwd |> Path.Concrete.of_string;
+	}
+
+let (run_id, root_cwd) =
+	let open Var_global in
+	if is_root then (
+			let runid = Big_int.to_string (Util.int_time (Unix.gettimeofday ()))
+			and root = Sys.getcwd () in
+			Unix.putenv Key.run_id runid;
+			Unix.putenv Key.root root;
+			(runid, Lazy.force cwd |> Path.Concrete.of_string)
+	) else
+		(
+			Unix.getenv Key.run_id,
+			Unix.getenv Key.root |> Path.Concrete.of_string
+		)
+
+module VarLog = struct
+	module type LOG = sig
+		val err : t -> 'a Logs.log
+		val warn : t -> 'a Logs.log
+		val info : t -> 'a Logs.log
+		val debug : t -> 'a Logs.log
+		val trace : t -> 'a Logs.log
+	end
+	let src_log : Logs.src -> (module LOG) = fun src ->
+		let module Base: Logging.LogsExt.LOG = (val Logging.LogsExt.src_log src) in
+		let module Log = struct
+			let wrap logfn var : 'a Logs.log = fun fn ->
+				logfn (fun m -> fn (fun ?header ?tags fmt -> m ?header ?tags ("%s" ^^ fmt) var.indent_str))
+
+			let err var = wrap Base.err var
+			let warn var = wrap Base.warn var
+			let info var = wrap Base.info var
+			let debug var = wrap Base.debug var
+			let trace var = wrap Base.trace var
+		end
+		in
+		(module Log : LOG)
+end
+
+let log_module name = VarLog.src_log (Logs.Src.create name)
+

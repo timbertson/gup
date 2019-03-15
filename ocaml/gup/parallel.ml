@@ -1,8 +1,7 @@
 open Batteries
 open Std
-open Lwt
 
-let log = Logging.get_logger "gup.par"
+module Log = (val Var.log_module "gup.par")
 module ExtUnix = ExtUnix.Specific
 
 (* because lockf is pretty much insane,
@@ -40,280 +39,149 @@ module LockMap = struct
 			)
 		in
 		Lwt_mutex.with_lock lock fn
-end
 
-type fds = (Lwt_unix.file_descr * Lwt_unix.file_descr) option ref
-
-let _lwt_descriptors (r,w) = (
-	Lwt_unix.of_unix_file_descr ~blocking:true ~set_flags:false r,
-	Lwt_unix.of_unix_file_descr ~blocking:true ~set_flags:false w
-)
-
-class fd_jobserver (read_end, write_end) toplevel =
-	let _have_token = Lwt_condition.create () in
-	let token = 't' in
-
-	(* initial token held by this process *)
-	let _mytoken = ref (Some ()) in
-	let repeat_tokens len = Bytes.make len token in
-
-	(* for debugging only *)
-	let _free_tokens = ref 0 in
-
-	let _write_tokens n =
-		let buf = repeat_tokens n in
-		let%lwt written = Lwt_unix.write write_end buf 0 n in
-		assert (written = n);
-		Lwt.return_unit
-	in
-
-	let _read_token () =
-		let buf = Bytes.make 1 ' ' in
-		let success = ref false in
-		while%lwt not !success do
-			(* XXX does this really return without reading sometimes? *)
-			let%lwt n = Lwt_unix.read read_end buf 0 1 in
-			let succ = n > 0 in
-			success := succ;
-			if not succ
-			then Lwt_unix.wait_read read_end
-			else Lwt.return_unit
-		done
-	in
-
-	let _release n =
-		log#trace "release(%d)" n;
-		let n = match !_mytoken with
-		| Some _ -> n
-		| None ->
-				(* keep one for myself *)
-				_mytoken := Some ();
-				Lwt_condition.signal _have_token ();
-				n - 1
-		in
-		if n > 0 then (
-			_free_tokens := !_free_tokens + n;
-			log#trace "free tokens: %d" !_free_tokens;
-			_write_tokens n
-		) else Lwt.return_unit
-	in
-
-	let _get_token () =
-		(* Get (and consume) a single token *)
-		let use_mine = fun () ->
-			assert (Option.is_some !_mytoken);
-			_mytoken := None;
-			log#trace "used my own token";
-			Lwt.return_unit
-		in
-
-		match !_mytoken with
-			| Some _ -> use_mine ()
-			| None ->
-				log#trace "waiting for token...";
-				let%lwt () = Lwt.pick [
-					Lwt_condition.wait _have_token >>= use_mine;
-					_read_token () >>= fun () ->
-						_free_tokens := !_free_tokens - 1;
-						log#trace "used a free token, there are %d left" !_free_tokens;
-						Lwt.return_unit;
-				] in
-				log#trace "got a token";
-				Lwt.return_unit
-	in
-
-	let () = Option.may (fun tokens -> Lwt_main.run (_release (tokens - 1))) toplevel in
-
-object
-	method finish =
-		match toplevel with
-			| Some tokens ->
-				(* wait for outstanding tasks by comsuming the number of tokens we started with *)
-				let remaining = ref (tokens - 1) in
-				let buf = repeat_tokens !remaining in
-				while%lwt !remaining > 0 do
-					log#debug "waiting for %d free tokens to be returned" !remaining;
-					let%lwt n = Lwt_unix.read read_end buf 0 !remaining in
-					remaining := !remaining - n;
-					Lwt.return_unit
-				done
-			| None -> Lwt.return_unit
-
-	method run_job : 'a. (unit -> 'a Lwt.t) -> 'a Lwt.t = fun fn ->
-		let%lwt () = _get_token () in
-		(try%lwt
-			fn ()
-		with e -> raise e)
-		[%lwt.finally
-			_release 1
-		]
-
-	method with_process_mutex : 'a. Lwt_unix.file_descr -> (unit -> 'a Lwt.t) -> 'a Lwt.t =
+	let with_process_mutex : 'a. Lwt_unix.file_descr -> (unit -> 'a Lwt.t) -> 'a Lwt.t =
 	fun fd fn ->
 		let%lwt stats = Lwt_unix.fstat fd in
-		LockMap.with_lock (FileIdentity.create stats) fn
+		with_lock (FileIdentity.create stats) fn
 end
 
-class named_jobserver path toplevel =
-	let fds =
-		log#trace "opening jobserver at %s" path;
-		let perm = 0o000 in (* ignored, since we don't use O_CREAT *)
-		let r = Unix.openfile path [Unix.O_RDONLY ; Unix.O_NONBLOCK ; Unix.O_CLOEXEC] perm in
-		let w = Unix.openfile path [Unix.O_WRONLY; Unix.O_CLOEXEC] perm in
-		Unix.clear_nonblock r;
-		(_lwt_descriptors (r,w))
-	in
+(**
+ * Jobpool: single-process mechanism for controlling the number of parallel jobs
+ * (this can be single-process since clients submit all jobs to the root process
+ * in a parallel execution)
+ *)
+module IntSet = Set.Make(Int)
+module Jobpool = struct
+	[@@@ocaml.warning "-3"]
+	type waiters = unit Lwt.u Lwt_sequence.t
+	type lease = {
+		id: int;
+		parent: int option;
+	}
+	type t = {
+		next_id: int ref;
+		num_free: int ref;
+		waiters: waiters;
+		leases: IntSet.t ref;
+	}
+	let empty parallelism =
+		assert (parallelism > 0);
+		{
+			next_id = ref 0;
+			num_free = ref parallelism;
+			waiters = Lwt_sequence.create ();
+			leases = ref IntSet.empty;
+		}
 
-	let server = new fd_jobserver fds toplevel in
+	let string_of_lease { id; parent } =
+		Printf.sprintf2 "{id=%d; parent=%a}"
+			id (Option.print Int.print) parent
 
-object
-	method finish =
-		let%lwt () = server#finish in
-		let (r, w) = fds in
-		let%lwt (_:unit list) = Lwt_list.map_p Lwt_unix.close [r;w] in
-
-		(* delete jobserver file if we are the toplevel *)
-		let%lwt () = Lwt_option.may (fun _ -> Lwt_unix.unlink path) toplevel in
-		Lwt.return_unit
-
-	method run_job : 'a. (unit -> 'a Lwt.t) -> 'a Lwt.t = fun fn ->
-		server#run_job fn
-
-	method with_process_mutex : 'a. Lwt_unix.file_descr -> (unit -> 'a Lwt.t) -> 'a Lwt.t =
-	fun fd fn -> server#with_process_mutex fd fn
-end
-
-class serial_jobserver =
-	let lock = Lwt_mutex.create () in
-object
-	method run_job : 'a. (unit -> 'a Lwt.t) -> 'a Lwt.t = fun fn ->
-		Lwt_mutex.with_lock lock fn
-
-	method finish = Lwt.return_unit
-	method with_process_mutex : 'a. Lwt_unix.file_descr -> (unit -> 'a Lwt.t) -> 'a Lwt.t =
-	fun fd fn -> ignore fd; fn ()
-end
-
-module Jobserver = struct
-	let _inherited_vars = ref []
-	let _impl = ref (new serial_jobserver)
-
-	let makeflags_var = "MAKEFLAGS"
-	let jobserver_var = "GUP_JOBSERVER"
-	let not_required = "0"
-
-	let _extract_fds makeflags =
-		let flags_re = Str.regexp "--jobserver-\\(auth\\|fds\\)=\\([0-9]+\\),\\([0-9]+\\)" in
-		try
-			ignore @@ Str.search_forward flags_re makeflags 0;
-			Some (
-				Int.of_string (Str.matched_group 2 makeflags),
-				Int.of_string (Str.matched_group 3 makeflags)
-			)
-		with Not_found -> None
-
-
-	let _discover_jobserver () = (
-		(* open GUP_JOBSERVER if present *)
-		let inherit_named_jobserver path = new named_jobserver path None in
-		let server = Var.get jobserver_var |> Option.map inherit_named_jobserver in
-		begin match server with
-			| None -> (
-				(* try extracting from MAKEFLAGS, if present *)
-				let fd_ints = Option.bind (Var.get makeflags_var) _extract_fds in
-
-				Option.bind fd_ints (fun (r,w) ->
-					let r = ExtUnix.file_descr_of_int r
-					and w = ExtUnix.file_descr_of_int w
-					in
-					(* check validity of fds given in $MAKEFLAGS *)
-					let valid fd = ExtUnix.is_open_descr fd in
-					if valid r && valid w then (
-						log#trace "using fds %a"
-							(Tuple.Tuple2.print Int.print Int.print) (Option.get fd_ints);
-
-						Some (new fd_jobserver (_lwt_descriptors (r,w)) None)
-					) else (
-						log#warn (
-							"broken --jobserver-fds in $MAKEFLAGS;" ^^
-							"prefix your Makefile rule with '+'\n" ^^
-							"or pass --jobs flag to gup directly to ignore make's jobserver\n" ^^
-							"Assuming --jobs=1");
-						ExtUnix.unsetenv makeflags_var;
-						None
-					)
-				)
-			)
-			| server -> server
-		end
-	)
-
-	let _create_named_pipe ():string = (
-		let filename = Filename.concat
-			(Filename.get_temp_dir_name ())
-			("gup-job-" ^ (string_of_int @@ Unix.getpid ())) in
-
-		let create = fun () ->
-			Unix.mkfifo filename 0o600
+	(* If ID is given, it must not be an active lease
+	 * (this is used for reacquiring a lease which has
+	 * been transferred).
+	 * Returns the ID of the lease. *)
+	let acquire t ~var ~current ~lease_id : lease Lwt.t = (
+		let { next_id; num_free; waiters; leases } = t in
+		Log.debug var (fun m->m "acquire: num_free = %d" !num_free);
+		let lease_id = match lease_id with
+			| Some lease_id ->
+				(* Leases aren't reentrant! *)
+				assert (not (IntSet.mem lease_id !leases));
+				lease_id
+			| None ->
+				let lease_id = !next_id in
+				next_id := lease_id + 1;
+				lease_id
 		in
-		(* if pipe already exists it must be old, so remove it *)
-		begin try create ()
-		with Unix.Unix_error (Unix.EEXIST, _, _) -> (
-			log#warn "removing stale jobserver file: %s" filename;
-			Unix.unlink filename;
-			create ()
-		) end;
-		log#trace "created jobserver at %s" filename;
-		filename
-	)
 
-	let extend_env env =
-		!_inherited_vars |> List.fold_left (fun env (key, value) ->
-			EnvironmentMap.add key value env
-		) env
+		let _acquire parent =
+			let lease = { id = lease_id; parent } in
+			Log.debug var (fun m->m "lease %s: acquired" (string_of_lease lease));
+			leases := IntSet.add lease_id !leases;
+			lease
+		in
 
-	let setup maxjobs fn = (
-		(* run the job server *)
-		let inherited = ref None in
+		(* only adopt the current slot if the passed in
+	* is the current owner *)
+		let owner = current |> Option.filter (fun lease ->
+			IntSet.mem lease !leases
+		) in
 
-		if (Var.get jobserver_var) <> (Some not_required) then (
-			if Option.is_none maxjobs then begin
-				(* no --jobs param given, check for a running jobserver *)
-				inherited := _discover_jobserver ()
-			end;
-
-			begin match !inherited with
-				| Some server -> _impl := server
-				| None -> (
-					(* no jobserver set, start our own *)
-					let maxjobs = Option.default 1 maxjobs in
-					if maxjobs = 1 then (
-						log#debug "no need for a jobserver (--jobs=1)";
-						_inherited_vars := (jobserver_var, not_required) :: !_inherited_vars;
-					) else (
-						assert (maxjobs > 0);
-						(* need to start a new server *)
-						log#trace "new jobserver! %d" maxjobs;
-
-						let path = _create_named_pipe () in
-						_inherited_vars := (jobserver_var, path) :: !_inherited_vars;
-						_impl := new named_jobserver path (Some maxjobs)
-					)
+		match owner with
+			| Some owner ->
+				(* take over this lease *)
+				Log.debug var (fun m->m "lease ID %d: stealing %d" lease_id owner);
+				leases := IntSet.remove owner !leases;
+				Lwt.return (_acquire (Some owner))
+			| None -> (
+				(* the parent lease isn't active, so we need to
+				 * consume a new slot *)
+				let current_free = !num_free in
+				if current_free > 0 then (
+					(* take a free slot *)
+					num_free := current_free - 1;
+					Lwt.return (_acquire None)
+				) else (
+					(* put self on the waitlist *)
+					let task, waiter = Lwt.task () in
+					let (_:unit Lwt.u Lwt_sequence.node) = Lwt_sequence.add_r waiter waiters in
+					Lwt.map (fun () -> _acquire None) task
 				)
-			end
-		);
-
-		(
-			try%lwt
-				fn ()
-			with e -> raise e
-		)[%lwt.finally 
-			!_impl#finish
-		]
+			)
 	)
 
-	let run_job fn = !_impl#run_job fn
-	let with_process_mutex fd fn = !_impl#with_process_mutex fd fn
+	let drop ~var { num_free; waiters; leases; _ } lease = (
+		Log.debug var (fun m->m "lease %s: removing ..." (string_of_lease lease));
+		assert (IntSet.mem lease.id !leases);
+		leases := IntSet.remove lease.id !leases;
+		(* we just freed up a slot, either dequeue a waiter
+		 * or increment `free` *)
+		match Lwt_sequence.take_opt_l waiters with
+			| Some waiter -> (
+				Log.debug var (fun m->m "Waking up next waiter");
+				Lwt.wakeup_later waiter ()
+			)
+			| None -> (
+				num_free := !num_free + 1;
+				Log.debug var (fun m->m "Incrementing `num_free` to %d" !num_free)
+			)
+	)
+
+	(* Reacquire parent lease, after dropping the lease. If the lease is already
+	 * dropped, only reacquire parent *)
+	let revert ~var t lease =
+		Log.debug var (fun m->m "revert(%s)" (string_of_lease lease));
+		if (IntSet.mem lease.id !(t.leases)) then drop ~var t lease;
+		match lease.parent with
+			| None ->
+					Lwt.return_unit
+			| Some parent ->
+				Lwt.map
+					(ignore: lease -> unit)
+					(acquire t ~var ~current:None ~lease_id:(Some parent))
+
+	let use t ~var ~parent fn =
+		let%lwt lease = acquire t ~var ~current:parent ~lease_id:None in
+		(fn lease)[%lwt.finally
+			revert ~var t lease
+		]
+
+	let use_new ~var t fn =
+		let%lwt lease = acquire t ~var ~current:None ~lease_id:None in
+		(fn lease)[%lwt.finally
+			drop ~var t lease;
+			Lwt.return_unit
+		]
+
+	let extend_env ~lease env =
+		match lease with
+			| None -> env
+			| Some { id; _ } ->
+				StringMap.add Var_global.Key.parent_lease (string_of_int id) env
+	
+	let is_empty t = IntSet.is_empty !(t.leases)
 end
 
 
@@ -332,7 +200,7 @@ let lock_flag_nb mode = match mode with
 	| ReadLock -> Unix.F_TRLOCK
 	| WriteLock -> Unix.F_TLOCK
 
-let print_lock_mode out mode = Printf.fprintf out "%s" (match mode with
+let print_lock_mode out mode = Format.fprintf out "%s" (match mode with
 	| ReadLock -> "ReadLock"
 	| WriteLock -> "WriteLock"
 )
@@ -348,7 +216,7 @@ exception Not_locked
 
 
 (* a reentrant lock file *)
-class lock_file ~target lock_path =
+class lock_file ~var ~target lock_path =
 	let current_lock = ref None in
 
 	let do_lockf path fd flag =
@@ -364,15 +232,15 @@ class lock_file ~target lock_path =
 		
 		(* ensure only one instance process-wide ever locks the given inode *)
 		
-		Jobserver.with_process_mutex fd (fun () ->
+		LockMap.with_process_mutex fd (fun () ->
 			let%lwt () = do_lockf path fd (lock_flag mode) in
-			log#trace "--Lock[%s] %a" path print_lock_mode mode;
+			Log.trace var (fun m->m "--Lock[%s] %a" path print_lock_mode mode);
 			(
 				try%lwt
 					f ()
 				with e -> raise e
 			) [%lwt.finally (
-				log#trace "Unlock[%s]" path;
+				Log.trace var (fun m->m "Unlock[%s]" path);
 				Lwt_unix.close fd
 			)]
 		)

@@ -1,0 +1,12 @@
+diff --git a/ppx_deriving_protobuf.opam b/ppx_deriving_protobuf.opam
+index 3b8bbb9..9f7a271 100644
+--- a/ppx_deriving_protobuf.opam
++++ b/ppx_deriving_protobuf.opam
+@@ -1,5 +1,5 @@
+ opam-version: "1.2"
+-version: "2.6"
++version: "2.6+master"
+ maintainer: "whitequark <whitequark@whitequark.org>"
+ authors: [ "whitequark <whitequark@whitequark.org>" ]
+ license: "MIT"
+

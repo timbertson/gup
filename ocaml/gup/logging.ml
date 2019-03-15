@@ -1,9 +1,6 @@
 open Batteries
 
-(* should be in `var`, but that causes recursive modules *)
-let indent = try Sys.getenv "GUP_INDENT" with Not_found -> ""
-let () =
-	Unix.putenv "GUP_INDENT" (indent ^ "  ")
+let indent_str = String.make (Var_global.indent) ' '
 
 type log_level =
 	| Error
@@ -45,56 +42,32 @@ let color_for lvl =
 	| Info  -> !green
 	| _ -> no_color
 
-let default_formatter _name _lvl = ("","")
+let default_formatter (_name:string) (_lvl:log_level) = ("","")
 
 let info_formatter _name lvl =
 	(
-		(color_for lvl) ^ "gup " ^ indent ^ (!bold),
+		(color_for lvl) ^ "gup " ^ indent_str ^ (!bold),
 		!plain
 	)
 
 let trace_formatter name lvl =
 	let pid = Unix.getpid () in
 	(
-		Printf.sprintf "%s[%d %-11s|%5s] %s%s" (color_for lvl) pid name (string_of_level lvl) indent !bold,
+		Printf.sprintf "%s[%d %-11s|%5s] %s%s" (color_for lvl) pid name (string_of_level lvl) indent_str !bold,
 		!plain
 	)
 
 let test_formatter _name lvl =
 	(
-		"# " ^ (color_for lvl) ^ (string_of_level lvl) ^ " " ^ indent ^ !bold,
+		"# " ^ (color_for lvl) ^ (string_of_level lvl) ^ " " ^ indent_str ^ !bold,
 		!plain
 	)
 
 let current_formatter = ref default_formatter
 
-class logger (name:string) =
-	object (self)
-		method logf : 'a. log_level -> ('a, unit IO.output, unit) format -> 'a = fun lvl ->
-			if (ord lvl) >= !current_level then
-				let (pre, post) = !current_formatter name lvl in
-				let print_post = fun _ -> prerr_endline post in
-				prerr_string pre;
-				Printf.kfprintf print_post stderr
-			else
-				Printf.ifprintf stdout
+(* TODO: make formatting Logs compatible *)
 
-		(* XXX are these ever used? *)
-		method errors  = self#logf Error "%s"
-		method warns   = self#logf Warn "%s"
-		method infos   = self#logf Info "%s"
-		method debugs  = self#logf Debug "%s"
-		method traces  = self#logf Trace "%s"
-
-		(* printf-style versions *)
-		method error : 'a. ('a, unit IO.output, unit) format -> 'a = self#logf Error
-		method warn  : 'a. ('a, unit IO.output, unit) format -> 'a = self#logf Warn
-		method info  : 'a. ('a, unit IO.output, unit) format -> 'a = self#logf Info
-		method debug : 'a. ('a, unit IO.output, unit) format -> 'a = self#logf Debug
-		method trace : 'a. ('a, unit IO.output, unit) format -> 'a = self#logf Trace
-	end
-
-let get_logger name = new logger name
+(* let get_logger name = new logger name *)
 let set_level new_lvl =
 	current_level := ord new_lvl
 let set_formatter fn =
@@ -120,3 +93,23 @@ let () =
 		bold   := "\x1b[1m";
 		plain  := "\x1b[m";
 	end
+
+(* upstream Logs compat, with added TRACE level *)
+module LogsExt = struct
+	module type LOG = sig
+		include Logs.LOG
+		val trace : 'a Logs.log
+	end
+	let src_log : Logs.src -> (module LOG) = fun src ->
+		let module Super = (val Logs.src_log src : Logs.LOG) in
+		let module Log = struct
+			include Super
+			let trace msgf =
+				if !current_level <= (ord Trace) then
+					Super.debug msgf
+				else
+					()
+		end
+		in
+		(module Log : LOG)
+end

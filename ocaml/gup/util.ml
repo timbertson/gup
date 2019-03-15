@@ -60,3 +60,5 @@ let which exe =
 			|> Enum.map (fun p -> Filename.concat p exe)
 			|> Enum.find Sys.file_exists
 	) with Not_found -> None
+
+let big_int_pp = Std.ppf Big_int.string_of_big_int

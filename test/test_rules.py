@@ -147,11 +147,6 @@ class TestBuildableCheck(TestCase):
 	def test_returns_1_when_file_is_not_buildable(self):
 		self.assertRaises(SafeError, lambda: self.build('--buildable', 'target'), message='gup failed with status 1')
 
-	def test_returns_2_when_there_was_an_error(self):
-		self.write('Gupfile', 'builder:\n\ta')
-		# multiple files passed
-		self.assertRaises(SafeError, lambda: self.build('--buildable', 'a', 'b'), message='gup failed with status 2')
-	
 	def test_doesnt_build_second_target_if_first_fails(self):
 		self.write("a.gup", BASH + "echo a > $2; exit 1")
 		self.write("b.gup", BASH + "echo b > $2; exit 1")

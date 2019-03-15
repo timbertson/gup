@@ -1,5 +1,3 @@
-OCAMLBUILD = $(shell if which rainbow >/dev/null 2>&1; then echo "rainbow -- ocamlbuild"; else echo "ocamlbuild"; fi)
-
 all: bin
 
 release:

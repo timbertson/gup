@@ -4,12 +4,6 @@
 
 open Batteries
 open Error
-let logger = Logging.get_logger "gup.utils"
-
-module StringMap = struct
-  include Map.Make(String)
-  let find key map = try Some (find key map) with Not_found -> None
-end
 
 type 'a result =
   | Success of 'a
@@ -170,10 +164,10 @@ let normpath path : filepath =
     | [] -> "."
     | _  -> String.concat Filename.dir_sep @@ List.rev_map to_string parts
 
-let abspath path =
+let abspath ~cwd path =
   normpath (
     if is_absolute path then path
-    else (Unix.getcwd ()) +/ path
+    else cwd +/ path
   )
 
 let walk root fn : unit =

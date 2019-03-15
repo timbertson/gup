@@ -26,6 +26,7 @@ let leaf = function
 let connect ~parent child = Recurse { parent; child }
 let terminal t = Terminal t
 
-let rec print subprint = fun (out: unit IO.output) -> function
-	| Recurse { parent; child } -> Printf.fprintf out "Recurse(%a, %a)" (print subprint) parent subprint child
+let rec print subprint out = function
+	| Recurse { parent; child } ->
+		Format.fprintf out "Recurse(%a, %a)" (print subprint) parent subprint child
 	| Terminal t -> subprint out t

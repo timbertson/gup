@@ -1,10 +1,10 @@
 open Batteries
 open Std
 open Lwt
-open Parallel
 open Path
 
 type dirty_args = {
+	var: Var.t;
 	path: ConcreteBase.t;
 	builder_path: RelativeFrom.t;
 	build: (RelativeFrom.t -> bool Lwt.t)
@@ -38,7 +38,7 @@ type dependency_type =
 	| AlwaysRebuild
 	| ClobbersTarget
 
-let log = Logging.get_logger "gup.state"
+module Log = (val Var.log_module "gup.state")
 let meta_dir_name = PathComponent.name_of_string ".gup"
 let deps_ext = "deps"
 let new_deps_ext = "deps2"
@@ -74,8 +74,7 @@ class run_id id =
 		method repr = "run_id(" ^ id ^ ")"
 		method fields = [id]
 		method tag = RunId
-		method print (out: unit IO.output) =
-			Printf.fprintf out "run_id(%s)" id
+		method print out = CCFormat.(within "run_id(" ")" string out id)
 	end
 
 let current_run_id = new run_id Var.run_id
@@ -129,25 +128,25 @@ let dirty_of_dep_state : dep_dirty_state -> bool = function
 	| `clean | `clean_after_build -> false
 
 let dirty_check_with_dep ~(path:RelativeFrom.t) checker args =
-	let%lwt dirty = checker () in
+	let%lwt dirty = checker args in
 	if dirty then Lwt.return `dirty else (
 		let%lwt built = args.build path in
 		if built
 			then (
-				log#trace "dirty_check_with_dep: path %s was built, rechecking" (RelativeFrom.to_string path);
-				checker () |> Lwt.map (function
+				Log.trace args.var (fun m->m "dirty_check_with_dep: path %s was built, rechecking" (RelativeFrom.to_string path));
+				checker args |> Lwt.map (function
 					| true -> `dirty
 					| false -> `clean_after_build
 				)
 			) else Lwt.return `clean
 	)
 
-let is_mtime_mismatch ~stored path =
+let is_mtime_mismatch ~var ~stored path =
 	let%lwt current_mtime = (RelativeFrom.lift Util.get_mtime) path in
-	log#trace "%s: comparing stored mtime %a against current %a"
+	Log.trace var CCFormat.(fun m->m "%s: comparing stored mtime %a against current %a"
 		(RelativeFrom.to_string path)
-		(Option.print Big_int.print) stored
-		(Option.print Big_int.print) current_mtime;
+		(Dump.option Util.big_int_pp) stored
+		(Dump.option Util.big_int_pp) current_mtime);
 	Lwt.return @@ not @@ eq (Option.compare ~cmp:Big_int.compare) stored current_mtime
 
 let file_fields ~mtime ~checksum path =
@@ -161,9 +160,10 @@ class virtual base_dependency = object (self)
 	method virtual is_dirty : dirty_args -> bool Lwt.t
 
 	method print out =
-		Printf.fprintf out "<#%s: %a>"
+		let open CCFormat in
+		Format.fprintf out "<#%s: %a>"
 			(string_of_dependency_type self#tag)
-			(List.print String.print_quoted) self#fields
+			Dump.(list string) self#fields
 end
 
 and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:RelativeFrom.t) =
@@ -175,26 +175,26 @@ and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:Re
 		method private mtime = mtime
 		method private is_dirty_cs checksum args =
 			(* checksum-based check *)
-			log#trace "%s: comparing using checksum %s" (RelativeFrom.to_string path) checksum;
-			let resolved_path = ConcreteBase.resolve_from path in
-			let state = new target_state resolved_path in
-			let checksum_mismatch () =
+			Log.trace args.var (fun m->m "%s: comparing using checksum %s" (RelativeFrom.to_string path) checksum);
+			let resolved_path = ConcreteBase.resolve_relfrom path in
+			let state = new target_state ~var:args.var resolved_path in
+			let checksum_mismatch args =
 				let%lwt deps = state#deps in
 				let latest_checksum = Option.bind deps (fun deps -> deps#checksum) in
 				let dirty = match latest_checksum with
 					| None -> true
 					| Some dep_cs -> dep_cs <> checksum
 				in
-				log#debug "%s: %s (stored checksum is %s, current is %a)"
+				Log.debug args.var CCFormat.Dump.(fun m->m "%s: %s (stored checksum is %s, current is %a)"
 					(if dirty then "DIRTY" else "CLEAN")
 					(ConcreteBase.to_string resolved_path) checksum
-					(Option.print String.print) latest_checksum;
+					(option string) latest_checksum);
 				Lwt.return dirty
 			in
 			dirty_check_with_dep ~path checksum_mismatch args |> Lwt.map dirty_of_dep_state
 
-		method private is_dirty_mtime = dirty_check_with_dep ~path (fun () ->
-			is_mtime_mismatch ~stored:self#mtime path
+		method private is_dirty_mtime = dirty_check_with_dep ~path (fun args ->
+			is_mtime_mismatch ~var:args.var ~stored:self#mtime path
 		)
 
 		method is_dirty args =
@@ -218,11 +218,11 @@ and builder_dependency ~mtime (path:RelativeFrom.t) =
 			let relative_path = path |> RelativeFrom.relative in
 			let builder_path = args.builder_path |> RelativeFrom.relative in
 			if not (Relative.eq builder_path relative_path) then (
-				log#debug "DIRTY: builder changed from %s -> %s"
+				Log.debug args.var (fun m->m "DIRTY: builder changed from %s -> %s"
 					(Relative.to_string relative_path)
-					(Relative.to_string builder_path);
+					(Relative.to_string builder_path));
 				Lwt.return_true
-			) else is_mtime_mismatch ~stored:mtime path
+			) else is_mtime_mismatch ~var:args.var ~stored:mtime path
 	end
 
 and always_rebuild =
@@ -243,15 +243,15 @@ and build_time time =
 			let%lwt mtime = Util.get_mtime path >>= (return $ Option.get) in
 			Lwt.return (
 				if neq Big_int.compare mtime time then (
-					log#debug "%s mtime (%a) differs from build time (%a)" path
-						Big_int.print mtime
-						Big_int.print time;
-					let log_method = ref log#warn in
+					Log.debug args.var (fun m->m "%s mtime (%a) differs from build time (%a)" path
+						Util.big_int_pp mtime
+						Util.big_int_pp time);
+					let log_method = ref Log.warn in
 					if Util.lisdir path then
 						(* dirs are modified externally for various reasons, not worth warning *)
-						log_method := log#debug
+						log_method := Log.debug
 					;
-					!log_method "%s was externally modified - rebuilding" path;
+					!log_method args.var (fun m->m"%s was externally modified - rebuilding" path);
 					true
 				)
 				else false
@@ -265,24 +265,26 @@ and dependencies (target_path:ConcreteBase.t) (data:base_dependency intermediate
 			| Some r -> r#is_current
 
 		method print out =
-			Printf.fprintf out "<#Dependencies(run=%a, cs=%a, clobbers=%b, rules=%a)>"
-				(Option.print print_obj) !(data.run_id)
-				(Option.print String.print) !(data.checksum)
+			let open CCFormat.Dump in
+			Format.fprintf out "<#Dependencies(run=%a, cs=%a, clobbers=%b, rules=%a)>"
+				(option print_obj) !(data.run_id)
+				(option string) !(data.checksum)
 				!(data.clobbers)
-				(List.print print_obj) !(data.rules)
+				(list print_obj) !(data.rules)
 
 		method checksum = !(data.checksum)
 
 		method clobbers = !(data.clobbers)
 
-		method is_dirty (buildable: Buildable.t) (build:RelativeFrom.t -> bool Lwt.t) : bool Lwt.t =
+		method is_dirty ~var (buildable: Buildable.t) (build:RelativeFrom.t -> bool Lwt.t) : bool Lwt.t =
 			let target_path_str = ConcreteBase.to_string target_path in
 			if not (Util.lexists target_path_str) then (
-				log#debug "DIRTY: %s (target does not exist)" target_path_str;
+				Log.debug var (fun m->m "DIRTY: %s (target does not exist)" target_path_str);
 				return true
 			) else (
 				let script_path = Buildable.script buildable in
 				let args = {
+					var;
 					path = target_path;
 					builder_path = resolve_builder_path ~target:target_path script_path;
 					build = build
@@ -291,13 +293,13 @@ and dependencies (target_path:ConcreteBase.t) (data:base_dependency intermediate
 				let rec iter rules =
 					match rules with
 					| [] ->
-							log#trace "dependencies#is_dirty: %s returning false" target_path_str;
+							Log.trace var (fun m->m "dependencies#is_dirty: %s returning false" target_path_str);
 							Lwt.return_false
 					| (rule::remaining_rules) ->
-						log#trace "dependencies#is_dirty checking %a for path %s" print_obj rule target_path_str;
+						Log.trace var (fun m->m "dependencies#is_dirty checking %a for path %s" print_obj rule target_path_str);
 						let%lwt dirty = rule#is_dirty args in
 						if dirty then (
-							log#trace "dependencies#is_dirty: %s returning true" target_path_str;
+							Log.trace var (fun m->m "dependencies#is_dirty: %s returning true" target_path_str);
 							Lwt.return_true
 						) else iter remaining_rules
 				in
@@ -305,7 +307,7 @@ and dependencies (target_path:ConcreteBase.t) (data:base_dependency intermediate
 			)
 end
 
-and dependency_builder target_path (input:Lwt_io.input_channel) = object
+and dependency_builder ~var target_path (input:Lwt_io.input_channel) = object
 	(* extracted into its own object because we can't use lwt in an object consutrctor
 	 * syntax *)
 	method build =
@@ -365,7 +367,7 @@ and dependency_builder target_path (input:Lwt_io.input_channel) = object
 				rules = ref [];
 			} in
 			let%lwt version_line = readline input in
-			log#trace "version_line: %a" (Option.print String.print) version_line;
+			Log.trace var CCFormat.Dump.(fun m->m "version_line: %a" (option string) version_line);
 			let version_number = Option.bind version_line (fun line ->
 				if String.starts_with line version_marker then (
 					let (_, version_string) = String.split line ~by:" " in
@@ -384,7 +386,7 @@ and dependency_builder target_path (input:Lwt_io.input_channel) = object
 		Lwt.return @@ new dependencies target_path data
 	end
 
-and target_state (target_path:ConcreteBase.t) =
+and target_state ~var (target_path:ConcreteBase.t) =
 	let base_path = ConcreteBase.dirname target_path in
 	let meta_path ext =
 		let target = ConcreteBase.basename target_path |> PathComponent.string_of_name_opt in
@@ -398,7 +400,7 @@ and target_state (target_path:ConcreteBase.t) =
 		p
 	in
 
-	let lock_for_ext ext = new Parallel.lock_file
+	let lock_for_ext ext = new Parallel.lock_file ~var
 		~target:(ensure_meta_path ext |> Absolute.to_string)
 		(meta_path (ext ^ "-lock") |> Absolute.to_string)
 	in
@@ -414,29 +416,29 @@ and target_state (target_path:ConcreteBase.t) =
 			"TargetState(" ^ (self#path_repr) ^ ")"
 
 		method private parse_dependencies : dependencies option Lwt.t =
-			log#trace "parse_deps %s" (target_path |> ConcreteBase.to_string);
+			Log.trace var (fun m->m "parse_deps %s" (target_path |> ConcreteBase.to_string));
 			let deps_path = self#meta_path deps_ext in
 			if Absolute.lexists deps_path then (
 				try%lwt
 					(Lazy.force deps_lock)#use Parallel.ReadLock (fun deps_path ->
 						with_file_in deps_path (fun f ->
-							(new dependency_builder target_path f)#build >>= (fun d -> Lwt.return (Some d))
+							(new dependency_builder ~var target_path f)#build >>= (fun d -> Lwt.return (Some d))
 						)
 					)
 				with
 					| Version_mismatch _ -> (
-						log#warn "Ignoring stored dependencies from incompatible version: %s"
-							(Absolute.to_string deps_path);
+						Log.warn var (fun m->m "Ignoring stored dependencies from incompatible version: %s"
+							(Absolute.to_string deps_path));
 						Lwt.return None
 					)
 					| Invalid_dependency_file -> (
-						log#warn "Ignoring invalid stored dependencies: %s"
-							(Absolute.to_string deps_path);
+						Log.warn var (fun m->m "Ignoring invalid stored dependencies: %s"
+							(Absolute.to_string deps_path));
 						Lwt.return None
 					)
 					| e -> (
-						log#warn "Error loading %s: %s (assuming dirty)"
-							(Absolute.to_string deps_path) (Printexc.to_string e);
+						Log.warn var (fun m->m "Error loading %s: %s (assuming dirty)"
+							(Absolute.to_string deps_path) (Printexc.to_string e));
 						Lwt.return None
 					)
 			) else
@@ -444,7 +446,7 @@ and target_state (target_path:ConcreteBase.t) =
 
 		method deps =
 			let%lwt deps = self#parse_dependencies in
-			log#trace "Loaded serialized state: %a" (Option.print print_obj) deps;
+			Log.trace var CCFormat.Dump.(fun m->m "Loaded serialized state: %a" (option print_obj) deps);
 			Lwt.return deps
 
 		method private with_dependency_lock fn : unit Lwt.t =
@@ -464,9 +466,9 @@ and target_state (target_path:ConcreteBase.t) =
 		method private file_dependency_with ~(mtime:Big_int.t option) ~(checksum:string option) path =
 			let path = ConcreteBase.rebase_to base_path path in
 			let dep = (new file_dependency ~mtime:mtime ~checksum:checksum path) in
-			log#trace "Adding dependency %s -> %a"
+			Log.trace var (fun m->m "Adding dependency %s -> %a"
 				(ConcreteBase.basename target_path |> PathComponent.string_of_name_opt)
-				print_obj dep;
+				print_obj dep);
 			serializable dep
 
 		method add_file_dependency_with ~(mtime:Big_int.t option) ~(checksum:string option) path =
@@ -499,12 +501,12 @@ and target_state (target_path:ConcreteBase.t) =
 		method perform_build (buildable:Buildable.t) block : bool Lwt.t =
 			let exe = Buildable.script buildable in
 			assert (Sys.file_exists (Absolute.to_string exe));
-			log#trace "perform_build %s" (ConcreteBase.to_string target_path);
+			Log.trace var (fun m->m "perform_build %s" (ConcreteBase.to_string target_path));
 
 			(* TODO: quicker mtime-based check *)
 			let still_needs_build = (fun deps ->
-				log#trace "Checking if %s still needs build after releasing lock"
-					(ConcreteBase.to_string target_path);
+				Log.trace var (fun m->m "Checking if %s still needs build after releasing lock"
+					(ConcreteBase.to_string target_path));
 				match deps with
 					| Some d -> not d#already_built
 					| None -> true
@@ -542,12 +544,8 @@ and target_state (target_path:ConcreteBase.t) =
 				) else Lwt.return false
 			) in
 
-			let%lwt built =
-				Jobserver.run_job (fun () ->
-					(Lazy.force deps_lock)#use Parallel.WriteLock build
-				)
-			in
+			let%lwt built = (Lazy.force deps_lock)#use Parallel.WriteLock build in
 			return built
 	end
 
-let of_buildable b = new target_state (Buildable.target_path b)
+let of_buildable ~var b = new target_state ~var (Buildable.target_path b)

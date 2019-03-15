@@ -1,14 +1,23 @@
 ; vim: set syntax=lisp commentstring=;\ %s:
 
 (library
- (name gup)
- (modules :standard \ main)
- (libraries batteries unix cryptokit extunix lwt lwt.unix)
- (preprocess
-  (pps lwt_ppx)))
+	(name gup)
+	(modules :standard \ main)
+	(libraries
+		batteries
+		containers
+		unix
+		cryptokit
+		extunix
+		logs
+		lwt
+		lwt.unix
+	)
+	(preprocess (pps ppx_deriving_protobuf lwt_ppx))
+)
 
 (executable
- (name main)
- (public_name gup)
- (libraries gup)
- (modules main))
+	(name main)
+	(public_name gup)
+	(libraries gup)
+	(modules main))
