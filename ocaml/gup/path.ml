@@ -73,7 +73,7 @@ module Make(Unix:UNIX) = struct
 		let to_string p = p
 		let _map fn = fn
 		let lift fn = fn
-		let compare = Pervasives.compare
+		let compare = String.compare
 		let basename path = match (Filename.basename path) with
 			| s when s = PathString_.root -> None (* only happens for root path *)
 			| other -> Some other
@@ -138,6 +138,7 @@ module Make(Unix:UNIX) = struct
 		val string_of_name_opt : name option -> string
 		val relative_of_name : name -> Relative.t
 		val relative_of_name_opt : name option -> Relative.t
+		val compare_name : name -> name -> int
 		val relative : t -> Relative.t
 		val join : t list -> Relative.t
 		val join_names : name list -> Relative.t
@@ -162,6 +163,7 @@ module Make(Unix:UNIX) = struct
 
 		let string_of_name s = s
 		let string_of_name_opt s = s |> Option.map string_of_name |> Option.default ""
+		let compare_name = String.compare
 		let _cast s = s
 		let lift fn = fn
 		let relative = Relative._cast % to_string
@@ -255,6 +257,8 @@ module Make(Unix:UNIX) = struct
 		let from_root : Absolute.t -> t = fun path ->
 			(Concrete_.root, Absolute.rootless path)
 
+		let compare = CCPair.compare Concrete_.compare Relative.compare
+
 		let concat_from : Concrete_.t ->  PathString.t -> t = fun base -> function
 			| `absolute path -> (Concrete_.root, Absolute.rootless path)
 			| `relative path -> (base, path)
@@ -264,7 +268,7 @@ module Make(Unix:UNIX) = struct
 
 	module ConcreteBase_ = struct
 		type t = Concrete_.t * PathComponent.name option
-		let compare = Pervasives.compare
+		let compare = CCPair.compare Concrete_.compare (CCOpt.compare PathComponent.compare_name)
 		let make_named : Concrete_.t -> PathComponent.name option -> t = fun base path -> (base, path)
 		let dirname : t -> Concrete_.t = fun (a,_) -> a
 		let basename : t -> PathComponent.name option = fun (_,b) -> b

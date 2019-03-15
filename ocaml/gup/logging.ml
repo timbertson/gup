@@ -30,6 +30,12 @@ let color_for colors lvl =
 	| Info    -> colors.green
 	| _ -> ""
 
+let style_for colors lvl =
+	let open Logs in
+	match lvl with
+	| Error | Warning | Info -> colors.bold
+	| _ -> ""
+
 let report colors apply ~over k user_msgf =
 	let k (_:Format.formatter) = over (); k () in
 	let k ppf = Format.kfprintf k ppf "%s\n" colors.reset in
@@ -39,7 +45,7 @@ let default_formatter colors ppf =
 	{ Logs.report = (fun _src level ->
 		report colors (fun ~indent k fmt ->
 			Format.kfprintf k ppf ("%sgup %s%s" ^^ fmt)
-				(color_for colors level) indent (colors.bold)
+				(color_for colors level) indent (style_for colors level)
 		)
 	)}
 
@@ -49,7 +55,7 @@ let trace_formatter colors ppf =
 		report colors (fun ~indent k fmt ->
 			Format.kfprintf k ppf ("%s[%d %-11s|%5s] %s%s" ^^ fmt)
 				(color_for colors level) pid (Logs.Src.name src)
-				(Logs.level_to_string (Some level)) indent colors.bold
+				(Logs.level_to_string (Some level)) indent (style_for colors level)
 		)
 	)}
 
@@ -57,7 +63,7 @@ let test_formatter colors ppf =
 	{ Logs.report = (fun _src level ->
 		report colors (fun ~indent k fmt ->
 			Format.kfprintf k ppf ("# %s%a %s%s" ^^ fmt)
-				(color_for colors level) Logs.pp_level level indent colors.bold
+				(color_for colors level) Logs.pp_level level indent (style_for colors level)
 		)
 	)}
 
