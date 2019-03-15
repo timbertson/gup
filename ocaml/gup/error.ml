@@ -1,6 +1,7 @@
 exception Unbuildable of string
 exception BuildCancelled
 exception Safe_exception of (string * string list ref)
+exception Target_failed of string * int option * string option
 
 (** Convenient way to create a new [Safe_exception] with no initial context. *)
 let raise_safe fmt =

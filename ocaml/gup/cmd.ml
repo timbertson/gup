@@ -4,43 +4,33 @@ open Extlib
 open Path
 open Error
 
-let log = Logging.get_logger "gup.cmd"
+module Log = (val Var.log_module "gup.cmd")
 let exit_error () = exit 2
 
-module Actions =
-struct
+module CmdActions = struct
 	open OptParse
-
-	let _get_parent_target () =
-		let target_var = Var.get("GUP_TARGET") in
-		target_var |> Option.map PathString.parse |> Option.map (function
-			| `relative rel ->
-				let msg = "relative path in $GUP_TARGET: " ^ (Relative.to_string rel) in
-				raise (Invalid_argument msg)
-			| `absolute p -> ConcreteBase._cast (Absolute.to_string p)
-		)
 
 	let ignore_hidden dirs =
 		dirs |> List.filter (fun dir ->
 			not @@ PathComponent.lift String.starts_with dir "."
 		)
 	
-	let _assert_parent_target action =
-		match _get_parent_target () with
+	let _assert_parent_target ~var action =
+		match var.Var.parent_target with
 			| None ->
-				log#warn "%s was used outside of a gup target; ignoring" action;
+				Log.warn var (fun m->m "%s was used outside of a gup target; ignoring" action);
 				Pervasives.exit 0
 			| Some p -> p
 
 	let expect_no args =
 		if List.length args > 0 then Error.raise_safe "no arguments expected"
 
-	let _init_path () =
+	let _init_path ~var () =
 		(* ensure `gup` is present on $PATH *)
 		let progname = Array.get Sys.argv 0 in
-		log#trace "run as: %s" progname;
-		let existing_path = Var.get_or "PATH" "" in
-		let gup_in_path = Var.get_or "GUP_IN_PATH" "0" in
+		Log.trace var (fun m->m "run as: %s" progname);
+		let existing_path = Var_global.get_or "PATH" "" in
+		let gup_in_path = Var_global.get_or "GUP_IN_PATH" "0" in
 		Unix.putenv "GUP_IN_PATH" "1";
 		if String.exists progname Filename.dir_sep && (gup_in_path <> "1") then (
 			(* TODO: (Windows) we should always perform this branch on Windows, regardless of
@@ -48,15 +38,15 @@ struct
 
 			(* gup may have been run as a relative / absolute script - check *)
 			(* whether our directory is in $PATH *)
-			let path_to_prog = ConcreteBase.resolve progname in
+			let path_to_prog = ConcreteBase.resolve ~cwd:var.Var.cwd progname in
 			let bin_dir = ConcreteBase.dirname path_to_prog |> Concrete.to_string in
 			let path_entries : string list = existing_path |> String.nsplit ~by: Util.path_sep in
 			let already_in_path = List.enum path_entries
 				|> Enum.exists ((=) bin_dir) in
 			if already_in_path then
-				log#trace("found `gup` in $PATH")
+				Log.trace var (fun m->m("found `gup` in $PATH"))
 			else (
-				log#trace "`gup` not in $PATH - adding %s" bin_dir;
+				Log.trace var (fun m->m "`gup` not in $PATH - adding %s" bin_dir);
 				Unix.putenv "PATH" @@ bin_dir ^ Util.path_sep ^ existing_path
 			);
 			Lwt.return_unit
@@ -64,113 +54,51 @@ struct
 			Lwt.return_unit
 		)
 	
-	let _report_nobuild path =
-		(if Var.is_root then log#info else log#trace) "%s: up to date" (ConcreteBase.to_string path)
-
-	let build ~update ~jobs ~keep_failed posargs =
-		if Opt.get keep_failed then Var.set_keep_failed_outputs ();
+	let build ~var ~update ~jobs ~keep_failed posargs = (
+		if Opt.get keep_failed then Var_global.set_keep_failed_outputs ();
 		let update = Opt.get update in
-		let%lwt () = _init_path () in
-
-		let jobs = match Opt.get jobs with
-			| 0 -> None
-			| n when n > 0 && n < 1000 -> Some n
-			| _ -> assert false
-		in
 		let posargs = match posargs with [] -> ["all"] | args -> args in
-		Parallel.Jobserver.setup jobs (fun () ->
-			let parent_target = _get_parent_target () in
-			let build_target (path:string) : unit Lwt.t =
-				let path = RelativeFrom.concat_from_cwd (PathString.parse path) in
-				try%lwt
-					let%lwt () = Lwt_option.may (fun parent ->
-						let path = ConcreteBase.resolve_from path in
-						if ConcreteBase.eq path parent then
-							raise_safe "Target `%s` attempted to build itself" (ConcreteBase.to_string path);
-						Lwt.return_unit
-					) parent_target in
 
-					let parent_state = parent_target |> Option.map (fun path ->
-						new State.target_state path
-					) in
-
-					let add_intermediate_link_deps = function
-						| [] -> Lwt.return_unit
-						| links -> parent_state |> Option.map (fun parent_state ->
-							log#trace "adding %d intermediate (symlink) file dependencies"
-								(List.length links);
-							parent_state#add_file_dependencies links
-						) |> Option.default Lwt.return_unit
+		let server = Var_global.rpc_server () in
+		match server with
+			| Some server -> Rpc.connect ~var ~server (fun state ->
+					(* if GUP_RPC is defined, we must also have lease & parent *)
+					let (lease, parent) = match (Var_global.parent_lease (), var.Var.parent_target) with
+						| Some lease, Some parent -> (lease, parent)
+						| lease, parent -> failwith (
+								Printf.sprintf2 "Invalid environment: lease=%a, parent=%a"
+									(Option.print Int.print) lease
+									(Option.print String.print) (Option.map ConcreteBase.to_string parent)
+							)
 					in
 
-					let rec build = fun (path:RelativeFrom.t) -> (
-						let open Lwt in
-						let traversed, path = ConcreteBase.traverse_from path in
-						join [
-							add_intermediate_link_deps traversed;
-							let%lwt target = (match Builder.prepare_build path with
-								| Some (`Target target) ->
-									Builder.build ~update target
-										|> Lwt.map (fun (_:bool) -> Some (Recursive.leaf target))
-								| Some (`Symlink_to path) ->
-									(* recurse on destination
-									 * (which will be added as a dep to parent_target)
-									 *)
-									let%lwt () = build path in
-									Lwt.return_none
-								| None -> begin
-									if update && (ConcreteBase.lexists path) then (
-										_report_nobuild path;
-										Lwt.return None
-									) else (
-										raise (Error.Unbuildable (ConcreteBase.to_string path))
-									)
-								end
-							) in
-							parent_state |> Lwt_option.may (fun (parent_state:State.target_state) ->
-								let%lwt mtime = Util.get_mtime (ConcreteBase.to_string path)
-								and checksum = target |> Lwt_option.bind (fun target ->
-									(State.of_buildable target)#deps |> Lwt.map (fun deps ->
-										Option.bind deps (fun deps -> deps#checksum)
-									)
-								) in
-								parent_state#add_file_dependency_with ~checksum ~mtime:mtime path
-							);
-						]
-					) in
-					build path
-				with
-					| Error.BuildCancelled -> Lwt.return_unit
-					| err -> (
-						begin match err with
-							| Builder.Target_failed (path, status, tempfile) ->
-								let status_desc = match status with
-									| None -> ""
-									| Some i -> " with exit status " ^ (string_of_int i)
-								in
-								let tempfile_desc = match tempfile with
-									| None -> ""
-									| Some path -> " (keeping " ^ path ^ " for inspection)"
-								in
-								log#error "Target `%s` failed%s%s" path status_desc tempfile_desc;
-							| _ -> ()
-						end;
-						(* once one build fails, we tell the `State` module to just raise BuildCancelled for all
-						* builds which have not yet started *)
-						State.cancel_all_future_builds ();
-						raise err
-					)
-			in
-			List.map build_target posargs |> Lwt.join
-		)
+					let%lwt built = Rpc.build ~lease ~state {
+						update = true;
+						parent = parent |> Path.ConcreteBase.to_string;
+						cwd = var.Var.cwd |> Path.Concrete.to_string;
+						targets = posargs;
+						indent = var.Var.indent;
+					} in
+					if not built then raise BuildCancelled;
+					Lwt.return_unit
+				)
+			| None -> (
+				let%lwt () = _init_path ~var () in
+
+				let jobs = Opt.get jobs in
+				Rpc.Server.setup ~var jobs (fun job_info ->
+					Action.build_all ~job_info ~var ~update posargs
+				)
+			)
+	)
 	
-	let mark_ifcreate args =
+	let mark_ifcreate ~var args =
 		if List.length args < 1 then Error.raise_safe "at least one file expected";
-		let parent_target = _assert_parent_target "--ifcreate" in
-		let parent_state = new State.target_state parent_target in
+		let parent_target = _assert_parent_target ~var "--ifcreate" in
+		let parent_state = new State.target_state ~var parent_target in
 		args |> Lwt_list.iter_s (fun path_str ->
-			let path = RelativeFrom.concat_from_cwd (PathString.parse path_str) in
-			let traversed, final_path = Concrete.traverse_from path in
+			let path = RelativeFrom.concat_from var.Var.cwd (PathString.parse path_str) in
+			let traversed, final_path = Concrete.traverse_relfrom path in
 			if Concrete.lexists final_path then
 				Error.raise_safe "File already exists: %s" (path_str)
 			;
@@ -180,21 +108,21 @@ struct
 			]
 		)
 	
-	let mark_contents targets =
-		let parent_target = _assert_parent_target "--contents" in
+	let mark_contents ~var targets =
+		let parent_target = _assert_parent_target ~var "--contents" in
 		let checksum =
 			if List.length targets = 0 then (
 				if (Unix.isatty Unix.stdin) then Error.raise_safe "stdin is a TTY";
-				Checksum.from_stream IO.stdin
+				Checksum.from_stream ~var IO.stdin
 			) else (
-				Checksum.from_files targets
+				Checksum.from_files ~var targets
 			)
 		in
-		(new State.target_state parent_target)#add_checksum checksum
+		(new State.target_state ~var parent_target)#add_checksum checksum
 
-	let mark_leave args =
+	let mark_leave ~var args =
 		expect_no args;
-		let parent_target = _assert_parent_target "--leave" |> ConcreteBase.to_string in
+		let parent_target = _assert_parent_target ~var "--leave" |> ConcreteBase.to_string in
 		let open Unix in
 		let kind = try Some ((lstat parent_target).st_kind)
 		with Unix_error(ENOENT, _, _) -> None in
@@ -204,10 +132,10 @@ struct
 		in
 		Lwt.return_unit
 
-	let mark_always args =
+	let mark_always ~var args =
 		expect_no args;
-		let parent_target = _assert_parent_target "--always" in
-		(new State.target_state parent_target)#mark_always_rebuild
+		let parent_target = _assert_parent_target ~var "--always" in
+		(new State.target_state ~var parent_target)#mark_always_rebuild
 	
 	let clean
 		~(force:bool Opt.t)
@@ -215,6 +143,7 @@ struct
 
 		~(metadata:bool Opt.t)
 		~(interactive:bool Opt.t)
+		~var
 		dests
 	=
 		let metadata = Opt.get metadata in
@@ -259,7 +188,7 @@ struct
 						built_targets |> List.iter (fun dep ->
 							let dep_name = PathComponent.string_of_name dep in
 							let path = (Filename.concat base dep_name) in
-							let buildscript = Gupfile.find_builder (ConcreteBase.resolve path) in
+							let buildscript = Gupfile.find_builder ~var (ConcreteBase.resolve ~cwd:var.Var.cwd path) in
 							buildscript |> Option.may (fun _ ->
 								if List.mem dep files then
 									rm ~isfile:true path
@@ -280,48 +209,49 @@ struct
 		;
 		Lwt.return_unit
 
-	let _list_targets base =
+	let _list_targets ~var base =
 		let basedir = (Option.default "." base) in
 		let add_prefix = begin match base with
 			| Some base -> fun file -> Filename.concat base file
 			| None -> identity
 		end in
-		Gupfile.buildable_files_in (Concrete.resolve basedir) |> Enum.iter (fun f ->
+		let resolved = Concrete.resolve ~cwd:var.Var.cwd basedir in
+		Gupfile.buildable_files_in ~var resolved |> Enum.iter (fun f ->
 			print_endline (add_prefix f)
 		)
 
-	let list_targets dirs =
+	let list_targets ~var dirs =
 		if List.length dirs > 1 then
 			raise_safe "Too many arguments"
 		;
 		let base = List.headOpt dirs in
-		_list_targets base;
+		_list_targets ~var base;
 		Lwt.return_unit
 
-	let test_buildable args =
+	let test_buildable ~var args =
 		begin match args with
 			| [target] ->
-					let target = ConcreteBase.resolve target in
-					let builder = Gupfile.find_builder target in
+					let target = ConcreteBase.resolve ~cwd:var.Var.cwd target in
+					let builder = Gupfile.find_builder ~var target in
 					exit (if (Option.is_some builder) then 0 else 1)
 			| _ -> raise_safe "Exactly one argument expected"
 		end
 
-	let test_dirty args =
+	let test_dirty ~var args =
 		begin match args with
 			| [] -> raise_safe "At least one argument expected"
 			| args ->
 				let rec is_dirty path =
-					let target = Builder.prepare_build path in
+					let target = Builder.prepare_build ~var path in
 					match target with
-						| Some (`Target target) -> Builder.is_dirty target
-						| Some (`Symlink_to dest) -> is_dirty (ConcreteBase.resolve_from dest)
+						| Some (`Target target) -> Builder.is_dirty ~var target
+						| Some (`Symlink_to dest) -> is_dirty (ConcreteBase.resolve_relfrom dest)
 						| None -> Lwt.return_false
 				in
 				let%lwt dirty =
 					try%lwt
 						let%lwt (_dirty:string) = args |> Lwt_list.find_s (fun path ->
-							is_dirty (ConcreteBase.resolve path)
+							is_dirty (ConcreteBase.resolve ~cwd:var.Var.cwd path)
 						) in
 						Lwt.return_true
 					with Not_found -> Lwt.return_false
@@ -329,12 +259,12 @@ struct
 				exit (if dirty then 0 else 1)
 		end
 
-	let print_version args =
+	let print_version ~var:_ args =
 		expect_no args;
 		print_endline Version.version;
 		Lwt.return_unit
 
-	let list_features args =
+	let list_features ~var:_ args =
 		expect_no args;
 		let features = [
 			"version " ^ Version.version;
@@ -344,7 +274,7 @@ struct
 		List.iter print_endline features;
 		Lwt.return_unit
 
-	let complete_args args =
+	let complete_args ~var args =
 		let dir = List.headOpt args in
 
 		let get_dir arg =
@@ -355,7 +285,7 @@ struct
 		in
 
 		let dir = Option.bind dir get_dir in
-		_list_targets dir;
+		_list_targets ~var dir;
 
 		(* also add dirs, since they _may_ contain targets *)
 		let root = Option.default "." dir in
@@ -381,9 +311,9 @@ module Options =
 struct
 	open OptParse
 	let update = StdOpt.store_true ()
-	let jobs = StdOpt.int_option ~default:0 ()
+	let jobs = StdOpt.int_option ~default:1 ()
 	let trace = StdOpt.store_true ()
-	let verbosity = ref Var.default_verbosity
+	let verbosity = ref Var_global.default_verbosity
 	let quiet = StdOpt.decr_option   ~dest:verbosity ()
 	let verbose = StdOpt.incr_option ~dest:verbosity ()
 	let interactive = StdOpt.store_true ()
@@ -391,7 +321,7 @@ struct
 	let keep_failed = StdOpt.store_true ()
 	let force = StdOpt.store_true ()
 	let metadata = StdOpt.store_true ()
-	let action = ref (Actions.build ~update:update ~jobs:jobs ~keep_failed)
+	let action = ref (CmdActions.build ~update:update ~jobs:jobs ~keep_failed)
 	let clean_mode () =
 		match (Opt.get force, Opt.get dry_run) with
 			| (true, false) -> `Force
@@ -434,67 +364,67 @@ struct
 		add options ~short_name:'n' ~long_name:"dry-run" ~help:"Just print files that would be removed" dry_run;
 		add options ~short_name:'f' ~long_name:"force" ~help:"Actually remove files" force;
 		add options ~short_name:'m' ~long_name:"metadata" ~help:"Remove .gup metadata directories, but leave targets" metadata;
-		action := Actions.clean ~force:force ~dry_run:dry_run ~metadata:metadata ~interactive:interactive;
+		action := CmdActions.clean ~force:force ~dry_run:dry_run ~metadata:metadata ~interactive:interactive;
 		options
 	;;
 
 	let ifcreate () =
 		let options = OptParser.make ~usage: "Usage: gup --ifcreate [file [...]]" () in
-		action := Actions.mark_ifcreate;
+		action := CmdActions.mark_ifcreate;
 		options
 	;;
 
 	let contents () =
 		let options = OptParser.make ~usage: "Usage: gup --contents [file [...]]" () in
-		action := Actions.mark_contents;
+		action := CmdActions.mark_contents;
 		options
 	;;
 
 	let always () =
 		let options = OptParser.make ~usage: "Usage: gup --always" () in
-		action := Actions.mark_always;
+		action := CmdActions.mark_always;
 		options
 	;;
 
 	let leave () =
 		let options = OptParser.make ~usage: "Usage: gup --leave" () in
-		action := Actions.mark_leave;
+		action := CmdActions.mark_leave;
 		options
 	;;
 
 	let list_targets () =
 		let options = OptParser.make ~usage: "Usage: gup --targets [directory]" () in
-		action := Actions.list_targets;
+		action := CmdActions.list_targets;
 		options
 	;;
 
 	let test_buildable () =
 		let options = OptParser.make ~usage: "Usage: gup --buildable <target>" () in
-		action := Actions.test_buildable;
+		action := CmdActions.test_buildable;
 		options
 	;;
 
 	let test_dirty () =
 		let options = OptParser.make ~usage: "Usage: gup --dirty [target [...]]" () in
-		action := Actions.test_dirty;
+		action := CmdActions.test_dirty;
 		options
 	;;
 
 	let complete_args () =
 		let options = OptParser.make ~usage: "Usage: gup --complete-command idx [args]" () in
-		action := Actions.complete_args;
+		action := CmdActions.complete_args;
 		options
 	;;
 
 	let list_features () =
 		let options = OptParser.make ~usage: "Usage: gup --features" () in
-		action := Actions.list_features;
+		action := CmdActions.list_features;
 		options
 	;;
 
 	let print_version () =
 		let options = OptParser.make ~usage: "Usage: gup --version" () in
-		action := Actions.print_version;
+		action := CmdActions.print_version;
 		options
 	;;
 end
@@ -513,14 +443,14 @@ let _init_logging verbosity =
 			lvl := Logging.Trace
 		end;
 
-	if Var.is_test_mode then
+	if Var_global.is_test_mode then
 		begin
 			lvl := Logging.Trace;
 			fmt := Logging.test_formatter
 		end;
 	
 	(* persist for child processes *)
-	Var.set_verbosity verbosity;
+	Var_global.set_verbosity verbosity;
 
 	Logging.set_level !lvl;
 	Logging.set_formatter !fmt
@@ -546,24 +476,23 @@ let main () =
 		| _ -> firstarg := 1; Options.main ()
 		in
 
+	let var = Var.global () in
 	try (
 		let posargs = OptParse.OptParser.parse p ~first:!firstarg Sys.argv in
-
 		_init_logging !Options.verbosity;
-		Var.set_trace (OptParse.Opt.get Options.trace);
-
-		Lwt_main.run (!Options.action posargs)
+		Var_global.set_trace (OptParse.Opt.get Options.trace);
+		Lwt_main.run (!Options.action ~var posargs)
 	) with
 		| Error.Unbuildable path -> (
-				log#error "Don't know how to build %s" path;
+				Log.err var (fun m -> m"Don't know how to build %s" path);
 				exit_error ()
 		)
-		| Builder.Target_failed _ -> (
+		| Error.Target_failed _ -> (
 				exit_error ()
 		)
 		| Error.Safe_exception (msg, _ctx) -> (
 				(* TODO: context?*)
-				log#error "%s" msg;
+				Log.err var (fun m->m"%s" msg);
 				exit_error ()
 		)
 ;;

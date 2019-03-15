@@ -1,0 +1,2 @@
+#!bash -eu
+gup -u out/1.1.1.1

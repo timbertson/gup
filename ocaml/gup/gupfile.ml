@@ -31,16 +31,16 @@ type builder_suffix =
 	| Empty
 	| Suffix of Direct.t
 
-let log = Logging.get_logger "gup.gupfile"
+module Log = (val Var.log_module "gup.gupfile")
 let _match_rule_splitter = Str.regexp "\\*+"
 
 let has_gup_extension f = String.lowercase (file_extension f) = ".gup"
 let remove_gup_extension = String.rchop ~n:4
-let extant_file_path path =
+let extant_file_path ~var path =
 	let path_str = Absolute.to_string path in
 	try (
 		match Sys.is_directory path_str with
-			| true -> log#trace "skipping directory: %s" path_str; None
+			| true -> Log.trace var (fun m->m "skipping directory: %s" path_str); None
 			| false -> Some path
 	) with Sys_error _ -> None
 
@@ -122,8 +122,9 @@ class match_rule (original_text:string) =
 			Enum.append declared_targets existing_file_targets
 	end
 
-let print_match_rule out r =
-	Printf.fprintf out "match_rule(%a)" String.print_quoted r#text
+let pp_match_rule : match_rule CCFormat.printer = fun fmt r ->
+	let open CCFormat in
+	within "match_rule(" ")" Dump.string fmt r#text
 
 class match_rules (rules:match_rule list) =
 	let (excludes, includes) = rules |> List.partition (fun rule -> rule#exclude) in
@@ -159,11 +160,13 @@ class match_rules (rules:match_rule list) =
 				)
 	end
 
-let print_match_rules out r =
-	Printf.fprintf out "match_rules(%a)" (List.print print_match_rule) r#rules
+let pp_match_rules : match_rules CCFormat.printer = fun fmt r ->
+	let open CCFormat in
+	within "match_rules(" ")" (Dump.list pp_match_rule) fmt r#rules
 
-let print_gupfile out =
-		(List.print (Tuple2.print String.print_quoted print_match_rules)) out
+let pp_gupfile : (string * match_rules) list CCFormat.printer =
+	let open CCFormat.Dump in
+	list (pair string pp_match_rules)
 
 exception Invalid_gupfile of int * string
 
@@ -215,6 +218,7 @@ let parse_gupfile_at path =
 		Error.raise_safe "Invalid gupfile - %s:%d (%s)" path line reason
 
 class build_candidate
+	(var:Var.t)
 	(root:Concrete.t)
 	(suffix:builder_suffix option) =
 	object (self)
@@ -242,8 +246,8 @@ class build_candidate
 			let target_name = Relative.basename target in
 			let build_basedir = self#_base_path false in
 			let with_extant_guppath fn =
-				Option.bind (self#guppath gupfile |> extant_file_path) (fun path ->
-					log#trace "candidate exists: %s" (Absolute.to_string path);
+				Option.bind (self#guppath gupfile |> extant_file_path ~var) (fun path ->
+					Log.trace var (fun m->m "candidate exists: %s" (Absolute.to_string path));
 					fn path
 				)
 			in
@@ -265,7 +269,7 @@ class build_candidate
 				| Gupfile, Some target_name ->
 					with_extant_guppath (fun path ->
 						let rules = parse_gupfile_at path in
-						log#trace "Parsed gupfile -> %a" print_gupfile rules;
+						Log.trace var (fun m->m "Parsed gupfile -> %a" pp_gupfile rules);
 						(* always use `/` as path sep in gupfile patterns *)
 						let match_target = canonicalize_target_name target in
 
@@ -273,14 +277,14 @@ class build_candidate
 							if String.starts_with script_name "!" then (
 								let script_name = String.lchop ~n:1 script_name in
 								let script = match Util.which script_name with
-									| Some script_path -> script_path |> PathString.parse |> PathString.to_absolute
+									| Some script_path -> script_path |> PathString.parse |> PathString.to_absolute ~cwd:var.Var.cwd
 									| None -> Error.raise_safe "Build command not found on PATH: %s\n     %s(specified in %s)"
-										script_name Var.indent (Absolute.to_string path)
+										script_name Logging.indent_str (Absolute.to_string path)
 								in
 								Recursive.Terminal (Buildable.make ~script ~target)
 							) else (
 								let script_path = PathString.parse script_name in
-								let concrete = Buildable.make ~script:(Absolute.concat_from_dir path script_path) ~target in
+								let concrete = Buildable.make ~script:(Absolute.concat_from path script_path) ~target in
 								let buildscript_builder = (List.enum rules) |> Enum.filter_map (fun (builder_name, ruleset) ->
 									if ruleset#matches_exactly script_name then
 										let target = RelativeFrom.concat_from basedir script_path in
@@ -360,7 +364,7 @@ let build_sources (dir:Concrete.t) : build_source Enum.t =
 	]
 
 
-let possible_builders (path:ConcreteBase.t) : (build_candidate * gupfile * Relative.t) Enum.t =
+let possible_builders ~var (path:ConcreteBase.t) : (build_candidate * gupfile * Relative.t) Enum.t =
 	let filename = ConcreteBase.basename path in
 	let direct_gupfile = Gupscript ((PathComponent.string_of_name_opt filename) ^ ".gup") in
 
@@ -368,9 +372,9 @@ let possible_builders (path:ConcreteBase.t) : (build_candidate * gupfile * Relat
 	build_sources (ConcreteBase.dirname path) |> Enum.map (fun source ->
 		match source with
 			| Direct (root, suff) ->
-					(new build_candidate root suff, direct_gupfile, filename)
+					(new build_candidate var root suff, direct_gupfile, filename)
 			| Indirect (root, suff, target) ->
-					(new build_candidate root suff, Gupfile, (Relative.concat target filename))
+					(new build_candidate var root suff, Gupfile, (Relative.concat target filename))
 	)
 
 (* Returns all targets in `dir` that are _definitely_ buildable.
@@ -378,7 +382,7 @@ let possible_builders (path:ConcreteBase.t) : (build_candidate * gupfile * Relat
  * that are also buildable, but obviously generating an infinite
  * list of _possible_ names is not useful.
  *)
-let buildable_files_in (dir:Concrete.t) : string Enum.t =
+let buildable_files_in ~var (dir:Concrete.t) : string Enum.t =
 	let readdir dir = try
 		Sys.readdir dir
 	with
@@ -389,7 +393,7 @@ let buildable_files_in (dir:Concrete.t) : string Enum.t =
 		match source with
 			| Direct (root, suff) ->
 					(* direct targets are just <name>.gup *)
-					let candidate = new build_candidate root suff in
+					let candidate = new build_candidate var root suff in
 					let base_path = candidate#base_path in
 					let files = (Absolute.lift readdir) base_path in
 					let files = files
@@ -399,8 +403,8 @@ let buildable_files_in (dir:Concrete.t) : string Enum.t =
 					in
 					files |> Enum.map remove_gup_extension
 			| Indirect (root, suff, target_prefix) ->
-					let candidate = new build_candidate root suff in
-					let guppath = candidate#guppath Gupfile |> extant_file_path in
+					let candidate = new build_candidate var root suff in
+					let guppath = candidate#guppath Gupfile |> extant_file_path ~var in
 					let get_targets guppath : string Enum.t =
 						parse_gupfile_at guppath
 							|> List.enum
@@ -425,8 +429,8 @@ let buildable_files_in (dir:Concrete.t) : string Enum.t =
 		with Not_found -> raise Enum.No_more_elements
 	)
 
-let find_builder path : Buildable.t Recursive.t option =
-	possible_builders path |> Enum.filter_map (fun (candidate, gupfile, target) ->
+let find_builder ~var path : Buildable.t Recursive.t option =
+	possible_builders ~var path |> Enum.filter_map (fun (candidate, gupfile, target) ->
 		candidate#builder_for gupfile target
 	)
 	|> Enum.get

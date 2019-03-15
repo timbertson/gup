@@ -1,11 +1,8 @@
 open Error
 open Batteries
 
-let log = Logging.get_logger "gup.path"
-
 module RealUnix = Unix
 module type UNIX = sig
-	val getcwd : unit -> string
 	val readlink : string -> string
 end
 
@@ -23,9 +20,6 @@ module Make(Unix:UNIX) = struct
 		let join = String.concat Filename.dir_sep
 
 		let root = Filename.dir_sep (* TODO: windows *)
-
-		(* gup doesn't chdir, so this is safe to cache *)
-		let cwd = Lazy.from_fun Unix.getcwd
 	end
 
 	module PathAssertions = struct
@@ -34,23 +28,26 @@ module Make(Unix:UNIX) = struct
 		let noop p = p
 
 		(* NOTE: these checks are slow, so we only enable them in tests *)
-		let concrete =
-			if Var.is_test_mode then (fun p ->
-				let p = absolute p in
-				if Zeroinstall_utils.abspath p <> p then raise_safe "Not a concrete path: %s" p else p
-			) else noop
-
-		let direct =
-			if Var.is_test_mode then (fun p ->
-				let p = relative p in
-				let parts = PathString_.split p in
-				let is_direct = try
-					let is_indirect_component = (fun part -> part = Filename.current_dir_name || part = Filename.parent_dir_name) in
-					let (_:string) = List.find is_indirect_component parts in
-					false
-				with Not_found -> p <> "" in
-				if not is_direct then raise_safe "Not a direct path: %s" p else p
-			) else noop
+		let (concrete, direct) =
+			if Var_global.is_test_mode then (
+				(* concrete *) (fun p ->
+					let p = absolute p in
+					(* this is only correct when the process cwd is the contextual cwd of the build, but we only use this
+					 * in tests so it'll do *)
+					let cwd = Lazy.force Var_global.cwd in
+					if Zeroinstall_utils.abspath ~cwd p <> p then raise_safe "Not a concrete path: %s" p else p
+				),
+				(* direct *) (fun p ->
+					let p = relative p in
+					let parts = PathString_.split p in
+					let is_direct = try
+						let is_indirect_component = (fun part -> part = Filename.current_dir_name || part = Filename.parent_dir_name) in
+						let (_:string) = List.find is_indirect_component parts in
+						false
+					with Not_found -> p <> "" in
+					if not is_direct then raise_safe "Not a direct path: %s" p else p
+				)
+			) else (noop, noop)
 	end
 
 	module type PATH = sig
@@ -123,7 +120,7 @@ module Make(Unix:UNIX) = struct
 		let rootless : t -> Relative.t = fun path ->
 			Relative._cast (PathString_.ltrim (to_string path))
 
-		let concat_from_dir : t -> [`absolute of t | `relative of Relative.t ] -> t = fun base -> function
+		let concat_from : t -> [`absolute of t | `relative of Relative.t ] -> t = fun base -> function
 			| `absolute abs -> abs
 			| `relative rel -> concat (dirname base) rel
 	end
@@ -189,6 +186,26 @@ module Make(Unix:UNIX) = struct
 			| name -> `name (name_of_string name)
 	end
 
+	module Concrete_ = struct
+		module Super = TypedPath(struct
+			let assert_valid = PathAssertions.concrete
+		end)
+		include Super
+		let absolute = Absolute._cast % to_string
+		let root = _cast PathString_.root
+		let dirname : t -> t = _map (Filename.dirname)
+		let split : t -> PathComponent.name list = fun path ->
+			(* cast is safe since concrete path cannot have . or .. components,
+			 * and str.split removes ignores leading slash *)
+			Super.split path |> List.map (PathComponent._cast)
+
+		let concat : t -> Relative.t -> Absolute.t = fun base rel ->
+			Absolute._cast (Filename.concat (to_string base) (Relative.to_string rel))
+
+		let basename : t -> PathComponent.name option = fun path ->
+			Super.basename path |> Option.map PathComponent.name_of_string
+	end
+
 	module PathString = struct
 		include PathString_
 		type t = [ `absolute of Absolute.t | `relative of Relative.t ]
@@ -199,10 +216,10 @@ module Make(Unix:UNIX) = struct
 				then `relative (Relative._cast path)
 				else `absolute (Absolute._cast path)
 
-		let to_absolute : t -> Absolute.t = function
+		let to_absolute : cwd:Concrete_.t -> t -> Absolute.t = fun ~cwd p -> match p with
 			| `absolute p -> p
 			| `relative p ->
-				let cwd = Absolute._cast (Lazy.force cwd) in
+				let cwd = Concrete_.absolute cwd in
 				Absolute.concat cwd p
 
 		(* let join = Relative.of_string % PathString_.join *)
@@ -232,36 +249,16 @@ module Make(Unix:UNIX) = struct
 			_walk root
 	end
 
-	module Concrete_ = struct
-		module Super = TypedPath(struct
-			let assert_valid = PathAssertions.concrete
-		end)
-		include Super
-		let absolute = Absolute._cast % to_string
-		let root = _cast PathString.root
-		let cwd () = _cast (Lazy.force PathString.cwd)
-		let dirname : t -> t = _map (Filename.dirname)
-		let split : t -> PathComponent.name list = fun path ->
-			(* cast is safe since concrete path cannot have . or .. components,
-			 * and str.split removes ignores leading slash *)
-			Super.split path |> List.map (PathComponent._cast)
-
-		let concat : t -> Relative.t -> Absolute.t = fun base rel ->
-			Absolute._cast (Filename.concat (to_string base) (Relative.to_string rel))
-
-		let basename : t -> PathComponent.name option = fun path ->
-			Super.basename path |> Option.map PathComponent.name_of_string
-	end
 
 	module RelativeFrom_ = struct
 		type t = Concrete_.t * Relative.t
+		let from_root : Absolute.t -> t = fun path ->
+			(Concrete_.root, Absolute.rootless path)
+
 		let concat_from : Concrete_.t ->  PathString.t -> t = fun base -> function
 			| `absolute path -> (Concrete_.root, Absolute.rootless path)
 			| `relative path -> (base, path)
 
-		let concat_from_cwd : PathString.t -> t = function
-			| `absolute path -> (Concrete_.root, Absolute.rootless path)
-			| `relative path -> (Concrete_.cwd (), path)
 		let make (basedir:Concrete_.t) (path:Relative.t) : t = (basedir, path)
 	end
 
@@ -361,7 +358,7 @@ module Make(Unix:UNIX) = struct
 			| name :: remaining -> (continue base name remaining)
 		)
 
-		let _make_traverse_from:
+		let _make_traverse_relfrom:
 				'result. ('result _traverser) -> RelativeFrom_.t -> (ConcreteBase_.t list * 'result) =
 			(fun traverser -> fun path ->
 				let links_rev = ref [] in
@@ -370,16 +367,16 @@ module Make(Unix:UNIX) = struct
 				(List.rev !links_rev, dest)
 			)
 
-		let traverse_from : RelativeFrom_.t -> (ConcreteBase_.t list * t) = _make_traverse_from _traverser
+		let traverse_relfrom : RelativeFrom_.t -> (ConcreteBase_.t list * t) = _make_traverse_relfrom _traverser
 
-		let resolve_from : RelativeFrom_.t -> t = _traverser (ignore)
+		let resolve_relfrom : RelativeFrom_.t -> t = _traverser (ignore)
 
 		let resolve_abs : Absolute.t -> t = fun path ->
-			resolve_from (RelativeFrom_.make root (Absolute.rootless path))
+			resolve_relfrom (RelativeFrom_.make root (Absolute.rootless path))
 
-		let resolve : string -> t = fun path ->
-			let path = RelativeFrom_.concat_from_cwd (PathString.parse path) in
-			resolve_from path
+		let resolve : cwd:Concrete_.t -> string -> t = fun ~cwd path ->
+			let path = RelativeFrom_.concat_from cwd (PathString.parse path) in
+			resolve_relfrom path
 	end
 
 	module ConcreteBase = struct
@@ -400,15 +397,15 @@ module Make(Unix:UNIX) = struct
 				| name :: remaining -> continue base name remaining
 			)
 
-		let traverse_from : RelativeFrom_.t -> (t list * t) = Concrete._make_traverse_from _traverser
+		let traverse_relfrom : RelativeFrom_.t -> (t list * t) = Concrete._make_traverse_relfrom _traverser
 
-		let resolve_from : RelativeFrom_.t -> t = _traverser (ignore)
+		let resolve_relfrom : RelativeFrom_.t -> t = _traverser (ignore)
 
-		let resolve : string -> t = fun path ->
-			let path = RelativeFrom_.concat_from_cwd (PathString.parse path) in
-			resolve_from path
+		let resolve : cwd:Concrete_.t -> string -> t = fun ~cwd path ->
+			resolve_relfrom (RelativeFrom_.concat_from cwd (PathString.parse path))
 
-		let resolve_abs : Absolute.t -> t = Absolute.lift resolve
+		let resolve_abs : Absolute.t -> t = fun path ->
+			resolve_relfrom (RelativeFrom_.from_root path)
 
 		let rebase_to (newbase:Concrete.t) ((base, name):ConcreteBase_.t) : RelativeFrom_.t =
 			let base_list = Concrete.split base in
@@ -434,7 +431,7 @@ module Make(Unix:UNIX) = struct
 		let base : t -> Concrete.t = fun (base, _) -> base
 		let to_field : t -> string = fun path -> Relative.to_string (relative path)
 		let of_field ~basedir path =
-			(* log#trace "making RelativeFrom from %s, %s" (Concrete.to_string basedir) (path); *)
+			(* Log.trace var (fun m->m "making RelativeFrom from %s, %s" (Concrete.to_string basedir) (path)); *)
 			make basedir (Relative.of_string path)
 
 		let absolute : t -> Absolute.t = fun (base, path) ->
@@ -454,21 +451,3 @@ module Make(Unix:UNIX) = struct
 end
 
 include Make(Unix)
-
-module Var = struct
-	include Var
-	let (run_id, root_cwd) =
-		if Var.is_root then
-			begin
-				let runid = Big_int.to_string (Util.int_time (Unix.gettimeofday ()))
-				and root = Sys.getcwd () in
-				Unix.putenv "GUP_RUNID" runid;
-				Unix.putenv "GUP_ROOT" root;
-				(runid, Concrete.of_string root)
-			end
-		else
-			(
-				Unix.getenv "GUP_RUNID",
-				Unix.getenv "GUP_ROOT" |> Concrete.of_string
-			)
-end

@@ -9,11 +9,11 @@ let ($) a b c = a (b c)
 let eq cmp a b = (cmp a b) = 0
 let neq cmp a b = (cmp a b) <> 0
 
-let print_repr out r = String.print out r#repr
-let print_obj out r = r#print out
+let print_repr (out: Format.formatter) r = CCFormat.string out r#repr
+let print_obj (out: Format.formatter) r = r#print out
 
 module EnvironmentMap = struct
-	include Map.Make (String)
+	include StringMap
 	let array env = enum env |> Enum.map (fun (k, v) -> k^"="^v) |> Array.of_enum
 end
 
@@ -59,3 +59,5 @@ module List = struct
 	include Batteries.List
 	let headOpt l = try Some (List.hd l) with Failure _ -> None
 end
+
+let ppf to_s fmt obj = Format.pp_print_string fmt (to_s obj)

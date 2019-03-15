@@ -1,0 +1,5 @@
+compile-main:
+	main.exe
+
+main.exe:
+	out/*

@@ -1,5 +1,5 @@
 open Batteries
-let log = Logging.get_logger "gup.checksum"
+module Log = (val Var.log_module "gup.checksum")
 
 let build fn =
 	let open Cryptokit in
@@ -21,12 +21,12 @@ let nread_ignoring_closed stream len =
 		IO.nread stream len
 	with IO.Input_closed -> raise IO.No_more_input
 
-let from_stream input =
-	log#trace "building checksum from stdin";
+let from_stream ~var input =
+	Log.trace var (fun m->m "building checksum from stdin");
 	build (pump_stream ~nread:nread_ignoring_closed input)
 
-let from_files files =
-	log#trace "building checksum from %a" (List.print String.print_quoted) files;
+let from_files ~var files =
+	Log.trace var CCFormat.Dump.(fun m->m "building checksum from %a" (list string) files);
 	build (fun ctx ->
 		List.enum files |> Enum.iter (fun filename ->
 			File.with_file_in filename (fun input ->

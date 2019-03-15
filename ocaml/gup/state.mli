@@ -9,7 +9,7 @@ type 'a intermediate_dependencies
 
 val cancel_all_future_builds : unit -> unit
 
-class target_state : ConcreteBase.t ->
+class target_state : var:Var.t -> ConcreteBase.t ->
 	object
 		method meta_path: string -> Absolute.t
 		method repr : string
@@ -28,11 +28,11 @@ class target_state : ConcreteBase.t ->
 
 and dependencies : ConcreteBase.t -> base_dependency intermediate_dependencies ->
 	object
-		method is_dirty : Buildable.t -> (RelativeFrom.t -> bool Lwt.t) -> bool Lwt.t
+		method is_dirty : var:Var.t -> Buildable.t -> (RelativeFrom.t -> bool Lwt.t) -> bool Lwt.t
 		method checksum : string option
 		method clobbers : bool
 		method already_built : bool
-		method print : unit IO.output -> unit
+		method print : Format.formatter -> unit
 	end
 
-val of_buildable : Buildable.t -> target_state
+val of_buildable : var:Var.t -> Buildable.t -> target_state
