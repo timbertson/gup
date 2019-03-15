@@ -5,6 +5,7 @@ open Std
  * (relative from the builder's basedir, typically) *)
 module Impl_ : sig
 	type t
+	val compare : t -> t -> int
 	val make : script:Absolute.t -> target:RelativeFrom.t -> t
 	val target_repr : t -> string
 	val target_path : t -> ConcreteBase.t
@@ -13,6 +14,7 @@ module Impl_ : sig
 	val repr : t -> string
 end = struct
 	type t = Absolute.t * RelativeFrom.t
+	let compare t = CCPair.compare Absolute.compare RelativeFrom.compare t
 	let make ~script ~target = (script, target)
 	let target_repr (_script, target) = RelativeFrom.to_string target
 	let target_path (_script, target) = ConcreteBase.resolve_relfrom target

@@ -8,7 +8,7 @@ open Error
 module Log = (val Var.log_module "gup.action")
 
 let _report_nobuild var path =
-	(if Option.is_some var.Var.parent_target then Log.info else Log.trace) var
+	(if Option.is_some var.Var.parent_target then Log.trace else Log.info) var
 		(fun m ->m "%s: up to date" (ConcreteBase.to_string path))
 
 let build ~lease ~var ~update (path:string) : unit Lwt.t = (

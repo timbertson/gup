@@ -248,8 +248,7 @@ module Server = struct
 					match request with
 						| Build build -> (
 							let open Protocol in
-							Log.info var (fun m->m "got build request: %a" pp_build build);
-
+							Log.debug var (fun m->m "got request: %a" pp_build build);
 							Jobpool.use jobs ~var ~parent:parent_lease (fun lease ->
 								let var = Var.{
 									indent = build.indent;

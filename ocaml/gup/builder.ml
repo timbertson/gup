@@ -52,6 +52,7 @@ let perform_build ~lease ~var ~toplevel (buildable: Buildable.t) = (
 		let env = Unix.environment_map ()
 			|> EnvironmentMap.add "GUP_TARGET" path_str
 			|> Parallel.Jobpool.extend_env ~lease
+			|> Var.extend_env var
 			|> EnvironmentMap.array
 		in
 
@@ -206,36 +207,43 @@ let _build_if_dirty ~lease ~var ~cache ~dry = (
 
 	(* builds a single buildable if its state is dirty *)
 	let rec build_target_if_dirty buildable = (
-		let state = State.of_buildable ~var buildable in
-		Log.trace var (fun m->m "checking whether %s is dirty" state#path_repr);
-		let%lwt deps = state#deps in
-		match deps with
-			| None -> (
-				Log.debug var (fun m->m "DIRTY: %s (is buildable but has no stored deps)" state#path_repr);
-				perform_build buildable
-			)
-			| Some deps -> (
-				if deps#already_built then (
-					Log.trace var (fun m->m "CLEAN: %s has already been built in this invocation" state#path_repr);
-					Lwt.return_false
-				) else (
-					if dry then (
-						(* In order to determine whether this file _may_ be dirty,
-						 * we inject a fake build function which just sets a flag
-						 * if any possibly-dirty dependency needs a build. *)
-						let open Lwt in
-						let child_dirty = ref false in
-						let%lwt dirty = deps#is_dirty ~var buildable (fun path ->
-							let%lwt child_built = build_path_if_dirty path in
-							if child_built then child_dirty := true;
-							return_false (* short-circuit any further checking *)
-						) in
-						return (dirty || !child_dirty)
-					)
-					else (
-						Lwt.bind (deps#is_dirty ~var buildable build_path_if_dirty) (function
-							| true -> perform_build buildable
-							| false -> Lwt.return_false
+		let target_path = Buildable.target_path buildable in
+		with_cached_build target_path (fun () ->
+			Log.debug var (fun m->m "%s [check]"
+				(ConcreteBase.rebase_to Var.root_cwd target_path
+				|> RelativeFrom.relative |> Relative.to_string)
+			);
+			let state = new State.target_state ~var target_path in
+			Log.trace var (fun m->m "checking whether %s is dirty" state#path_repr);
+			let%lwt deps = state#deps in
+			match deps with
+				| None -> (
+					Log.debug var (fun m->m "DIRTY: %s (is buildable but has no stored deps)" state#path_repr);
+					perform_build buildable
+				)
+				| Some deps -> (
+					if deps#already_built then (
+						Log.trace var (fun m->m "CLEAN: %s has already been built in this invocation" state#path_repr);
+						Lwt.return_false
+					) else (
+						if dry then (
+							(* In order to determine whether this file _may_ be dirty,
+							 * we inject a fake build function which just sets a flag
+							 * if any possibly-dirty dependency needs a build. *)
+							let open Lwt in
+							let child_dirty = ref false in
+							let%lwt dirty = deps#is_dirty ~var buildable (fun path ->
+								let%lwt child_built = build_path_if_dirty path in
+								if child_built then child_dirty := true;
+								return_false (* short-circuit any further checking *)
+							) in
+							return (dirty || !child_dirty)
+						)
+						else (
+							Lwt.bind (deps#is_dirty ~var buildable build_path_if_dirty) (function
+								| true -> perform_build buildable
+								| false -> Lwt.return_false
+							)
 						)
 					)
 				)
@@ -256,14 +264,15 @@ let _build_if_dirty ~lease ~var ~cache ~dry = (
 	)
 
 	and build_recursive_if_dirty (buildable: Buildable.t Recursive.t) = (
-		Log.debug var (fun m->m "checking if %a needs to be built" (Recursive.print Buildable.print) buildable);
+		Log.trace var (fun m->m "checking if %a needs to be built" (Recursive.print Buildable.print) buildable);
 		match buildable with
 			| Recursive.Recurse { parent; child = self } ->
 				Lwt.bind (build_recursive_if_dirty parent) (function
 					| true -> perform_build self
 					| false -> build_target_if_dirty self
 				)
-			| Recursive.Terminal self -> build_target_if_dirty self
+			| Recursive.Terminal self ->
+				build_target_if_dirty self
 	) in
 
 	build_recursive_if_dirty
