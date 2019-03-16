@@ -438,16 +438,69 @@ files in `src/` changes.
 You can also pass contents to `gup --contents` via stdin, for pure "stamp" tasks
 where the output is not actually used for anything.
 
-### Other features
+### Builders-as-targets
+
+Gup (as of version 0.8.0) adds explicit support for having generated builders.
+i.e. if you are building a target `x` using `generate-x`, then `generate-x` is
+allowed to be a target itself, and `generate-x` will be both a dependency of
+`x` and also a target.
+
+Why would you want to do that? Compiled buildscripts! `gup` has always supported
+arbitrary executables as builders, but before now it didn't treat any
+builders as possible targets. You would have to `gup -u <buildscript>` explicitly
+in every target which was built by `<buildscript>`, or `gup -u buildscript` as a
+pre-step to the rest of your targets. Both of these solutions are easy to get wrong.
+
+**Big caveat**: In general, `gup` searches quite a few paths in order to determine
+whether a path is a buildable target or just a plain file. In the case of plain
+files this is unavoidable, since gup knows nothing about them.
+
+But to ensure implementation of this advanced feature doesn't impact
+the performance of the typical case, builders-of-builders have an additional
+limitation: they must be declared as a literal path (i.e. not a wildcard match)
+in the same Gupfile as the target(s) they are responsible for building.
+
+That means you cannot have a direct `foo.gup` builder be buildable. Instead, you
+should pick a different name (to avoid confusion), say `make-foo`, and
+write a Gupfile containing:
+
+```
+make-foo:
+	foo
+
+compile-make-foo:
+	make-foo
+```
+
+This is a little awkward, but by requiring that the builder for `make-foo` exists
+in the same Gupfile which defines `make-foo` as a builder, the check for "is this
+builder itself buildable?" becomes essentially free.
+
+### Parallelism
 
 `gup` can build targets in parallel - just pass in the maximum number of
 concurrent tasks after `-j` or `--jobs`.
 
-When `gup` is invoked from `make`, it automatically uses make's existing
-jobserver instead of creating its own. This only works if `make` is at the
-toplevel though - make's jobserver relies on open file descriptors being
-inherited on `exec()` (which is forbidden in some languages), so
-`gup` uses a more robust jobserver when it can.
+Gup's python implementation uses a parallel jobserver, compatible with Make.
+
+Due to limitations in inheriting open file descriptors, it also implements a
+jobserver backed by a named pipe. The named pipe is used by default because it
+is more robust, but the make-compatible jobserver is used when we detect
+we're being executed from make.
+
+This is a bunch of complexity for a small amount of gain (sharing Make's jobserver,
+which is broken by many modern runtimes anyway).
+
+In version 0.8.0, the make-compatible jobserver in the OCaml version was reworked
+into an actual RPC system, communicating via unix datagram sockets. The initial
+`gup` process acts as a server, and all child `gup` instances simply delegate
+commands to the root process.
+
+This has one main benefit, in that we can more aggressively cache information needed
+to determine the state of a target, since all checks are done in the same process.
+
+It also opens up the possibility for embedding the client side of this RPC protocol
+directly in builders, which may improve performance for large builds.
 
 # Using bash
 
