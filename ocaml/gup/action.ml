@@ -1,5 +1,4 @@
 open Parallel
-open Batteries
 open Std
 open Extlib
 open Path

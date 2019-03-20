@@ -150,7 +150,7 @@ let is_mtime_mismatch ~var ~stored path =
 	Lwt.return @@ not @@ eq (Option.compare ~cmp:Big_int.compare) stored current_mtime
 
 let file_fields ~mtime ~checksum path =
-	let mtime_str = Option.default empty_field (Option.map Big_int.to_string mtime) in
+	let mtime_str = Option.default empty_field (Option.map Big_int.string_of_big_int mtime) in
 	let checksum_str = Option.default empty_field checksum in
 	[mtime_str; checksum_str; RelativeFrom.to_field path]
 
@@ -236,7 +236,7 @@ and build_time time =
 	object
 		inherit base_dependency
 		method tag = BuildTime
-		method fields = [Big_int.to_string time]
+		method fields = [Big_int.string_of_big_int time]
 		method is_dirty args =
 			let path = args.path |> ConcreteBase.to_string in
 			let%lwt mtime = Util.get_mtime path >>= (return $ Option.get) in

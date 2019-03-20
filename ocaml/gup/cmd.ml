@@ -110,10 +110,10 @@ module CmdActions = struct
 	
 	let mark_contents ~var targets =
 		let parent_target = _assert_parent_target ~var "--contents" in
-		let checksum =
+		let%lwt checksum =
 			if List.length targets = 0 then (
 				if (Unix.isatty Unix.stdin) then Error.raise_safe "stdin is a TTY";
-				Checksum.from_stream ~var IO.stdin
+				Checksum.from_stream ~var Lwt_unix.stdin
 			) else (
 				Checksum.from_files ~var targets
 			)

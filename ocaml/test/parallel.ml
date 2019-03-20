@@ -1,7 +1,7 @@
 open OUnit2
 open Gup.Parallel
 open Common
-open PP
+open Gup.PP
 
 let suite = "parallelism" >:::
 [

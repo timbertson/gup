@@ -1,5 +1,3 @@
-open Batteries
-
 (* A recursive structure, holding a node which may have an arbitrarily long chain of parent nodes.
  * Used for buildscripts, which are frequently single but may have (recursive) builders defined *)
 

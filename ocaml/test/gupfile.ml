@@ -3,7 +3,7 @@ open Batteries
 open OUnit2
 open Gup.Gupfile
 open Gup.Path
-open PP
+open Gup.PP
 
 let possible_gup_files path =
 	let path = PathAssertions.absolute path in

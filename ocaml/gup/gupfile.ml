@@ -150,6 +150,7 @@ class match_rules (rules:match_rule list) =
 			(prefix:string)
 			(existing_files:string array) : string Enum.t
 		=
+			let open Batteries in
 			includes |> List.enum
 				|> Enum.map (fun r -> r#definite_targets_in prefix existing_files)
 				|> Enum.concat

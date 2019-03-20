@@ -2,7 +2,6 @@ open Batteries
 open Std
 
 module Log = (val Var.log_module "gup.par")
-module ExtUnix = ExtUnix.Specific
 
 (* because lockf is pretty much insane,
  * we must *never* close an FD that we might hold a lock
