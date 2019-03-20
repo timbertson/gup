@@ -94,7 +94,7 @@ let perform_build ~lease ~var ~toplevel (buildable: Buildable.t) = (
 
 			let%lwt ret = try%lwt in_dir basedir_str (fun () -> Lwt_process.exec
 					~env:env
-					((List.first args), (Array.of_list args))
+					((List.hd args), (Array.of_list args))
 				)
 				with ex -> begin
 					Log.err var (fun m -> m"%s is not executable and has no shebang line" exe_path_str);

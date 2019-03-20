@@ -12,6 +12,8 @@ depends: [
   "lwt" { >= "2.5.1" }
   "lwt_ppx"
   "ocamlfind" {build}
+  "oseq"
+  "seq"
   "ppx_deriving_protobuf" { >= "2.6" }
   "conf-python-2-7" {build}
   "dune" {build & >= "1.0"}

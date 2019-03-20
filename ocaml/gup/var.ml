@@ -1,4 +1,3 @@
-open Batteries
 open Path
 
 (* vars which vary by build *)
@@ -14,7 +13,7 @@ let extend_env var env =
 	StringMap.add Var_global.Key.indent (var.indent_str ^ "  ") env
 
 let resolve_parent_target var =
-	var |> Option.map PathString.parse |> Option.map (function
+	var |> CCOpt.map PathString.parse |> CCOpt.map (function
 		| `relative rel ->
 			let msg = "relative path in $GUP_TARGET: " ^ (Relative.to_string rel) in
 			raise (Invalid_argument msg)
@@ -35,7 +34,7 @@ let global () =
 let (run_id, root_cwd) =
 	let open Var_global in
 	if is_root then (
-			let runid = Big_int.to_string (Util.int_time (Unix.gettimeofday ()))
+			let runid = Big_int.string_of_big_int (Util.int_time (Unix.gettimeofday ()))
 			and root = Sys.getcwd () in
 			Unix.putenv Key.run_id runid;
 			Unix.putenv Key.root root;

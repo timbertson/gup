@@ -1,5 +1,3 @@
-open Batteries
-
 module Key = struct
 	let parent_target = "GUP_TARGET"
 	let root = "GUP_ROOT"
@@ -21,16 +19,16 @@ let is_root = not @@ has_env Key.root
 let parent_target () = get Key.parent_target
 let rpc_server () = get "GUP_RPC"
 let set_rpc_server addr = Unix.putenv "GUP_RPC" addr
-let parent_lease () = get Key.parent_lease |> Option.map (fun s ->
+let parent_lease () = get Key.parent_lease |> CCOpt.map (fun s ->
 	try int_of_string s with Failure _ -> failwith (Printf.sprintf "Invalid %s: %s" Key.parent_lease s)
 )
 
-let default_verbosity = Option.default 0 (Option.map int_of_string (get "GUP_VERBOSE"))
+let default_verbosity = CCOpt.get_or ~default:0 (CCOpt.map int_of_string (get "GUP_VERBOSE"))
 let set_verbosity v = Unix.putenv "GUP_VERBOSE" (string_of_int v)
 
 let trace = ref (get_or "GUP_XTRACE" "0" = "1")
 
-let runtime_dir () = get "XDG_RUNTIME_DIR" |> Option.default_delayed Filename.get_temp_dir_name
+let runtime_dir () = get "XDG_RUNTIME_DIR" |> CCOpt.get_lazy Filename.get_temp_dir_name
 
 let set_trace t =
 	(* Note: we ignore set_trace if trace is already true -

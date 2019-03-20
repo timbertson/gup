@@ -1,8 +1,6 @@
 (* Copyright (C) 2013, Thomas Leonard
  * See the ZeroInstall README file for details, or visit http://0install.net.
  *)
-
-open Batteries
 open Error
 
 type 'a result =
@@ -205,8 +203,8 @@ let rmtree root =
   with Safe_exception _ as ex -> reraise_with_context ex "... trying to delete directory %s" root
 
 let slice ~start ?stop lst =
-  let from_start = Batteries.List.drop start lst in
+  let from_start = CCList.drop start lst in
   match stop with
   | None -> from_start
-  | Some stop -> Batteries.List.take (stop - start) from_start
+  | Some stop -> CCList.take (stop - start) from_start
 

@@ -8,7 +8,7 @@ opam2nix.buildOpamPackage rec {
     # TODO: limit to shell
     { name = "ounit"; }
     { name = "merlin"; }
-    # { name = "utop"; }
+    { name = "utop"; }
   ];
 
   # override ppx_deriving_protobuf with master as of 2019-02-16

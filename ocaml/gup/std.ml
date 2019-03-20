@@ -1,5 +1,3 @@
-open Batteries
-
 class disallowed = object end
 let (==) (_:disallowed) (_:disallowed) = assert false
 let (!=) (_:disallowed) (_:disallowed) = assert false
@@ -14,11 +12,13 @@ let print_obj (out: Format.formatter) r = r#print out
 
 module EnvironmentMap = struct
 	include StringMap
+	open Batteries
 	let array env = enum env |> Enum.map (fun (k, v) -> k^"="^v) |> Array.of_enum
 end
 
 module Unix = struct
-	include Batteries.Unix
+	include Unix
+	open Batteries
 	let environment_map () = (Array.enum @@ Unix.environment ()) |>
 		Enum.map (fun v -> String.split ~by:"=" v) |>
 		EnvironmentMap.of_enum
@@ -56,7 +56,8 @@ module Lwt_option = struct
 end
 
 module List = struct
-	include Batteries.List
+	include List
+	let enum = BatList.enum
 	let headOpt l = try Some (List.hd l) with Failure _ -> None
 end
 

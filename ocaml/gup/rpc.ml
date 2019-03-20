@@ -3,7 +3,6 @@ open Parallel
 
 module IntMap = Map.Make(BatInt)
 open Std
-open Batteries
 module Log = (val Var.log_module "gup.rpc")
 
 let null_byte = "\x00"
@@ -142,7 +141,7 @@ let serve ~var ~path ~handler fn =
 	let server_loop = listen_loop ~var s (fun bytes sender ->
 		Log.debug var (fun m->m "Received message %s from sender %s" (String.escaped (Bytes.to_string bytes)) (string_of_sockaddr sender));
 		let packet = Protocol.(decode bytes) in
-		packet.request |> Option.map (fun request ->
+		packet.request |> CCOpt.map (fun request ->
 			let parent_lease = match packet.lease_id with
 				| Some id -> (
 					try Some (int_of_string id)
@@ -169,7 +168,7 @@ let serve ~var ~path ~handler fn =
 				Log.warn var (fun m->m "Server response failed (%s); dropping" (Printexc.to_string e));
 				Lwt.return_unit
 			)
-		) |> Option.default_delayed (fun () ->
+		) |> CCOpt.get_lazy (fun () ->
 			Log.warn var (fun m->m "Server received packet with no request; dropping");
 			Lwt.return_unit
 		)
