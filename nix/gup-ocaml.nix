@@ -1,4 +1,4 @@
-{ pkgs, callPackage, stdenv, lib, fetchurl, python, zlib, ncurses, pythonImpl, opam2nix ? (callPackage ./opam2nix-packages {}) }:
+{ pkgs, callPackage, stdenv, lib, fetchurl, python, zlib, ncurses, pythonImpl ? pkgs.callPackage ./gup-python.nix, opam2nix ? (callPackage ./opam2nix-packages {}) }:
 opam2nix.buildOpamPackage rec {
   inherit (pythonImpl.drvAttrs) src version;
   name = "gup-${version}";

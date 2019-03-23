@@ -26,7 +26,7 @@ let from_stream ~var input =
 	build (pump_stream ~nread:nread_ignoring_closed input)
 
 let from_files ~var files =
-	Log.trace var CCFormat.Dump.(fun m->m "building checksum from %a" (list string) files);
+	Log.trace var PP.(fun m->m "building checksum from %a" (list string) files);
 	build (fun ctx ->
 		List.enum files |> Enum.iter (fun filename ->
 			File.with_file_in filename (fun input ->

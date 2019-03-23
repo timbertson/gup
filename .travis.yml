@@ -5,7 +5,7 @@ env:
     - target=ci-python2
     - target=ci-python3
     - target=ci-ocaml
-    - target=ci-opam
+    # - target=ci-opam
     - target=ci-permutation
 notifications:
   email: false

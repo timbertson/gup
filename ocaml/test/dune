@@ -1,5 +1,7 @@
 ; vim: set syntax=lisp commentstring=;\ %s:
 
 (executable
- (name test)
- (libraries oUnit gup))
+	(name test)
+	(libraries oUnit gup)
+	(preprocess (pps lwt_ppx))
+)

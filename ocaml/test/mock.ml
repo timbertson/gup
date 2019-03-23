@@ -37,7 +37,4 @@ module Fake_unix : Gup.Path.UNIX = struct
 			| Some link, _ -> link
 			| None, Some _missing -> raise (Unix_error (ENOENT, "readlink", path))
 			| None, None -> raise (Unix_error (EINVAL, "readlink", path))
-
-	(* this gets cached, so we might as well use the real one :/ *)
-	let getcwd = Unix.getcwd
 end

@@ -123,8 +123,8 @@ class match_rule (original_text:string) =
 	end
 
 let pp_match_rule : match_rule CCFormat.printer = fun fmt r ->
-	let open CCFormat in
-	within "match_rule(" ")" Dump.string fmt r#text
+	let open PP in
+	within "match_rule(" ")" string fmt r#text
 
 class match_rules (rules:match_rule list) =
 	let (excludes, includes) = rules |> List.partition (fun rule -> rule#exclude) in
@@ -161,11 +161,11 @@ class match_rules (rules:match_rule list) =
 	end
 
 let pp_match_rules : match_rules CCFormat.printer = fun fmt r ->
-	let open CCFormat in
-	within "match_rules(" ")" (Dump.list pp_match_rule) fmt r#rules
+	let open PP in
+	within "match_rules(" ")" (list pp_match_rule) fmt r#rules
 
 let pp_gupfile : (string * match_rules) list CCFormat.printer =
-	let open CCFormat.Dump in
+	let open PP in
 	list (pair string pp_match_rules)
 
 exception Invalid_gupfile of int * string

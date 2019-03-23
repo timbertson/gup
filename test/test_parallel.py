@@ -9,6 +9,7 @@ import re
 
 GUP_JOBSERVER = 'GUP_JOBSERVER'
 MAKEFLAGS = 'MAKEFLAGS'
+GUP_RPC = 'GUP_RPC'
 
 def load_env(path):
 	env = {}
@@ -16,7 +17,7 @@ def load_env(path):
 		for line in f.read().splitlines():
 			if '=' not in line: continue
 			key, val = line.split('=',1)
-			if key in (GUP_JOBSERVER, MAKEFLAGS):
+			if key in (GUP_JOBSERVER, MAKEFLAGS, GUP_RPC):
 				logging.debug("serialized env: %s=%s" % (key,val))
 			env[key] = val
 	return env
@@ -36,19 +37,27 @@ if not IS_WINDOWS:
 			self.write('build-step.gup', BASH + 'env > "$2.env"; echo ok > $1')
 			self.write('Gupfile', 'build-step.gup:\n\tstep*')
 
-		def test_uses_named_pipe_for_jobserver(self):
+		def test_uses_named_pipe_or_rpc_jobserver(self):
 			self.build('step1', '-j3')
 			env = load_env(self.path('step1.env'))
-			assert env.get(GUP_JOBSERVER) not in (None, '0'), env.get(GUP_JOBSERVER)
+			if IS_OCAML:
+				assert env.get(GUP_RPC) is not None
+			else:
+				assert env.get(GUP_JOBSERVER) not in (None, '0'), env.get(GUP_JOBSERVER)
 			assert env.get(MAKEFLAGS) is None
 
+		@skipPermutations
 		def test_doesnt_use_jobserver_for_serial_build(self):
 			self.build('step1', '-j1')
 			self.build('step2')
 
 			for target in 'step1', 'step2':
 				env = load_env(self.path(target + '.env'))
-				assert env.get(GUP_JOBSERVER) == '0'
+				if IS_OCAML:
+					assert env.get(GUP_RPC) is None
+				else:
+					assert env.get(GUP_JOBSERVER) == '0'
+				assert env.get(MAKEFLAGS) is None
 				assert env.get(MAKEFLAGS) is None
 
 	class TestParallelBuilds(TestCase):
@@ -100,8 +109,6 @@ if not IS_WINDOWS:
 			self.assertRaises(SafeError, lambda: self.build('-j9', 'short_fail', 'long_fail'))
 
 		def test_limiting_number_of_concurrent_jobs(self):
-			if any(['ocaml/bin/gup' in exe for exe in GUP_EXES]):
-				self.skipTest("TODO: Intermittent deadlock somewhere in ocaml impl")
 			steps = ['step1', 'step2', 'step3', 'step4', 'step5', 'step6']
 
 			# counter takes 1s, plus 3 pairs of 1s jobs (two at a time)
@@ -117,6 +124,7 @@ if not IS_WINDOWS:
 			self.build('-j10', 'step1', 'step2')
 
 		@skipPermutations
+		@unittest.skipIf(IS_OCAML, "OCaml jobserver incompatible with Make")
 		def test_uses_make_jobserver_when_present(self):
 			gup = GUP_EXES[0] # + ' -vv'
 			self.write("Makefile", "a:\n\t+" + gup + " step1 step2 step3\nb:\n\t+" + gup + " step4 step5 step6")

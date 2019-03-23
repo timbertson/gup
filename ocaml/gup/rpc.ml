@@ -37,7 +37,7 @@ module Protocol = struct
 	} [@@deriving protobuf { protoc = "../../../gup/rpc.proto" }]
 
 	let pp_build fmt { targets; update; cwd; indent; parent } = (
-		let open CCFormat.Dump in
+		let open PP in
 		Format.fprintf fmt (
 			"build {"
 			^^ " targets = %a;"
