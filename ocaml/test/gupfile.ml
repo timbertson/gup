@@ -1,11 +1,13 @@
+open Common
 open Batteries
 open OUnit2
 open Gup.Gupfile
 open Gup.Path
+open PP
 
 let possible_gup_files path =
 	let path = PathAssertions.absolute path in
-	List.of_enum (possible_builders (ConcreteBase._cast path))
+	List.of_enum (possible_builders ~var (ConcreteBase._cast path))
 
 let print_builder (candidate, gupfile, target) =
 	let guppath = Absolute.to_string (candidate#guppath gupfile) in
@@ -13,7 +15,6 @@ let print_builder (candidate, gupfile, target) =
 	Printf.sprintf2 "%s (%s)" guppath target
 
 let print_str_list lst = "[ " ^ (lst |> String.concat "\n") ^ " ]"
-let custom_printf fn obj = Printf.sprintf2 "%a" fn obj
 let lift_compare m f a b = m (f a) (f b)
 let eq cmp a b = (cmp a b) = 0
 let compare_gupfile =
@@ -71,7 +72,7 @@ let suite = "Gupfile" >:::
 
 	"gupfile parsing" >:: (fun _ ->
 		assert_equal
-		~printer: (custom_printf print_gupfile)
+		~printer: (to_string pp_gupfile)
 		~cmp: (compare_gupfile)
 		[
 			("foo.gup", new match_rules [

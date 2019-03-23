@@ -17,6 +17,7 @@ let assertConcrete expected actual =
 	let expected = Concrete._cast expected in
 	assert_equal ~printer:Concrete.to_string expected actual
 
+let cwd = Path.Concrete._cast "/"
 
 let suite = "RelativeFrom.pivot_to" >:::
 [
@@ -40,7 +41,7 @@ let suite = "RelativeFrom.pivot_to" >:::
 		() in
 		Mock.run ~state (fun () ->
 			assertConcrete "/dest/d"
-				(Concrete.resolve "/a/b/c/link/d")
+				(Concrete.resolve ~cwd "/a/b/c/link/d")
 		)
 	);
 
@@ -49,16 +50,16 @@ let suite = "RelativeFrom.pivot_to" >:::
 			~links:[ "/a/b/c/link", "../dest" ]
 		() in
 		Mock.run ~state (fun () ->
-			assertConcrete "/a/b/dest/d" (Concrete.resolve "/a/b/c/link/d");
-			assertConcrete "/a/b" (Concrete.resolve "/a/b/c/link/..");
+			assertConcrete "/a/b/dest/d" (Concrete.resolve ~cwd "/a/b/c/link/d");
+			assertConcrete "/a/b" (Concrete.resolve ~cwd "/a/b/c/link/..");
 		)
 	);
 
 	"resolve relative" >:: (fun _ ->
 		Mock.run (fun () ->
-			assertConcrete "/a/b/c/d" (Concrete.resolve "/a/b/./c/d");
-			assertConcrete "/a/b/c/d" (Concrete.resolve "/a/b/c/d/.");
-			assertConcrete "/a/b/c/e" (Concrete.resolve "/a/b/c/d/../e")
+			assertConcrete "/a/b/c/d" (Concrete.resolve ~cwd "/a/b/./c/d");
+			assertConcrete "/a/b/c/d" (Concrete.resolve ~cwd "/a/b/c/d/.");
+			assertConcrete "/a/b/c/e" (Concrete.resolve ~cwd "/a/b/c/d/../e")
 		)
 	);
 ]

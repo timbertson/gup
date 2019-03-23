@@ -86,10 +86,10 @@ let perform_build ~lease ~var ~toplevel (buildable: Buildable.t) = (
 
 			if !Var_global.trace then begin
 				Log.info var (fun m->m " # %s" basedir_str);
-				Log.info var (fun m->m " + %a" CCFormat.Dump.(list string) args)
+				Log.info var (fun m->m " + %a" PP.(list string) args)
 			end else begin
 				Log.trace var (fun m->m " from cwd: %s" basedir_str);
-				Log.trace var (fun m->m "executing: %a" CCFormat.Dump.(list string) args)
+				Log.trace var (fun m->m "executing: %a" PP.(list string) args)
 			end;
 
 			let%lwt ret = try%lwt in_dir basedir_str (fun () -> Lwt_process.exec

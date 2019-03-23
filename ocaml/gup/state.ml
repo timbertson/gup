@@ -143,10 +143,10 @@ let dirty_check_with_dep ~(path:RelativeFrom.t) checker args =
 
 let is_mtime_mismatch ~var ~stored path =
 	let%lwt current_mtime = (RelativeFrom.lift Util.get_mtime) path in
-	Log.trace var CCFormat.(fun m->m "%s: comparing stored mtime %a against current %a"
+	Log.trace var PP.(fun m->m "%s: comparing stored mtime %a against current %a"
 		(RelativeFrom.to_string path)
-		(Dump.option Util.big_int_pp) stored
-		(Dump.option Util.big_int_pp) current_mtime);
+		(option Util.big_int_pp) stored
+		(option Util.big_int_pp) current_mtime);
 	Lwt.return @@ not @@ eq (Option.compare ~cmp:Big_int.compare) stored current_mtime
 
 let file_fields ~mtime ~checksum path =
@@ -160,10 +160,9 @@ class virtual base_dependency = object (self)
 	method virtual is_dirty : dirty_args -> bool Lwt.t
 
 	method print out =
-		let open CCFormat in
 		Format.fprintf out "<#%s: %a>"
 			(string_of_dependency_type self#tag)
-			Dump.(list string) self#fields
+			PP.(list string) self#fields
 end
 
 and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:RelativeFrom.t) =
@@ -185,7 +184,7 @@ and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:Re
 					| None -> true
 					| Some dep_cs -> dep_cs <> checksum
 				in
-				Log.debug args.var CCFormat.Dump.(fun m->m "%s: %s (stored checksum is %s, current is %a)"
+				Log.debug args.var PP.(fun m->m "%s: %s (stored checksum is %s, current is %a)"
 					(if dirty then "DIRTY" else "CLEAN")
 					(ConcreteBase.to_string resolved_path) checksum
 					(option string) latest_checksum);
@@ -265,7 +264,7 @@ and dependencies (target_path:ConcreteBase.t) (data:base_dependency intermediate
 			| Some r -> r#is_current
 
 		method print out =
-			let open CCFormat.Dump in
+			let open PP in
 			Format.fprintf out "<#Dependencies(run=%a, cs=%a, clobbers=%b, rules=%a)>"
 				(option print_obj) !(data.run_id)
 				(option string) !(data.checksum)
@@ -367,7 +366,7 @@ and dependency_builder ~var target_path (input:Lwt_io.input_channel) = object
 				rules = ref [];
 			} in
 			let%lwt version_line = readline input in
-			Log.trace var CCFormat.Dump.(fun m->m "version_line: %a" (option string) version_line);
+			Log.trace var PP.(fun m->m "version_line: %a" (option string) version_line);
 			let version_number = Option.bind version_line (fun line ->
 				if String.starts_with line version_marker then (
 					let (_, version_string) = String.split line ~by:" " in
@@ -446,7 +445,7 @@ and target_state ~var (target_path:ConcreteBase.t) =
 
 		method deps =
 			let%lwt deps = self#parse_dependencies in
-			Log.trace var CCFormat.Dump.(fun m->m "Loaded serialized state: %a" (option print_obj) deps);
+			Log.trace var PP.(fun m->m "Loaded serialized state: %a" (option print_obj) deps);
 			Lwt.return deps
 
 		method private with_dependency_lock fn : unit Lwt.t =

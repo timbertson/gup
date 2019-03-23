@@ -65,6 +65,7 @@ module Jobpool = struct
 		waiters: waiters;
 		leases: IntSet.t ref;
 	}
+
 	let empty parallelism =
 		assert (parallelism > 0);
 		{
@@ -149,11 +150,15 @@ module Jobpool = struct
 			)
 	)
 
+	let active t lease = IntSet.mem lease.id !(t.leases)
+
+	let ensure_dropped ~var t lease = if (active t lease) then drop ~var t lease
+
 	(* Reacquire parent lease, after dropping the lease. If the lease is already
 	 * dropped, only reacquire parent *)
 	let revert ~var t lease =
 		Log.debug var (fun m->m "revert(%s)" (string_of_lease lease));
-		if (IntSet.mem lease.id !(t.leases)) then drop ~var t lease;
+		ensure_dropped ~var t lease;
 		match lease.parent with
 			| None ->
 					Lwt.return_unit
@@ -171,7 +176,7 @@ module Jobpool = struct
 	let use_new ~var t fn =
 		let%lwt lease = acquire t ~var ~current:None ~lease_id:None in
 		(fn lease)[%lwt.finally
-			drop ~var t lease;
+			ensure_dropped ~var t lease;
 			Lwt.return_unit
 		]
 
