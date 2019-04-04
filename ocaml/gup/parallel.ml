@@ -1,4 +1,3 @@
-open Batteries
 open Std
 
 module Log = (val Var.log_module "gup.par")
@@ -22,7 +21,7 @@ module FileIdentity = struct
 	let _extract (Device dev, Inode ino) = (dev, ino)
 	let create stats = (Device stats.Unix.st_dev, Inode stats.Unix.st_ino)
 	let compare a b =
-		Tuple2.compare ~cmp1:Int.compare ~cmp2:Int.compare (_extract a) (_extract b)
+		CCPair.compare CCInt.compare CCInt.compare (_extract a) (_extract b)
 end
 
 module LockMap = struct
@@ -50,7 +49,7 @@ end
  * (this can be single-process since clients submit all jobs to the root process
  * in a parallel execution)
  *)
-module IntSet = Set.Make(Int)
+module IntSet = Set.Make(CCInt)
 module Jobpool = struct
 	[@@@ocaml.warning "-3"]
 	type waiters = unit Lwt.u Lwt_sequence.t
@@ -75,8 +74,8 @@ module Jobpool = struct
 		}
 
 	let string_of_lease { id; parent } =
-		Printf.sprintf2 "{id=%d; parent=%a}"
-			id (Option.print Int.print) parent
+		Format.asprintf "{id=%d; parent=%a}"
+			id PP.(option int) parent
 
 	(* If ID is given, it must not be an active lease
 	 * (this is used for reacquiring a lease which has
@@ -105,7 +104,7 @@ module Jobpool = struct
 
 		(* only adopt the current slot if the passed in
 	* is the current owner *)
-		let owner = current |> Option.filter (fun lease ->
+		let owner = current |> CCOpt.filter (fun lease ->
 			IntSet.mem lease !leases
 		) in
 

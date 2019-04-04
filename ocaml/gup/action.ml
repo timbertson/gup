@@ -1,13 +1,12 @@
 open Parallel
 open Std
-open Extlib
 open Path
 open Error
 
 module Log = (val Var.log_module "gup.action")
 
 let _report_nobuild var path =
-	(if Option.is_some var.Var.parent_target then Log.trace else Log.info) var
+	(if CCOpt.is_some var.Var.parent_target then Log.trace else Log.info) var
 		(fun m ->m "%s: up to date" (ConcreteBase.to_string path))
 
 let build ~lease ~var ~update (path:string) : unit Lwt.t = (
@@ -21,17 +20,17 @@ let build ~lease ~var ~update (path:string) : unit Lwt.t = (
 			Lwt.return_unit
 		) parent_target in
 
-		let parent_state = parent_target |> Option.map (fun path ->
+		let parent_state = parent_target |> CCOpt.map (fun path ->
 			new State.target_state ~var path
 		) in
 
 		let add_intermediate_link_deps = function
 			| [] -> Lwt.return_unit
-			| links -> parent_state |> Option.map (fun parent_state ->
+			| links -> parent_state |> CCOpt.map (fun parent_state ->
 				Log.trace var (fun m->m "adding %d intermediate (symlink) file dependencies"
 					(List.length links));
 				parent_state#add_file_dependencies links
-			) |> Option.default Lwt.return_unit
+			) |> CCOpt.get_or ~default:Lwt.return_unit
 		in
 
 		let rec build = fun (path:RelativeFrom.t) -> (
@@ -39,33 +38,36 @@ let build ~lease ~var ~update (path:string) : unit Lwt.t = (
 			let traversed, path = ConcreteBase.traverse_relfrom path in
 			join [
 				add_intermediate_link_deps traversed;
-				let%lwt target = (match Builder.prepare_build ~var path with
-					| Some (`Target target) ->
-						Builder.build ~lease ~var ~update target
-							|> Lwt.map (fun (_:bool) -> Some (Recursive.leaf target))
-					| Some (`Symlink_to path) ->
-						(* recurse on destination
-						 * (which will be added as a dep to parent_target)
-						 *)
-						let%lwt () = build path in
-						Lwt.return_none
-					| None -> begin
-						if update && (ConcreteBase.lexists path) then (
-							_report_nobuild var path;
-							Lwt.return None
-						) else (
-							raise (Error.Unbuildable (ConcreteBase.to_string path))
-						)
-					end
-				) in
-				parent_state |> Lwt_option.may (fun (parent_state:State.target_state) ->
-					let%lwt mtime = Util.get_mtime (ConcreteBase.to_string path)
-					and checksum = target |> Lwt_option.bind (fun target ->
-						(State.of_buildable ~var target)#deps |> Lwt.map (fun deps ->
-							Option.bind deps (fun deps -> deps#checksum)
-						)
+				(
+					let%lwt builder = Builder.prepare_build ~var path in
+					let%lwt target = (match builder with
+						| Some (`Target target) ->
+							Builder.build ~lease ~var ~update target
+								|> Lwt.map (fun (_:bool) -> Some (Recursive.leaf target))
+						| Some (`Symlink_to path) ->
+							(* recurse on destination
+							 * (which will be added as a dep to parent_target)
+							 *)
+							let%lwt () = build path in
+							Lwt.return_none
+						| None -> begin
+							if update && (ConcreteBase.lexists path) then (
+								_report_nobuild var path;
+								Lwt.return None
+							) else (
+								raise (Error.Unbuildable (ConcreteBase.to_string path))
+							)
+						end
 					) in
-					parent_state#add_file_dependency_with ~checksum ~mtime:mtime path
+					parent_state |> Lwt_option.may (fun (parent_state:State.target_state) ->
+						let%lwt mtime = Util.get_mtime (ConcreteBase.to_string path)
+						and checksum = target |> Lwt_option.bind (fun target ->
+							(State.of_buildable ~var target)#deps |> Lwt.map (fun deps ->
+								CCOpt.flat_map (fun deps -> deps#checksum) deps
+							)
+						) in
+						parent_state#add_file_dependency_with ~checksum ~mtime:mtime path
+					)
 				);
 			]
 		) in

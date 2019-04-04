@@ -1,6 +1,4 @@
-open Batteries
 open Std
-open Extlib
 open Path
 open Error
 
@@ -12,7 +10,7 @@ module CmdActions = struct
 
 	let ignore_hidden dirs =
 		dirs |> List.filter (fun dir ->
-			not @@ PathComponent.lift String.starts_with dir "."
+			not @@ PathComponent.lift (CCString.prefix ~pre:".") dir
 		)
 	
 	let _assert_parent_target ~var action =
@@ -32,7 +30,7 @@ module CmdActions = struct
 		let existing_path = Var_global.get_or "PATH" "" in
 		let gup_in_path = Var_global.get_or "GUP_IN_PATH" "0" in
 		Unix.putenv "GUP_IN_PATH" "1";
-		if String.exists progname Filename.dir_sep && (gup_in_path <> "1") then (
+		if CCString.mem ~sub:Filename.dir_sep progname && (gup_in_path <> "1") then (
 			(* TODO: (Windows) we should always perform this branch on Windows, regardless of
 			 * whether Filename.dir_sep is in progname *)
 
@@ -40,9 +38,8 @@ module CmdActions = struct
 			(* whether our directory is in $PATH *)
 			let path_to_prog = ConcreteBase.resolve ~cwd:var.Var.cwd progname in
 			let bin_dir = ConcreteBase.dirname path_to_prog |> Concrete.to_string in
-			let path_entries : string list = existing_path |> String.nsplit ~by: Util.path_sep in
-			let already_in_path = List.enum path_entries
-				|> Enum.exists ((=) bin_dir) in
+			let path_entries : string list = existing_path |> CCString.split ~by:Util.path_sep in
+			let already_in_path = List.exists ((=) bin_dir) path_entries in
 			if already_in_path then
 				Log.trace var (fun m->m("found `gup` in $PATH"))
 			else (
@@ -65,10 +62,10 @@ module CmdActions = struct
 					(* if GUP_RPC is defined, we must also have lease & parent *)
 					let (lease, parent) = match (Var_global.parent_lease (), var.Var.parent_target) with
 						| Some lease, Some parent -> (lease, parent)
-						| lease, parent -> failwith (
-								Printf.sprintf2 "Invalid environment: lease=%a, parent=%a"
-									(Option.print Int.print) lease
-									(Option.print String.print) (Option.map ConcreteBase.to_string parent)
+						| lease, parent -> failwith PP.(
+								Format.asprintf "Invalid environment: lease=%a, parent=%a"
+									(option int) lease
+									(option string) (CCOpt.map ConcreteBase.to_string parent)
 							)
 					in
 
@@ -154,30 +151,28 @@ module CmdActions = struct
 			| _ -> Error.raise_safe "Exactly one of --force or --dry-run must be given"
 		in
 		let rm ?(isfile=false) path =
-			Return.label (fun rv ->
-				if not force then (
-					Printf.printf "Would remove: %s\n" path;
-					Return.return rv ()
-				);
-
+			if not force then (
+				Printf.printf "Would remove: %s\n" path
+			) else (
 				Printf.eprintf "Removing: %s\n" path;
-				if interactive then (
+				let continue = if interactive then (
 					Printf.eprintf "    [Y/n]: ";
 					flush_all ();
 					let response = String.trim (read_line ()) in
-					if not @@ List.mem response ["y";"Y";""] then (
-						Printf.eprintf "Skipped.\n";
-						Return.return rv ()
-					)
-				);
-				if isfile
-					then Sys.remove path
-					else Util.rmtree path
+					List.mem response ["y";"Y";""]
+				) else true in
+				if continue then (
+					if isfile
+						then Sys.remove path
+						else Util.rmtree path
+				) else (
+					Printf.eprintf "Skipped.\n";
+				)
 			)
 		in
 		let dests = if dests = [] then ["."] else dests in
 		let meta_dir_name = State.meta_dir_name in
-		List.enum dests |> Enum.iter (fun root ->
+		dests |> List.iter (fun root ->
 			PathString.walk root (fun base dirs files ->
 				let removed_dirs = ref [] in
 				if List.mem meta_dir_name dirs then (
@@ -188,7 +183,8 @@ module CmdActions = struct
 						built_targets |> List.iter (fun dep ->
 							let dep_name = PathComponent.string_of_name dep in
 							let path = (Filename.concat base dep_name) in
-							let buildscript = Gupfile.find_builder ~var (ConcreteBase.resolve ~cwd:var.Var.cwd path) in
+							(* TODO: chain lwt instead of running each thread internally *)
+							let buildscript = Lwt_main.run (Gupfile.find_builder ~var (ConcreteBase.resolve ~cwd:var.Var.cwd path)) in
 							buildscript |> Option.may (fun _ ->
 								if List.mem dep files then
 									rm ~isfile:true path
@@ -213,10 +209,10 @@ module CmdActions = struct
 		let basedir = (Option.default "." base) in
 		let add_prefix = begin match base with
 			| Some base -> fun file -> Filename.concat base file
-			| None -> identity
+			| None -> CCFun.id
 		end in
 		let resolved = Concrete.resolve ~cwd:var.Var.cwd basedir in
-		Gupfile.buildable_files_in ~var resolved |> Enum.iter (fun f ->
+		Gupfile.buildable_files_in ~var resolved |> Lwt_stream.iter (fun f ->
 			print_endline (add_prefix f)
 		)
 
@@ -224,15 +220,14 @@ module CmdActions = struct
 		if List.length dirs > 1 then
 			raise_safe "Too many arguments"
 		;
-		let base = List.headOpt dirs in
-		_list_targets ~var base;
-		Lwt.return_unit
+		let base = CCList.head_opt dirs in
+		_list_targets ~var base
 
 	let test_buildable ~var args =
 		begin match args with
 			| [target] ->
 					let target = ConcreteBase.resolve ~cwd:var.Var.cwd target in
-					let builder = Gupfile.find_builder ~var target in
+					let%lwt builder = Gupfile.find_builder ~var target in
 					exit (if (Option.is_some builder) then 0 else 1)
 			| _ -> raise_safe "Exactly one argument expected"
 		end
@@ -242,7 +237,7 @@ module CmdActions = struct
 			| [] -> raise_safe "At least one argument expected"
 			| args ->
 				let rec is_dirty path =
-					let target = Builder.prepare_build ~var path in
+					let%lwt target = Builder.prepare_build ~var path in
 					match target with
 						| Some (`Target target) -> Builder.is_dirty ~var target
 						| Some (`Symlink_to dest) -> is_dirty (ConcreteBase.resolve_relfrom dest)
@@ -275,26 +270,24 @@ module CmdActions = struct
 		Lwt.return_unit
 
 	let complete_args ~var args =
-		let dir = List.headOpt args in
+		let dir = CCList.head_opt args in
 
 		let get_dir arg =
-			try
-				let (dir, _) = String.rsplit arg ~by:Filename.dir_sep in
-				Some dir
-			with Not_found -> None
+			CCString.Split.right ~by:Filename.dir_sep arg
+				|> CCOpt.map fst
 		in
 
-		let dir = Option.bind dir get_dir in
-		_list_targets ~var dir;
+		let dir = CCOpt.flat_map get_dir dir in
+		let%lwt () = _list_targets ~var dir in
 
 		(* also add dirs, since they _may_ contain targets *)
-		let root = Option.default "." dir in
+		let root = CCOpt.get_or ~default:"." dir in
 		let subdirs =
 			try
 				let files = PathString.readdir root in
 				let prefix = match dir with
 					| Some p -> Filename.concat p
-					| None -> identity
+					| None -> CCFun.id
 				in
 				Array.to_list files
 					|> ignore_hidden

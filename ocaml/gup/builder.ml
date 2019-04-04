@@ -1,4 +1,3 @@
-open Batteries
 open Std
 open Path
 open Error
@@ -6,27 +5,28 @@ module PathMap = Map.Make(ConcreteBase)
 module Log = (val Var.log_module "gup.builder")
 
 let _guess_executable path =
-	File.with_file_in path (fun file ->
-		let initial = IO.nread file 255 in
-		if String.starts_with initial "#!" then (
-			let initial = String.lchop ~n:2 initial in
-			let (line, _) = try
-				String.split ~by:"\n" initial with Not_found -> (initial,"")
-			in
-			let args = Str.split (Str.regexp "[ \t]+") line in
-			match args with
-				| bin :: rest ->
-					let bin = if String.starts_with bin "."
-						then Filename.concat (Filename.dirname path) bin
-						else bin
-					in
-					if Util.is_absolute bin && not (Sys.file_exists bin) then (
-						(* special-case: we ignore /path/to/<env> for compatibility with plain shell scripts on weird platforms *)
-						if Filename.basename bin = "env" then rest
-						else Error.raise_safe "No such interpreter: %s" bin;
-					) else bin :: rest
-				| [] -> []
-		) else []
+	Lwt_io.with_file ~mode:Lwt_io.input path (fun file ->
+		Lwt_io.read ~count:255 file |> Lwt.map (fun initial ->
+			if CCString.prefix ~pre:"#!" initial then (
+				let initial = CCString.drop 2 initial in
+				let (line, _) =
+					CCString.Split.left ~by:"\n" initial |> CCOpt.get_or ~default:(initial,"")
+				in
+				let args = Str.split (Str.regexp "[ \t]+") line in
+				match args with
+					| bin :: rest ->
+						let bin = if CCString.prefix ~pre:"." bin
+							then Filename.concat (Filename.dirname path) bin
+							else bin
+						in
+						if Util.is_absolute bin && not (Sys.file_exists bin) then (
+							(* special-case: we ignore /path/to/<env> for compatibility with plain shell scripts on weird platforms *)
+							if Filename.basename bin = "env" then rest
+							else Error.raise_safe "No such interpreter: %s" bin;
+						) else bin :: rest
+					| [] -> []
+			) else []
+		)
 	)
 
 let in_dir wd action =
@@ -73,11 +73,13 @@ let perform_build ~lease ~var ~toplevel (buildable: Buildable.t) = (
 
 		let do_build () =
 			Log.info var (fun m->m"%s" target_relstr);
-			let%lwt mtime = Util.get_mtime path_str in
 			let exe_path_str = Absolute.to_string exe_path in
+			let%lwt (mtime, executable) = Util.lwt_zip
+				(Util.get_mtime path_str)
+				(_guess_executable exe_path_str) in
 			let args = List.concat
 				[
-					_guess_executable exe_path_str;
+					executable;
 					[ exe_path_str; output_file;
 						target |> RelativeFrom.relative |> Relative.to_string
 					]
@@ -102,7 +104,7 @@ let perform_build ~lease ~var ~toplevel (buildable: Buildable.t) = (
 				end
 			in
 			let%lwt new_mtime = Util.get_mtime path_str in
-			let target_changed = neq (Option.compare ~cmp:Big_int.compare) mtime new_mtime in
+			let target_changed = neq (CCOpt.compare Big_int.compare_big_int) mtime new_mtime in
 			let%lwt () = if target_changed then (
 				let p = CCOpt.pp Util.big_int_pp in
 				Log.trace var (fun m->m "old_mtime=%a, new_mtime=%a" p mtime p new_mtime);
@@ -255,7 +257,8 @@ let _build_if_dirty ~lease ~var ~cache ~dry = (
 	and build_path_if_dirty path = (
 		let path = ConcreteBase.resolve_relfrom path in
 		with_cached_build path (fun () ->
-			match Gupfile.find_builder ~var path with
+			let%lwt builder = Gupfile.find_builder ~var path in
+			match builder with
 				| None ->
 					Log.trace var (fun m->m "CLEAN: %s (not a target)" (ConcreteBase.to_string path));
 					Lwt.return_false
@@ -300,11 +303,12 @@ type prepared_build = [
 	| `Symlink_to of RelativeFrom.t
 ]
 
-let prepare_build ~var (path: ConcreteBase.t) : prepared_build option =
-	match Gupfile.find_builder ~var path with
+let prepare_build ~var (path: ConcreteBase.t) : prepared_build option Lwt.t =
+	Gupfile.find_builder ~var path |> Lwt.map (function
 		| Some buildable -> Some (`Target buildable)
 		| None -> (match ConcreteBase.readlink path with
 			(* # this target isn't buildable, but its symlink destination might be *)
 			| `concrete _ -> None
 			| `link dest -> Some (`Symlink_to dest)
 		)
+	)

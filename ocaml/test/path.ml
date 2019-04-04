@@ -1,13 +1,12 @@
-open Batteries
 open OUnit2
 
 module Path = Gup.Path.Make(Mock.Fake_unix)
 open Path
 
 let print_relative_from (base,rel) =
-	Printf.sprintf2 "(%s,%s)"
-		(Concrete.to_string base |> String.quote)
-		(Relative.to_string rel |> String.quote)
+	Printf.sprintf "(%s,%s)"
+		(Concrete.to_string base |> CCString.escaped)
+		(Relative.to_string rel |> CCString.escaped)
 
 let assertRelativeFrom expected actual =
 	let expected = match expected with (base, p) -> (Concrete._cast base, Relative._cast p) in

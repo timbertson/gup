@@ -1,5 +1,3 @@
-open Batteries
-
 type state = {
 	links : (string * string) list;
 	missing_paths: string list;
@@ -9,8 +7,8 @@ let _state : state option ref = ref None
 
 let make_state ?links ?missing () =
 	{
-		links = links |> Option.default [];
-		missing_paths = missing |> Option.default [];
+		links = links |> CCOpt.get_or ~default:[];
+		missing_paths = missing |> CCOpt.get_or ~default:[];
 	}
 
 let get_state () =
@@ -19,7 +17,7 @@ let get_state () =
 		| None -> failwith "Mock.state not initialized"
 
 let run ?state fn =
-	_state := Some (state |> Option.default (make_state ()));
+	_state := Some (state |> CCOpt.get_or ~default:(make_state ()));
 	let reset () = _state := None in
 	let rv = try fn () with e -> (reset (); raise e) in
 	reset ();

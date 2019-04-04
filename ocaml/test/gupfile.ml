@@ -1,27 +1,31 @@
 open Common
-open Batteries
 open OUnit2
 open Gup.Gupfile
 open Gup.Path
 open Gup.PP
+open CCFun
 
 let possible_gup_files path =
 	let path = PathAssertions.absolute path in
-	List.of_enum (possible_builders ~var (ConcreteBase._cast path))
+	OSeq.to_list (possible_builders ~var (ConcreteBase._cast path))
 
 let print_builder (candidate, gupfile, target) =
 	let guppath = Absolute.to_string (candidate#guppath gupfile) in
 	let target = Relative.to_string target in
-	Printf.sprintf2 "%s (%s)" guppath target
+	Printf.sprintf "%s (%s)" guppath target
 
 let print_str_list lst = "[ " ^ (lst |> String.concat "\n") ^ " ]"
 let lift_compare m f a b = m (f a) (f b)
 let eq cmp a b = (cmp a b) = 0
 let compare_gupfile =
 	let compare_rule = lift_compare String.compare (fun r -> r#text) in
-	let compare_rules = lift_compare (List.compare compare_rule) (fun r -> r#rules) in
-	let compare_string_and_rules = (Tuple2.compare ~cmp1:String.compare ~cmp2:compare_rules) in
-	eq @@ List.compare compare_string_and_rules
+	let compare_rules = lift_compare (CCList.compare compare_rule) (fun r -> r#rules) in
+	let compare_string_and_rules = (CCPair.compare String.compare compare_rules) in
+	eq @@ CCList.compare compare_string_and_rules
+
+let io_of_string s =
+	Lwt_io.of_bytes ~mode:Lwt_io.input
+		(Lwt_bytes.of_bytes (Bytes.of_string s))
 
 let suite = "Gupfile" >:::
 [
@@ -66,7 +70,7 @@ let suite = "Gupfile" >:::
 				"/x/y/gup/somefile.gup (somefile)";
 				"/x/gup/y/somefile.gup (somefile)"
 			]
-			(possible_gup_files "/x/y/somefile" |> List.take 3 |> List.map print_builder)
+			(possible_gup_files "/x/y/somefile" |> CCList.take 3 |> List.map print_builder)
 		;
 	);
 
@@ -84,7 +88,7 @@ let suite = "Gupfile" >:::
 				new match_rule "bar2"]
 			)
 		]
-		(parse_gupfile @@ IO.input_string (
+		(Lwt_main.run (parse_gupfile @@ io_of_string (
 			String.concat "\n" [
 				"foo.gup:";
 				" foo1";
@@ -96,15 +100,15 @@ let suite = "Gupfile" >:::
 				"bar.gup :";
 				" bar1\t ";
 				"    bar2";
-			])
+			]))
 		)
 	);
 
 	"rule parsing" >:: (fun _ ->
 		let regexp_of_rule r = regexp_of_rule_parts ~original_text:"(none)" (parts_of_rule_pattern r) in
-		assert_equal ~printer:identity "^[^/]*$"         (regexp_of_rule "*");
-		assert_equal ~printer:identity "^.*$"            (regexp_of_rule "**");
-		assert_equal ~printer:identity "^foo.*bar[^/]*$" (regexp_of_rule "foo**bar*");
+		assert_equal ~printer:id "^[^/]*$"         (regexp_of_rule "*");
+		assert_equal ~printer:id "^.*$"            (regexp_of_rule "**");
+		assert_equal ~printer:id "^foo.*bar[^/]*$" (regexp_of_rule "foo**bar*");
 	);
 
 	"extracting extant targets from rules" >:: (fun _ ->
@@ -114,7 +118,7 @@ let suite = "Gupfile" >:::
 					rules |> List.map (fun r -> new match_rule r)
 			) in
 			rules#definite_targets_in dir (Array.of_list files)
-				|> List.of_enum
+				|> OSeq.to_list
 		in
 
 		assert_equal [ "file1" ] (gen_targets ["file1"; "*.html"] []);

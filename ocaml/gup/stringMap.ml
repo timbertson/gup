@@ -1,2 +1,1 @@
-open Batteries
-include Map.Make(String)
+include CCMap.Make(String)

@@ -1,7 +1,7 @@
 (* TODO: eventually extract into gup-rpc library *)
 open Parallel
 
-module IntMap = Map.Make(BatInt)
+module IntMap = Map.Make(CCInt)
 open Std
 module Log = (val Var.log_module "gup.rpc")
 

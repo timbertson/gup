@@ -1,7 +1,7 @@
-open Batteries
 open Std
 open Lwt
 open Path
+open CCFun
 
 type dirty_args = {
 	var: Var.t;
@@ -54,13 +54,11 @@ let readline f =
 		Lwt.return @@ Some line
 	with End_of_file -> Lwt.return None
 
-let int_option_of_string s = try Some (Int.of_string s) with Invalid_argument _ -> None
-
 let built_targets dir =
 	let contents = Sys.readdir dir in
-	contents |> Array.filter_map (fun f ->
-		if String.starts_with f (deps_ext ^ ".")
-			then Some (PathComponent.name_of_string (Tuple.Tuple2.second (String.split f ~by:".")))
+	contents |> CCArray.filter_map (fun f ->
+		if CCString.prefix ~pre:(deps_ext ^ ".") f
+			then (CCString.Split.left ~by:"." f) |> CCOpt.map (PathComponent.name_of_string % snd)
 			else None
 	) |> Array.to_list
 
@@ -120,7 +118,7 @@ let serializable dep = (dep#tag, dep#fields)
 let write_dependency output (tag,fields) =
 	let (_, typ) = List.find (fun (t, _) -> t = tag) tag_assoc in
 	if List.length fields <> typ.num_fields then Error.raise_safe "invalid fields";
-	Lwt_io.write_line output @@ (string_of_dependency_type tag) ^ ": " ^ (String.join " " fields)
+	Lwt_io.write_line output @@ (string_of_dependency_type tag) ^ ": " ^ (String.concat " " fields)
 
 type dep_dirty_state = [ `clean | `dirty | `clean_after_build ]
 let dirty_of_dep_state : dep_dirty_state -> bool = function
@@ -147,11 +145,11 @@ let is_mtime_mismatch ~var ~stored path =
 		(RelativeFrom.to_string path)
 		(option Util.big_int_pp) stored
 		(option Util.big_int_pp) current_mtime);
-	Lwt.return @@ not @@ eq (Option.compare ~cmp:Big_int.compare) stored current_mtime
+	Lwt.return @@ not @@ eq (CCOpt.compare Big_int.compare_big_int) stored current_mtime
 
 let file_fields ~mtime ~checksum path =
-	let mtime_str = Option.default empty_field (Option.map Big_int.string_of_big_int mtime) in
-	let checksum_str = Option.default empty_field checksum in
+	let mtime_str = CCOpt.get_or ~default:empty_field (CCOpt.map Big_int.string_of_big_int mtime) in
+	let checksum_str = CCOpt.get_or ~default:empty_field checksum in
 	[mtime_str; checksum_str; RelativeFrom.to_field path]
 
 class virtual base_dependency = object (self)
@@ -165,7 +163,7 @@ class virtual base_dependency = object (self)
 			PP.(list string) self#fields
 end
 
-and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:RelativeFrom.t) =
+and file_dependency ~(mtime:Big_int.big_int option) ~(checksum:string option) (path:RelativeFrom.t) =
 	object (self)
 		inherit base_dependency
 		method tag = FileDependency
@@ -179,7 +177,7 @@ and file_dependency ~(mtime:Big_int.t option) ~(checksum:string option) (path:Re
 			let state = new target_state ~var:args.var resolved_path in
 			let checksum_mismatch args =
 				let%lwt deps = state#deps in
-				let latest_checksum = Option.bind deps (fun deps -> deps#checksum) in
+				let latest_checksum = CCOpt.flat_map (fun deps -> deps#checksum) deps in
 				let dirty = match latest_checksum with
 					| None -> true
 					| Some dep_cs -> dep_cs <> checksum
@@ -239,9 +237,9 @@ and build_time time =
 		method fields = [Big_int.string_of_big_int time]
 		method is_dirty args =
 			let path = args.path |> ConcreteBase.to_string in
-			let%lwt mtime = Util.get_mtime path >>= (return $ Option.get) in
+			let%lwt mtime = Util.get_mtime path >>= (return $ CCOpt.get_exn) in
 			Lwt.return (
-				if neq Big_int.compare mtime time then (
+				if neq Big_int.compare_big_int mtime time then (
 					Log.debug args.var (fun m->m "%s mtime (%a) differs from build time (%a)" path
 						Util.big_int_pp mtime
 						Util.big_int_pp time);
@@ -312,26 +310,26 @@ and dependency_builder ~var target_path (input:Lwt_io.input_channel) = object
 	method build =
 		let basedir = ConcreteBase.dirname target_path in
 		let update_singleton r v =
-			assert (Option.is_none !r);
+			assert (CCOpt.is_none !r);
 			r := v;
 			None
 		in
 
 		let parse_line line : (dependency_class * string list) =
-			let tag, content = String.split line ~by:":" in
-			let (_, typ) =
-				try List.find (fun (prefix, _typ) -> prefix = tag) tag_assoc_str
-				with Not_found -> Error.raise_safe "invalid dep line: %s" line
+			let (typ, content) = CCString.Split.left line ~by:":" |> CCOpt.flat_map (fun (tag, content) ->
+				CCList.find_opt (fun (prefix, _typ) -> prefix = tag) tag_assoc_str
+					|> CCOpt.map (fun (_, typ) -> (typ, content))
+			) |> CCOpt.get_lazy (fun () -> Error.raise_safe "invalid dep line: %s" line)
 			in
-			let fields = Str.bounded_split (Str.regexp " ") (String.lchop content) typ.num_fields in
+			let fields = Str.bounded_split (Str.regexp " ") (CCString.ltrim content) typ.num_fields in
 			(typ, fields)
 		in
 
 		let _parse input rv =
 			let process_line line : base_dependency option =
-				let typ, fields = parse_line (String.strip line) in
+				let typ, fields = parse_line (String.trim line) in
 				let parse_cs cs = if cs = empty_field then None else Some cs in
-				let parse_mtime mtime = if mtime = empty_field then None else Some (Big_int.of_string mtime) in
+				let parse_mtime mtime = if mtime = empty_field then None else Some (Big_int.big_int_of_string mtime) in
 				match (typ.tag, fields) with
 					| (Checksum, [cs])      -> update_singleton rv.checksum (Some cs)
 					| (RunId, [r])          -> update_singleton rv.run_id (Some (new run_id r))
@@ -346,7 +344,7 @@ and dependency_builder ~var target_path (input:Lwt_io.input_channel) = object
 							Some (new builder_dependency
 								~mtime:(parse_mtime mtime)
 								(RelativeFrom.of_field ~basedir path))
-					| (BuildTime, [time]) -> Some (new build_time (Big_int.of_string time))
+					| (BuildTime, [time]) -> Some (new build_time (Big_int.big_int_of_string time))
 					| (AlwaysRebuild, []) -> Some (new always_rebuild)
 					| _ -> Error.raise_safe "Invalid dependency line: %s" line
 			in
@@ -367,10 +365,9 @@ and dependency_builder ~var target_path (input:Lwt_io.input_channel) = object
 			} in
 			let%lwt version_line = readline input in
 			Log.trace var PP.(fun m->m "version_line: %a" (option string) version_line);
-			let version_number = Option.bind version_line (fun line ->
-				if String.starts_with line version_marker then (
-					let (_, version_string) = String.split line ~by:" " in
-					int_option_of_string version_string
+			let version_number = version_line |> CCOpt.flat_map (fun line ->
+				if CCString.prefix ~pre:version_marker line then (
+					CCString.Split.left line ~by:" " |> CCOpt.flat_map (CCInt.of_string % snd)
 				) else None
 			) in
 			match version_number with
@@ -462,7 +459,7 @@ and target_state ~var (target_path:ConcreteBase.t) =
 		method mark_clobbers =
 			self#add_dependency (ClobbersTarget, [])
 
-		method private file_dependency_with ~(mtime:Big_int.t option) ~(checksum:string option) path =
+		method private file_dependency_with ~(mtime:Big_int.big_int option) ~(checksum:string option) path =
 			let path = ConcreteBase.rebase_to base_path path in
 			let dep = (new file_dependency ~mtime:mtime ~checksum:checksum path) in
 			Log.trace var (fun m->m "Adding dependency %s -> %a"
@@ -470,7 +467,7 @@ and target_state ~var (target_path:ConcreteBase.t) =
 				print_obj dep);
 			serializable dep
 
-		method add_file_dependency_with ~(mtime:Big_int.t option) ~(checksum:string option) path =
+		method add_file_dependency_with ~(mtime:Big_int.big_int option) ~(checksum:string option) path =
 			self#add_dependency (self#file_dependency_with ~mtime ~checksum path)
 
 		method add_file_dependency path =

@@ -1,5 +1,5 @@
 open Error
-open Batteries
+open CCFun
 
 module RealUnix = Unix
 module type UNIX = sig
@@ -162,13 +162,13 @@ module Make(Unix:UNIX) = struct
 		let name n = `name n
 
 		let string_of_name s = s
-		let string_of_name_opt s = s |> Option.map string_of_name |> Option.default ""
+		let string_of_name_opt s = s |> CCOpt.map string_of_name |> CCOpt.get_or ~default:""
 		let compare_name = String.compare
 		let _cast s = s
 		let lift fn = fn
 		let relative = Relative._cast % to_string
 		let relative_of_name = Relative._cast
-		let relative_of_name_opt n = n |> Option.map relative_of_name |> Option.default Relative.empty
+		let relative_of_name_opt n = n |> CCOpt.map relative_of_name |> CCOpt.get_or ~default:Relative.empty
 
 		let join components = Relative._cast (PathString_.join (components |> List.map to_string))
 		let join_names names = Relative._cast (PathString_.join (names |> List.map string_of_name))
@@ -205,7 +205,7 @@ module Make(Unix:UNIX) = struct
 			Absolute._cast (Filename.concat (to_string base) (Relative.to_string rel))
 
 		let basename : t -> PathComponent.name option = fun path ->
-			Super.basename path |> Option.map PathComponent.name_of_string
+			Super.basename path |> CCOpt.map PathComponent.name_of_string
 	end
 
 	module PathString = struct
@@ -415,14 +415,14 @@ module Make(Unix:UNIX) = struct
 			let base_list = Concrete.split base in
 			let newbase_list = Concrete.split newbase in
 
-			let zipped = Enum.combine (List.enum base_list, List.enum newbase_list) in
-			let common = Enum.count @@ Enum.take_while (fun (a,b) -> a = b) zipped in
+			let zipped = OSeq.zip (OSeq.of_list base_list) (OSeq.of_list newbase_list) in
+			let common = OSeq.length @@ OSeq.take_while (fun (a,b) -> a = b) zipped in
 
 			let depth_from_common_prefix = (List.length newbase_list - common) in
-			let base_from_common_prefix = List.drop common base_list |> List.map PathComponent.name in
+			let base_from_common_prefix = CCList.drop common base_list |> List.map PathComponent.name in
 
 			let rel_list =
-				List.of_enum (Enum.repeat ~times:depth_from_common_prefix `parent)
+				OSeq.to_list (OSeq.repeat `parent |> OSeq.take depth_from_common_prefix)
 				@ base_from_common_prefix
 				@ (match name with Some name -> [PathComponent.name name] | None -> [])
 			in

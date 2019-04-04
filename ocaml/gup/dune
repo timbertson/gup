@@ -4,14 +4,17 @@
 	(name gup)
 	(modules :standard \ main)
 	(libraries
-		batteries
 		containers
-		unix
 		cryptokit
+		extlib
 		extunix
 		logs
 		lwt
 		lwt.unix
+		num
+		oseq
+		str
+		unix
 	)
 	(preprocess (pps ppx_deriving_protobuf lwt_ppx))
 )

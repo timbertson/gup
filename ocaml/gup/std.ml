@@ -12,16 +12,24 @@ let print_obj (out: Format.formatter) r = r#print out
 
 module EnvironmentMap = struct
 	include StringMap
-	open Batteries
-	let array env = enum env |> Enum.map (fun (k, v) -> k^"="^v) |> Array.of_enum
+	let array env =
+		let seq receiver =
+			let bindings = StringMap.to_seq env in
+			bindings (fun (k,v) -> receiver (k^"="^v))
+		in
+		CCArray.of_list (CCList.of_seq seq)
+
+	let of_seq oseq = of_seq (fun receiver ->
+		oseq |> OSeq.iter receiver
+	)
 end
 
 module Unix = struct
 	include Unix
-	open Batteries
-	let environment_map () = (Array.enum @@ Unix.environment ()) |>
-		Enum.map (fun v -> String.split ~by:"=" v) |>
-		EnvironmentMap.of_enum
+	let environment_map () = (OSeq.of_array @@ Unix.environment ())
+		|> OSeq.map (fun v -> CCString.Split.left ~by:"=" v)
+		|> OSeq.filter_map CCFun.id
+		|> EnvironmentMap.of_seq
 end
 
 (* make an alias for those functions where
@@ -53,12 +61,6 @@ module Lwt_option = struct
 		match v with
 		| None -> Lwt.return_unit
 		| Some v -> Lwt.(>>=) (f v) (fun _ -> Lwt.return_unit)
-end
-
-module List = struct
-	include List
-	let enum = BatList.enum
-	let headOpt l = try Some (List.hd l) with Failure _ -> None
 end
 
 let ppf to_s fmt obj = Format.pp_print_string fmt (to_s obj)

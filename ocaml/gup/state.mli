@@ -1,4 +1,3 @@
-open Batteries
 open Path
 
 val meta_dir_name : PathComponent.name
@@ -20,7 +19,7 @@ class target_state : var:Var.t -> ConcreteBase.t ->
 		method deps : dependencies option Lwt.t
 		method add_file_dependency : ConcreteBase.t -> unit Lwt.t
 		method add_file_dependencies : ConcreteBase.t list -> unit Lwt.t
-		method add_file_dependency_with : mtime:(Big_int.t option) -> checksum:(string option) -> ConcreteBase.t -> unit Lwt.t
+		method add_file_dependency_with : mtime:(Big_int.big_int option) -> checksum:(string option) -> ConcreteBase.t -> unit Lwt.t
 		method add_checksum : string -> unit Lwt.t
 		method mark_always_rebuild : unit Lwt.t
 		method mark_clobbers : unit Lwt.t

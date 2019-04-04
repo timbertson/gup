@@ -65,3 +65,35 @@ let which exe =
 				else find tail
 	in
 	CCString.Split.klist_cpy ~by:":" (Unix.getenv "PATH") |> find
+
+let lwt_zip : 'a 'b. 'a Lwt.t -> 'b Lwt.t -> ('a * 'b) Lwt.t = fun a b ->
+	let aref = ref (Obj.magic ())
+	and bref = ref (Obj.magic ()) in
+	let set r = Lwt.map ((:=) r) in
+	Lwt.join [ set aref a; set bref b ]
+		|> Lwt.map (fun () -> (!aref, !bref))
+
+let oseq_head s = let open OSeq in match s () with
+	| Cons (x, _) -> Some x
+	| Nil -> None
+
+
+let stream_of_oseq input =
+	let head = ref input in
+	Lwt_stream.from_direct (fun () ->
+		let open OSeq in
+		match !head () with
+			| Nil -> None
+			| Cons (x, tail) -> head := tail; Some x
+	)
+
+
+let stream_of_lwt_oseq (input: 'a Lwt.t OSeq.t) : 'a Lwt_stream.t =
+	let head = ref input in
+	Lwt_stream.from (fun () ->
+		let open OSeq in
+		match !head () with
+			| Nil -> Lwt.return_none
+			| Cons (x, tail) -> head := tail; x |> Lwt.map (fun x -> Some x)
+	)
+
