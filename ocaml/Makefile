@@ -1,12 +1,14 @@
 all: bin
 
-release:
+release: PREBUILD
 	dune build -p gup
 
 unit-test-pre: test/test.exe
 integration-test-pre: bin
 
 bin: gup.install
+
+_bin:
 	ln -sfn _build/install/default/bin bin
 
 %.install %.exe: PREBUILD
@@ -22,7 +24,7 @@ unit-test: unit-test-pre phony
 integration-test: integration-test-pre phony
 	../run_tests.py -i
 
-PREBUILD: phony version
+PREBUILD: phony version _bin
 version: phony gup/version.ml
 
 gup/version.ml: ../VERSION
