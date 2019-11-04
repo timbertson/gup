@@ -31,8 +31,7 @@ add_to_env('PYTHONPATH', os.path.join(os.path.dirname(__file__), 'python'))
 
 try:
 	def run_nose(args):
-		if os.environ.get('CI', 'false') == 'true':
-			args = args + ['-v']
+		args = args + ['-v']
 		args = ['--with-doctest', '-w', test_dir] + args
 		args = list(filter(None, os.environ.get('NOSE_ARGS', '').split())) + args
 
