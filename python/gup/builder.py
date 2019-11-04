@@ -167,7 +167,7 @@ class Target(object):
 					self.state.mark_clobbers()
 					expect_clobber = False if deps is None else deps.clobbers
 					if not (from_update and expect_clobber):
-						_log.warn("%s modified %s directly" % (exe_path_relative_to_cwd, self.path))
+						_log.warning("%s modified %s directly" % (exe_path_relative_to_cwd, self.path))
 			if ret == 0:
 				if os.path.lexists(output_file):
 					if os.path.lexists(self.path) and (
@@ -178,7 +178,7 @@ class Target(object):
 					rename(output_file, self.path)
 				else:
 					if (not target_changed) and (os.path.lexists(self.path)) and (not os.path.islink(self.path)):
-						_log.warn("Removing stale target: %s", target_relative_to_cwd)
+						_log.warning("Removing stale target: %s", target_relative_to_cwd)
 						try_remove(self.path)
 				cleanup_output_file = False # not needed
 			else:

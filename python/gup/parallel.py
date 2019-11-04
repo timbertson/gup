@@ -272,11 +272,11 @@ def _discover_jobserver():
 				a = atoi(a)
 				b = atoi(b)
 			except ValueError:
-				_log.warn('invalid --jobserver-fds: %r' % arg)
+				_log.warning('invalid --jobserver-fds: %r' % arg)
 				return None
 
 			if a <= 0 or b <= 0:
-				_log.warn('invalid --jobserver-fds: %r' % arg)
+				_log.warning('invalid --jobserver-fds: %r' % arg)
 				return None
 			try:
 				fcntl.fcntl(a, fcntl.F_GETFL)
@@ -284,7 +284,7 @@ def _discover_jobserver():
 			except IOError as e:
 				if e.errno == errno.EBADF:
 					_log.debug("--jobserver-fds error (flags=%r, a=%r, b=%r)", flags, a, b, exc_info=True)
-					_log.warn('broken --jobserver-fds from make; prefix your Makefile rule with a "+"')
+					_log.warning('broken --jobserver-fds from make; prefix your Makefile rule with a "+"')
 					return None
 				else:
 					raise
@@ -300,7 +300,7 @@ def _create_named_pipe():
 	except OSError as e:
 		if e.errno == errno.EEXIST:
 			# if pipe already exists it must be old, so remove it
-			_log.warn("removing stale jobserver file: %s" % path)
+			_log.warning("removing stale jobserver file: %s" % path)
 			os.remove(path)
 			create()
 		else: raise
@@ -351,7 +351,7 @@ else:
 		"Start the job server"
 		global _jobserver
 		if _jobserver is not None:
-			_log.warn("tried to set up jobserver multiple times")
+			_log.warning("tried to set up jobserver multiple times")
 			return
 
 		_debug('setup_jobserver(%s)' % maxjobs)

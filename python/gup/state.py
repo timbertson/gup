@@ -416,7 +416,7 @@ class BuildTime(Dependency):
 		assert mtime is not None
 		_log.debug("comparing stored mtime %s to %s", self.value, mtime)
 		if mtime != self.value:
-			log_method = _log.warn
+			log_method = _log.warning
 			if os.path.isdir(path):
 				# dirs are modified externally for various reasons, not worth warning
 				log_method = _log.debug

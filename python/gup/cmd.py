@@ -176,7 +176,7 @@ def _get_parent_target():
 def _assert_parent_target(action):
 	p = _get_parent_target()
 	if p is None:
-		_log.warn("%s was used outside of a gup target; ignoring" % (action,))
+		_log.warning("%s was used outside of a gup target; ignoring" % (action,))
 		sys.exit(0)
 	return p
 
