@@ -450,7 +450,11 @@ let stream_of_seq input =
 			| Cons (x, tail) -> head := tail; Some x
 	)
 
-let find_builder ~var path : Buildable.t Recursive.t option Lwt.t =
-	possible_builders ~var path |> Util.stream_of_oseq |> Lwt_stream.filter_map_s (fun ((candidate:build_candidate), gupfile, target) ->
-		candidate#builder_for gupfile target
-	) |> Lwt_stream.get
+let find_builder =
+	let cached = PathMap.cached (ref PathMap.empty) in
+	fun ~var path : Buildable.t Recursive.t option Lwt.t ->
+		cached path (fun () ->
+			possible_builders ~var path |> Util.stream_of_oseq |> Lwt_stream.filter_map_s (fun ((candidate:build_candidate), gupfile, target) ->
+				candidate#builder_for gupfile target
+			) |> Lwt_stream.get
+		)

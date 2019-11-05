@@ -452,6 +452,18 @@ module Make(Unix:UNIX) = struct
 			(base, Relative.concat rel path)
 	end
 
+	module PathMap = struct
+		include Map.Make(ConcreteBase)
+		let cached cache = fun key fn -> (
+			try
+				find key !cache
+			with Not_found -> (
+				let result = fn () in
+				cache := add key result !cache;
+				result
+			)
+		)
+	end
 end
 
 include Make(Unix)

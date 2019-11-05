@@ -1,7 +1,6 @@
 open Std
 open Path
 open Error
-module PathMap = Map.Make(ConcreteBase)
 module Log = (val Var.log_module "gup.builder")
 
 let _guess_executable path =
@@ -197,20 +196,10 @@ let _build_if_dirty ~lease ~var ~cache ~dry = (
 		then (fun _ -> Lwt.return_true)
 		else perform_build ~lease ~var ~toplevel:false in
 
-	let with_cached_build key fn = (
-		try
-			PathMap.find key !cache
-		with Not_found -> (
-			let result : bool Lwt.t = fn () in
-			cache := PathMap.add key result !cache;
-			result
-		)
-	) in
-
 	(* builds a single buildable if its state is dirty *)
 	let rec build_target_if_dirty buildable = (
 		let target_path = Buildable.target_path buildable in
-		with_cached_build target_path (fun () ->
+		PathMap.cached cache target_path (fun () ->
 			Log.debug var (fun m->m "%s [check]"
 				(ConcreteBase.rebase_to Var.root_cwd target_path
 				|> RelativeFrom.relative |> Relative.to_string)
@@ -252,18 +241,15 @@ let _build_if_dirty ~lease ~var ~cache ~dry = (
 			)
 	)
 
-	(* builds a single _path_ if dirty (used by deps#is_dirty), fronted
-	 * by a cache in case we see the same dep twice *)
+	(* builds a single _path_ if dirty (used by deps#is_dirty) *)
 	and build_path_if_dirty path = (
 		let path = ConcreteBase.resolve_relfrom path in
-		with_cached_build path (fun () ->
-			let%lwt builder = Gupfile.find_builder ~var path in
-			match builder with
-				| None ->
-					Log.trace var (fun m->m "CLEAN: %s (not a target)" (ConcreteBase.to_string path));
-					Lwt.return_false
-				| Some buildable -> build_recursive_if_dirty buildable
-		)
+		let%lwt builder = Gupfile.find_builder ~var path in
+		match builder with
+			| None ->
+				Log.trace var (fun m->m "CLEAN: %s (not a target)" (ConcreteBase.to_string path));
+				Lwt.return_false
+			| Some buildable -> build_recursive_if_dirty buildable
 	)
 
 	and build_recursive_if_dirty (buildable: Buildable.t Recursive.t) = (
