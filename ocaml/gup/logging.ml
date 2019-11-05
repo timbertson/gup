@@ -79,6 +79,9 @@ let set_level new_lvl =
 	| Trace -> Logs.Debug
 	))
 
+let _flush = ref ignore
+let flush () = !_flush ()
+
 let set_formatter r =
 	let want_color =
 		try Sys.getenv "GUP_COLOR"
@@ -101,7 +104,10 @@ let set_formatter r =
 			reset  = "\x1b[m";
 		} else no_colors
 	in
-	Logs.set_reporter (r colors Format.err_formatter)
+	let fmt = Format.err_formatter in
+	_flush := Format.pp_print_flush fmt;
+	Logs.set_reporter (r colors fmt)
+
 
 (* upstream Logs compat, with added TRACE level *)
 module LogsExt = struct

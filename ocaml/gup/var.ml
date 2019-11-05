@@ -58,6 +58,8 @@ module VarLog = struct
 		let module Log = struct
 			let wrap logfn var : 'a Logs.log = fun fn ->
 				logfn (fun m -> fn (fun ?header:_ ?tags fmt -> m ?header:(Some var.indent_str) ?tags fmt))
+				(* uncomment for responsive logs in the face of non-termination *)
+				(* ; Logging.flush () *)
 
 			let err var = wrap Base.err var
 			let warn var = wrap Base.warn var
