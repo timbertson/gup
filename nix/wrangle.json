@@ -1,0 +1,53 @@
+{
+  "sources": {
+    "nix-wrangle": {
+      "fetch": {
+        "owner": "timbertson",
+        "repo": "nix-wrangle",
+        "rev": "97e9048b7b2fa5ed80f3bb2c369364519aa35c7c",
+        "sha256": "0s2a65dh1xdyj6ygdgg2zisl109bqxzyjgywibbm9zwrygifj8yr"
+      },
+      "nix": "nix",
+      "owner": "timbertson",
+      "ref": "v1",
+      "repo": "nix-wrangle",
+      "type": "github"
+    },
+    "opam2nix": {
+      "fetch": {
+        "owner": "timbertson",
+        "repo": "opam2nix",
+        "rev": "5ece45d7ed561e365a00ae551326e8c20c9f9710",
+        "sha256": "0b625d4bn7zhckp5yfgzzfipr555v5mb77bg75rspq5q1gr49w60"
+      },
+      "nix": "default.nix",
+      "owner": "timbertson",
+      "ref": "v1",
+      "repo": "opam2nix",
+      "type": "github"
+    },
+    "public": {
+      "fetch": {
+        "owner": "timbertson",
+        "repo": "gup",
+        "rev": "eb8b116d6ab66e9f51560c6408f161c0911a31a6",
+        "sha256": "1cla13s9sxj6zsjwv2f05s5gb1lww900ngq2gw8vpm9v2xmdgb5m"
+      },
+      "nix": "default.nix",
+      "owner": "timbertson",
+      "ref": "master",
+      "repo": "gup",
+      "type": "github"
+    },
+    "self": {
+      "fetch": {
+        "relativePath": "."
+      },
+      "relativePath": ".",
+      "type": "git-local"
+    }
+  },
+  "wrangle": {
+    "apiversion": 1
+  }
+}

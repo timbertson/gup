@@ -43,22 +43,14 @@ update-windows: phony
 	git checkout origin/windows
 
 # CI targets: invoked from the top-level, will run tests inside nix
-ci-python2: phony
-	./test/nix-shell -A python2 --run "make -C python test"
-
 ci-python3: phony
-	./test/nix-shell -A python3 --run "make -C python test"
+	./test/nix-shell -A python --run "make -C python test"
 
 ci-ocaml: phony
 	./test/nix-shell -A ocaml --run "make -C ocaml test"
 
-ci-opam: phony
-	./test/nix-shell -A opam --run "env TRAVIS=${TRAVIS} make -C ocaml opam-test"
-
 ci-permutation: phony
 	./test/nix-shell -A development --run "make permutation-test"
-
-ci-all: phony ci-python2 ci-python3 ci-ocaml ci-opam ci-permutation
 
 install-base: phony
 	[ -n "${DISTDIR}" ]

@@ -1,0 +1,2 @@
+#!bash -eux
+nix-shell -A resolveSelection ../default.nix --argstr selection "$1"
