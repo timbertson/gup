@@ -16,6 +16,7 @@
 		str
 		unix
 	)
+	(flags (:include ./flags))
 	(preprocess (pps ppx_deriving_protobuf lwt_ppx))
 )
 

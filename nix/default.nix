@@ -1,5 +1,6 @@
 { stdenv, pkgs, callPackage, python3Packages, ocaml-ng, opam2nix, self }:
 let
+	ocamlPackages = ocaml-ng.ocamlPackages_4_08;
 	pythonPackages = python3Packages;
 	python = pythonPackages.python;
 
@@ -13,7 +14,7 @@ let
 	pychecker = pkgs.callPackage ./pychecker.nix {};
 
 	opamArgs = {
-		inherit (ocaml-ng.ocamlPackages_4_06) ocaml;
+		inherit (ocamlPackages) ocaml;
 		selection = ./opam-selection.nix;
 		src = self;
 	};
@@ -30,6 +31,7 @@ let
 		python = wrapImpl (callPackage ./gup-python.nix { inherit python pychecker; });
 		ocaml = wrapImpl (opamSelection.gup);
 		development = withExtraDeps result.ocaml (result.python.buildInputs);
+		inherit opamSelection;
 	};
 in
 result.development.overrideAttrs (o: {

@@ -17,7 +17,7 @@ let
 in
 {
   format-version = 4;
-  ocaml-version = "4.06.1";
+  ocaml-version = "4.08.1";
   opam-commit = opam-commit;
   selection = 
   {
@@ -78,24 +78,23 @@ in
     };
     camlp4 = 
     {
-      buildInputs = [ (pkgs.camlp4 or null) (pkgs.camlp4-extra or null) ];
       opamInputs = 
       {
         ocaml = selection.ocaml;
-        ocaml-system = selection.ocaml-system;
+        ocamlbuild = selection.ocamlbuild;
       };
       opamSrc = repoPath repo 
       {
-        hash = "sha256:145zv79bf3jyf1lzxrxi80pvd5k9ddwm7zx7bw0mhpjw7hwxbfkg";
-        package = "packages/camlp4/camlp4.4.06+system";
+        hash = "sha256:1fc9rfgbndhy1dn7c8kjmsvanxxfqfaa0imd3pdny0x64q87d2m5";
+        package = "packages/camlp4/camlp4.4.08+1";
       };
       pname = "camlp4";
       src = pkgs.fetchurl 
       {
-        sha256 = "13kf9mskhaznxgychpgp238fcvgmyv7gdpfgcip1yybl429dxzch";
-        url = "https://github.com/ocaml/camlp4/archive/system.1.tar.gz";
+        sha256 = "124xpl9bl0ggj498in5gypp9zdifvm3ln3znfxc47y7vrayx6p35";
+        url = "https://github.com/ocaml/camlp4/archive/4.08+1.tar.gz";
       };
-      version = "4.06+system";
+      version = "4.08+1";
     };
     conf-gmp = 
     {
@@ -522,12 +521,29 @@ in
       };
       opamSrc = repoPath repo 
       {
-        hash = "sha256:1wd1hz4r4rwqmfhlkw9j0j0zkq6z4mlmx06nbnckkcvjqq484z9p";
-        package = "packages/ocaml/ocaml.4.06.1";
+        hash = "sha256:1f2v07fzx7rg0lc8pzs1s24vp49y0jyfxf98b9z57giik28dafgp";
+        package = "packages/ocaml/ocaml.4.08.1";
       };
       pname = "ocaml";
       src = null;
-      version = "4.06.1";
+      version = "4.08.1";
+    };
+    ocaml-base-compiler = 
+    {
+      opamInputs = {
+      };
+      opamSrc = repoPath repo 
+      {
+        hash = "sha256:1gh1552rac1r3zzw1b7z0776walapin07bk0bpg8j561b4kwcb46";
+        package = "packages/ocaml-base-compiler/ocaml-base-compiler.4.08.1";
+      };
+      pname = "ocaml-base-compiler";
+      src = pkgs.fetchurl 
+      {
+        sha256 = "11fvsm861lr73lk181gl5iczprp8d83fvgc1q6dx8gxqhzad6gmm";
+        url = "https://github.com/ocaml/ocaml/archive/4.08.1.tar.gz";
+      };
+      version = "4.08.1";
     };
     ocaml-config = 
     {
@@ -567,19 +583,6 @@ in
         url = "https://github.com/ocaml-ppx/ocaml-migrate-parsetree/releases/download/v1.4.0/ocaml-migrate-parsetree-v1.4.0.tbz";
       };
       version = "1.4.0";
-    };
-    ocaml-system = 
-    {
-      opamInputs = {
-      };
-      opamSrc = repoPath repo 
-      {
-        hash = "sha256:1714bj1vxy930dgcyjzaahijmhd8hibx2cchbw1grbl82p6x41ph";
-        package = "packages/ocaml-system/ocaml-system.4.06.1";
-      };
-      pname = "ocaml-system";
-      src = null;
-      version = "4.06.1";
     };
     ocamlbuild = 
     {
@@ -750,16 +753,16 @@ in
       };
       opamSrc = repoPath repo 
       {
-        hash = "sha256:0d77xpvaz95qnkwzwybzs52pk9wnywdxq2h24vj0vplqzmphpvmp";
-        package = "packages/ppx_tools/ppx_tools.5.1+4.06.0";
+        hash = "sha256:09w55zr780cw72zx72x81j8fcvmqxvcba45y17rk3i7wvz3wf9py";
+        package = "packages/ppx_tools/ppx_tools.5.3+4.08.0";
       };
       pname = "ppx_tools";
       src = pkgs.fetchurl 
       {
-        sha256 = "0mncpy9v2mcjgnj7s2vqpp2b1ixv54djicfx66ic9wny9d202gj1";
-        url = "https://github.com/ocaml-ppx/ppx_tools/archive/5.1+4.06.0.tar.gz";
+        sha256 = "0i9nh0rs1h6z4jnhahppbdm5d5q47w4xs6hhc8dy6sbjh7rf8fl4";
+        url = "https://github.com/ocaml-ppx/ppx_tools/archive/5.3+4.08.0.tar.gz";
       };
-      version = "5.1+4.06.0";
+      version = "5.3+4.08.0";
     };
     ppx_tools_versioned = 
     {
@@ -826,23 +829,17 @@ in
     };
     seq = 
     {
-      opamInputs = 
-      {
-        dune = selection.dune;
-        ocaml = selection.ocaml;
+      opamInputs = {
+                     ocaml = selection.ocaml;
       };
       opamSrc = repoPath repo 
       {
-        hash = "sha256:1zaqrqiky2w8qri0v7fdz8fgbf7dayqyj1fxdr98wbk80cdz30h1";
-        package = "packages/seq/seq.0.2";
+        hash = "sha256:1vm8mk6zm2q3fwnkprl6jib048zr4ysldw0bl74x6wwbxj0vx6k9";
+        package = "packages/seq/seq.base";
       };
       pname = "seq";
-      src = pkgs.fetchurl 
-      {
-        sha256 = "010r532y9a6zzx73d921r8n2n8xk96fifa9sxl16cbkrrvj4rv05";
-        url = "https://github.com/c-cube/seq/archive/0.2.tar.gz";
-      };
-      version = "0.2";
+      src = null;
+      version = "base";
     };
     topkg = 
     {
