@@ -17,6 +17,11 @@ let
 		inherit (ocamlPackages) ocaml;
 		selection = ./opam-selection.nix;
 		src = self;
+		override = {selection}: {
+			gup = super: super.overrideAttrs (impl: {
+				buildInputs = (impl.buildInputs or []) ++ [ selection.ounit ];
+			});
+		};
 	};
 
 	opamSelection = opam2nix.build opamArgs;
@@ -27,7 +32,7 @@ let
 
 	result = {
 		pychecker = pkgs.callPackage ./nix/pychecker.nix {};
-		resolveSelection = opam2nix.resolve opamArgs [ ../gup.opam ];
+		resolveSelection = opam2nix.resolve opamArgs [ ../gup.opam "ounit" ];
 		python = wrapImpl (callPackage ./gup-python.nix { inherit python pychecker; });
 		ocaml = wrapImpl (opamSelection.gup);
 		development = withExtraDeps result.ocaml (result.python.buildInputs);

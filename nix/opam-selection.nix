@@ -127,7 +127,7 @@ in
     };
     conf-m4 = 
     {
-      buildInputs = [ (pkgs.m4 or null) ];
+      buildInputs = [ (pkgs.m4) ];
       opamInputs = {
       };
       opamSrc = repoPath repo 
@@ -141,7 +141,7 @@ in
     };
     conf-perl = 
     {
-      buildInputs = [ (pkgs.perl or null) (pkgs.perl-Pod-Html or null) ];
+      buildInputs = [ (pkgs.perl) ];
       opamInputs = {
       };
       opamSrc = repoPath repo 
@@ -169,28 +169,23 @@ in
       src = null;
       version = "1.1";
     };
-    conf-python-2-7 = 
+    conf-python-3 = 
     {
-      buildInputs = [ (pkgs."dev-lang/python:2.7" or null)
-                       (pkgs."lang/python27" or null) (pkgs.python or null)
-                       (pkgs."python/2.7" or null) (pkgs.python2 or null)
-                       (pkgs."python2.7" or null) (pkgs.python27 or null) ];
+      buildInputs = [ (pkgs.python3) ];
       opamInputs = {
       };
       opamSrc = repoPath repo 
       {
-        hash = "sha256:0rhcw4z2ba2vhwr5x35g7g8dbaa3msld7rr3sqnydn3zjidj14q5";
-        package = "packages/conf-python-2-7/conf-python-2-7.1.0";
+        hash = "sha256:0wgv2ha39p4p19d9x0456jcl6c2v4y0v27g06v5sz6h9d6y80cgq";
+        package = "packages/conf-python-3/conf-python-3.1.0.0";
       };
-      pname = "conf-python-2-7";
+      pname = "conf-python-3";
       src = null;
-      version = "1.0";
+      version = "1.0.0";
     };
     conf-zlib = 
     {
-      buildInputs = [ (pkgs.lzlib or null) (pkgs.zlib or null)
-                       (pkgs.zlib-dev or null) (pkgs.zlib-devel or null)
-                       (pkgs.zlib1g-dev or null) ];
+      buildInputs = [ (pkgs.zlib) ];
       opamInputs = 
       {
         conf-pkg-config = selection.conf-pkg-config;
@@ -370,7 +365,7 @@ in
       buildInputs = [ (pkgs.zlib or null) ];
       opamInputs = 
       {
-        conf-python-2-7 = selection.conf-python-2-7;
+        conf-python-3 = selection.conf-python-3;
         containers = selection.containers;
         cryptokit = selection.cryptokit;
         dune = selection.dune;
@@ -671,6 +666,49 @@ in
       };
       version = "0.3";
     };
+    ounit = 
+    {
+      opamInputs = 
+      {
+        ocamlfind = selection.ocamlfind;
+        ounit2 = selection.ounit2;
+      };
+      opamSrc = repoPath repo 
+      {
+        hash = "sha256:06gh1jvz45rq9qsqg9fb1pkas5xyms6bca8d0pmf2vyj7nj87xf7";
+        package = "packages/ounit/ounit.2.2.1";
+      };
+      pname = "ounit";
+      src = pkgs.fetchurl 
+      {
+        sha256 = "0fayi6laqrzxhvz7w32fkbhlqz914k6v2hqcdszakcnx7j61wy6v";
+        url = "https://github.com/gildor478/ounit/releases/download/v2.2.1/ounit-v2.2.1.tbz";
+      };
+      version = "2.2.1";
+    };
+    ounit2 = 
+    {
+      opamInputs = 
+      {
+        base-bytes = selection.base-bytes;
+        base-unix = selection.base-unix;
+        dune = selection.dune;
+        ocaml = selection.ocaml;
+        stdlib-shims = selection.stdlib-shims;
+      };
+      opamSrc = repoPath repo 
+      {
+        hash = "sha256:1nwzc9p5k3hdyrzff63zxgv1fg3swla9j9y7rznyrgfqbby7izpx";
+        package = "packages/ounit2/ounit2.2.2.1";
+      };
+      pname = "ounit2";
+      src = pkgs.fetchurl 
+      {
+        sha256 = "0fayi6laqrzxhvz7w32fkbhlqz914k6v2hqcdszakcnx7j61wy6v";
+        url = "https://github.com/gildor478/ounit/releases/download/v2.2.1/ounit-v2.2.1.tbz";
+      };
+      version = "2.2.1";
+    };
     ppx_derivers = 
     {
       opamInputs = 
@@ -840,6 +878,26 @@ in
       pname = "seq";
       src = null;
       version = "base";
+    };
+    stdlib-shims = 
+    {
+      opamInputs = 
+      {
+        dune = selection.dune;
+        ocaml = selection.ocaml;
+      };
+      opamSrc = repoPath repo 
+      {
+        hash = "sha256:0l6bfv426xb77qfiv880yy8dcscb2hi5703n9dj32fa3mlxnbg42";
+        package = "packages/stdlib-shims/stdlib-shims.0.1.0";
+      };
+      pname = "stdlib-shims";
+      src = pkgs.fetchurl 
+      {
+        sha256 = "1jv6yb47f66239m7hsz7zzw3i48mjpbvfgpszws48apqx63wjwsk";
+        url = "https://github.com/ocaml/stdlib-shims/releases/download/0.1.0/stdlib-shims-0.1.0.tbz";
+      };
+      version = "0.1.0";
     };
     topkg = 
     {

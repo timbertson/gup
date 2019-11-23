@@ -15,7 +15,7 @@ depends: [
   "ocamlfind" {build}
   "oseq"
   "ppx_deriving_protobuf" { >= "2.6" }
-  "conf-python-2-7" {build}
+  "conf-python-3" {build}
   "dune" {build & >= "1.0"}
   "ounit" {with-test}
 ]
