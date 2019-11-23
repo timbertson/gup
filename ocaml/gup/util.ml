@@ -87,13 +87,13 @@ let stream_of_oseq input =
 			| Cons (x, tail) -> head := tail; Some x
 	)
 
-
-let stream_of_lwt_oseq (input: 'a Lwt.t OSeq.t) : 'a Lwt_stream.t =
-	let head = ref input in
+let deferred_stream (input: 'a Lwt_stream.t Lwt.t) : 'a Lwt_stream.t =
+	let stream = ref None in
 	Lwt_stream.from (fun () ->
-		let open OSeq in
-		match !head () with
-			| Nil -> Lwt.return_none
-			| Cons (x, tail) -> head := tail; x |> Lwt.map (fun x -> Some x)
+		match !stream with
+			| None -> Lwt.bind input (fun s ->
+					stream := Some s;
+					Lwt_stream.get s
+			)
+			| Some stream -> Lwt_stream.get stream
 	)
-

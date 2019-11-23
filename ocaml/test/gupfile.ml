@@ -117,8 +117,7 @@ let suite = "Gupfile" >:::
 			let rules = new match_rules (
 					rules |> List.map (fun r -> new match_rule r)
 			) in
-			rules#definite_targets_in dir (Array.of_list files)
-				|> OSeq.to_list
+			rules#definite_targets_in dir files |> OSeq.to_list
 		in
 
 		assert_equal [ "file1" ] (gen_targets ["file1"; "*.html"] []);

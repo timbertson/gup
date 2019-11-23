@@ -115,7 +115,7 @@ class match_rule (original_text:string) =
 			) in
 
 			(* if rule happens to match existing files, include them *)
-			let existing_file_targets = existing_files |> OSeq.of_array |> OSeq.filter (function filename ->
+			let existing_file_targets = existing_files |> OSeq.of_list |> OSeq.filter (function filename ->
 				self#matches (full_target filename)
 			) in
 
@@ -148,7 +148,7 @@ class match_rules (rules:match_rule list) =
 		 *)
 		method definite_targets_in
 			(prefix:string)
-			(existing_files:string array) : string OSeq.t
+			(existing_files:string list) : string OSeq.t
 		=
 			includes |> OSeq.of_list
 				|> OSeq.map (fun r -> r#definite_targets_in prefix existing_files)
@@ -394,44 +394,51 @@ let possible_builders ~var (path:ConcreteBase.t) : (build_candidate * gupfile * 
  * list of _possible_ names is not useful.
  *)
 let buildable_files_in ~var (dir:Concrete.t) : string Lwt_stream.t =
-	let readdir dir = try
-		Sys.readdir dir
-	with
-		| Sys_error _ -> [| |]
+	let empty_stream = Lwt_stream.from_direct (fun () -> None) in
+	let readdir_opt dir : string Lwt_stream.t =
+		let source = Lwt_unix.files_of_directory dir in
+		Lwt_stream.from (fun () ->
+			try%lwt Lwt_stream.get source
+			with Unix.Unix_error _ -> Lwt.return None
+		)
 	in
-	let existing_files = (Concrete.lift readdir) dir in
-	let extract_targets source : string list Lwt.t =
-		match source with
-			| Direct (root, suff) ->
-					(* direct targets are just <name>.gup *)
-					let candidate = new build_candidate var root suff in
-					let base_path = candidate#base_path in
-					let files = (Absolute.lift Lwt_unix.files_of_directory) base_path in
-					files
-						|> Lwt_stream.filter_map (fun f ->
-							if (has_gup_extension f && Util.lexists ((Absolute.lift Filename.concat) base_path f))
-								then Some (remove_gup_extension f)
-								else None
-						)
-						|> Lwt_stream.to_list
-			| Indirect (root, suff, target_prefix) ->
-					let candidate = new build_candidate var root suff in
-					let%lwt guppath = candidate#guppath Gupfile |> extant_file_path ~var in
-					let get_targets (guppath: Absolute.t) : string list Lwt.t =
-						parse_gupfile_at guppath |> Lwt.map (fun parsed -> parsed
-							|> List.map snd
-							|> List.map (fun rule ->
-								rule#definite_targets_in (Relative.to_string target_prefix) existing_files |> OSeq.to_list
-							) |> List.flatten
-						)
-					in
-					guppath |> CCOpt.map get_targets |> CCOpt.get_or ~default:(Lwt.return CCList.empty)
+	let existing_files = lazy ((Concrete.lift readdir_opt) dir |> Lwt_stream.to_list) in
+	let extract_targets source : string Lwt_stream.t = match source with
+		| Direct (root, suff) ->
+			(* direct targets are just <name>.gup *)
+			let candidate = new build_candidate var root suff in
+			let base_path = candidate#base_path in
+			let files = (Absolute.lift readdir_opt) base_path in
+			files
+				|> Lwt_stream.filter_map (fun f ->
+					if (has_gup_extension f && Util.lexists ((Absolute.lift Filename.concat) base_path f))
+						then Some (remove_gup_extension f)
+						else None
+				)
+		| Indirect (root, suff, target_prefix) -> Util.deferred_stream (
+			let candidate = new build_candidate var root suff in
+			let%lwt guppath = candidate#guppath Gupfile |> extant_file_path ~var in
+			let get_targets (guppath: Absolute.t) : string Lwt_stream.t Lwt.t =
+				let%lwt existing_files = Lazy.force existing_files in
+				let%lwt parsed = parse_gupfile_at guppath in
+				Lwt.return (parsed
+					|> List.map snd
+					|> List.map (fun rule ->
+						rule#definite_targets_in (Relative.to_string target_prefix) existing_files |> OSeq.to_list
+					)
+					|> List.flatten
+					|> Lwt_stream.of_list
+				)
+			in
+			guppath |> CCOpt.map get_targets |> CCOpt.get_or ~default:(Lwt.return empty_stream)
+		)
 	in
 
-	let chunks : string list Lwt.t OSeq.t = (build_sources dir |> OSeq.map extract_targets) in
-	let all_results : string Lwt_stream.t = Util.stream_of_lwt_oseq chunks
-		|> Lwt_stream.map Lwt_stream.of_list |> Lwt_stream.concat in
-
+	let all_results : string Lwt_stream.t = build_sources dir
+		|> Util.stream_of_oseq
+		|> Lwt_stream.map extract_targets
+		|> Lwt_stream.concat
+	in
 	(* all_results may have dupes - instead return an enum that lazily filters out successive seen elements *)
 	let module Set = Set.Make(String) in
 	let seen = ref Set.empty in
