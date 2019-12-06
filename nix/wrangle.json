@@ -26,19 +26,6 @@
       "repo": "opam2nix",
       "type": "github"
     },
-    "public": {
-      "fetch": {
-        "owner": "timbertson",
-        "repo": "gup",
-        "rev": "eb8b116d6ab66e9f51560c6408f161c0911a31a6",
-        "sha256": "1cla13s9sxj6zsjwv2f05s5gb1lww900ngq2gw8vpm9v2xmdgb5m"
-      },
-      "nix": "default.nix",
-      "owner": "timbertson",
-      "ref": "master",
-      "repo": "gup",
-      "type": "github"
-    },
     "self": {
       "fetch": {
         "relativePath": "."
