@@ -2,10 +2,10 @@
 stdenv.mkDerivation rec {
   version = "0.7.0";
   src = fetchFromGitHub {
-    owner = "timbertson";
+    rev = "8b4e22e90db0db4296d3806cb4418fbd7874f32e";
+    sha256 = "1zjd76jyb5zc9w3l368723bjmxjl05s096g8ipwncfks1p9hdgf3";
     repo = "gup";
-    rev = "version-0.7.0";
-    sha256 = "1pwnmlq2pgkkln9sgz4wlb9dqlqw83bkf105qljnlvggc21zm3pv";
+    owner = "timbertson";
   };
   name = "gup-${version}";
   buildInputs = lib.remove null [ python which pychecker ];
