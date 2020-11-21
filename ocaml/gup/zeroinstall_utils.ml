@@ -168,22 +168,11 @@ let abspath ~cwd path =
     else cwd +/ path
   )
 
-let walk root fn : unit =
-  let rec _walk path =
-    let contents = Sys.readdir path in
-    let (dirs, files) = List.partition
-      (fun name -> Sys.is_directory (path +/ name))
-      (Array.to_list contents) in
-    let dirs = fn path dirs files in
-    dirs |> List.iter (fun dir -> _walk (path +/ dir))
-  in
-  _walk root
-
-let readdir path =
-  try Success (Sys.readdir path)
-  with Sys_error _ as ex -> Problem ex
-
 let rmtree root =
+  let readdir path =
+    try Success (Sys.readdir path)
+    with Sys_error _ as ex -> Problem ex
+  in
   try
     let rec rmtree path =
       match try_lstat path with

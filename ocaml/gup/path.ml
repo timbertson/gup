@@ -233,9 +233,11 @@ module Make(Unix:UNIX) = struct
 
 		let walk root fn : unit =
 			let isdir = fun base name ->
-				Sys.is_directory (
-					Filename.concat base (PathComponent.string_of_name name)
-				)
+				let path = Filename.concat base (PathComponent.string_of_name name) in
+				let stat = RealUnix.lstat path in
+				match stat.st_kind with
+					| RealUnix.S_DIR -> true
+					| _ -> false
 			in
 
 			let rec _walk path =

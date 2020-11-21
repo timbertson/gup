@@ -137,7 +137,6 @@ module CmdActions = struct
 	let clean
 		~(force:bool Opt.t)
 		~(dry_run:bool Opt.t)
-
 		~(metadata:bool Opt.t)
 		~(interactive:bool Opt.t)
 		~var
