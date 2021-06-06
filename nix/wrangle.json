@@ -17,8 +17,8 @@
       "fetch": {
         "owner": "timbertson",
         "repo": "opam2nix",
-        "rev": "1ffd0231c972bef5d741f178072593bee98c62da",
-        "sha256": "1j2l8sfs9n2pfqm0xg517rdnwb8sqb23m7gi1wqblxd12f5v1f04"
+        "rev": "48e98dce385cee4a615445249d4c0aaa58596872",
+        "sha256": "1drw254961xqg2gz7pbkgpc81gxwhq11bzdp83kzc0sdj5hixsxd"
       },
       "nix": "default.nix",
       "owner": "timbertson",
