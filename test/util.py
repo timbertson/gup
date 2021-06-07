@@ -119,7 +119,7 @@ class TestCase(mocktest.TestCase):
 		self.invocation_count = 0
 		if self.exes is None:
 			self.exes = initial_exes
-		self.ROOT = tempfile.mkdtemp(prefix='gup-test-')
+		self.ROOT = os.path.realpath(tempfile.mkdtemp(prefix='gup-test-'))
 		log.debug('root: %s', self.ROOT)
 		# self._last_build_time = None
 	
