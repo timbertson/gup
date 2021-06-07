@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # Gup build tool
-# VERSION: 0.7.0
+# VERSION: 0.8.0
 # Copyright (C) 2013  Tim Cuthbertson, Avery Pennarun
 #
 # This library is free software; you can redistribute it and/or
@@ -245,7 +245,7 @@ def traverse_from(base, rel, resolve_final=False):
 
 
 ## --- version.py --- ##
-VERSION = "0.7.0"
+VERSION = "0.8.0"
 
 ## --- error.py --- ##
 UNKNOWN_ERROR_CODE = 1

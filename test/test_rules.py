@@ -162,9 +162,9 @@ class TestDirectoryTargets(TestCase):
 	
 	def test_relative_paths_are_supported_from_within_target(self):
 		self.write('dir.gup', BASH + 'mkdir -p $1; echo ok > $1/hello; mkdir $1/child')
-		self.build_u('dir' + os.path.sep)
-		self.build_u('.' + os.path.sep, cwd=self.path('dir'))
-		self.build_u('./' + os.path.sep, cwd=self.path('dir'))
-		self.build_u('../' + os.path.sep, cwd=self.path('dir/child'))
-		self.build_u('..' + os.path.sep, cwd=self.path('dir/child'))
+		self.build_u('dir')
+		self.build_u('.', cwd=self.path('dir'))
+		self.build_u('./', cwd=self.path('dir'))
+		self.build_u('../', cwd=self.path('dir/child'))
+		self.build_u('..', cwd=self.path('dir/child'))
 		self.assertEqual(self.read('dir/hello'), 'ok')
