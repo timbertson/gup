@@ -2,10 +2,10 @@
   "sources": {
     "nix-wrangle": {
       "fetch": {
+        "hash": "sha256-yHejSB3cZbHyBgMiiu0BweKqimN0KVosBmjSY9mjT0E=",
         "owner": "timbertson",
         "repo": "nix-wrangle",
-        "rev": "97e9048b7b2fa5ed80f3bb2c369364519aa35c7c",
-        "sha256": "0s2a65dh1xdyj6ygdgg2zisl109bqxzyjgywibbm9zwrygifj8yr"
+        "rev": "25625d48f91785715dc62d7d90e44777839fa03d"
       },
       "nix": "nix",
       "owner": "timbertson",
@@ -15,10 +15,10 @@
     },
     "opam2nix": {
       "fetch": {
+        "hash": "sha256-B2CeN3DzZFa8RCdraCIASqjCaG7lSVwPxlmkBWgkISE=",
         "owner": "timbertson",
         "repo": "opam2nix",
-        "rev": "8d787c5cc26b29ff3874f73a2f6b64f21764859f",
-        "sha256": "1myjbqq5bdm1x9g6z5lbhwrm15j2jq2pfjfqrn99frij50c7v2bs"
+        "rev": "d66764553c19a86520107977c0105f9d2d520b78"
       },
       "nix": "default.nix",
       "owner": "timbertson",
@@ -28,10 +28,10 @@
     },
     "public": {
       "fetch": {
+        "hash": "sha256-w70G0w16Omb5jeiZBHQBVPYq1xAHmUEHT+yX5aU5Tf4=",
         "owner": "timbertson",
         "repo": "gup",
-        "rev": "8b4e22e90db0db4296d3806cb4418fbd7874f32e",
-        "sha256": "1zjd76jyb5zc9w3l368723bjmxjl05s096g8ipwncfks1p9hdgf3"
+        "rev": "8b4e22e90db0db4296d3806cb4418fbd7874f32e"
       },
       "nix": "default.nix",
       "owner": "timbertson",
