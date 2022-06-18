@@ -214,8 +214,8 @@ let _build_if_dirty ~lease ~var ~cache ~dry = (
 				)
 				| Some deps -> (
 					if deps#already_built then (
-						Log.trace var (fun m->m "CLEAN: %s has already been built in this invocation" state#path_repr);
-						Lwt.return_false
+						Log.trace var (fun m->m "DIRTY: %s has already been built in this invocation" state#path_repr);
+						Lwt.return_true
 					) else (
 						if dry then (
 							(* In order to determine whether this file _may_ be dirty,

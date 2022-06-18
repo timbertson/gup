@@ -51,8 +51,8 @@ def _build_if_dirty(target, allow_build):
 			return perform_build(target)
 
 		if deps.already_built():
-			_log.trace("CLEAN: %s has already been built in this invocation", target.path)
-			return False
+			_log.trace("DIRTY: %s was previously built in this invocation", target.path)
+			return True
 
 		built_children = set()
 		def build_child_if_dirty(path):

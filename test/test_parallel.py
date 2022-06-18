@@ -160,6 +160,50 @@ if not IS_WINDOWS:
 			self.build('--jobs=10', 'target', 'link/target')
 			self.assertEquals(self.read('target'), '1')
 
+		def test_multiple_targets_with_common_dependency(self):
+			self.write('input.txt', '1')
+			self.write('a.gup', BASH + 'gup -u input.txt ; cat input.txt > "$1" ; echo -n a >> "$1"')
+
+			# both depend on a
+			self.write('b.gup', BASH + 'gup -u a ; cat a > "$1" ; echo -n b >> "$1"')
+			self.write('c.gup', BASH + 'gup -u a ; cat a > "$1" ; echo -n c >> "$1"')
+
+			# depends on c
+			self.write('d.gup', BASH + 'gup -u c ; cat c > "$1" ; echo -n d >> "$1"')
+
+			self.build('--jobs=2', '-u', 'b', 'd')
+			self.assertEquals(self.read('b'), '1ab')
+			self.assertEquals(self.read('c'), '1ac')
+			self.assertEquals(self.read('d'), '1acd')
+
+			# BUG: both depend on a.
+			# b causes a to rebuild (it's dirty), then is rebuilt naturally
+			# When c is tested, its dependency (a) is already built and so
+			# (in an earlier version) it's seen as clean
+			self.write('input.txt', '2')
+			self.build('--jobs=2', '-u', 'b', 'd')
+			self.assertEquals(self.read('b'), '2ab')
+			self.assertEquals(self.read('c'), '2ac') # ends up with 1ac when c isn't rebuilt
+			self.assertEquals(self.read('d'), '2acd')
+
+		def test_multiple_targets_with_common_dependency_checksum(self):
+			# fake checksum to prevent rebuilding
+			self.write('input', '1')
+			self.write('input-checksum.gup', BASH + 'gup -u input; cat input > "$1"; echo UNCHANGED | gup --contents')
+
+			self.write('a.gup', echo_file_contents('input-checksum') + '; echo -n a >> "$1"')
+			self.write('b.gup', echo_file_contents('input-checksum') + '; echo -n b >> "$1"')
+			self.write('c.gup', echo_file_contents('b') + '; echo -n c >> "$1"')
+
+			self.build('--jobs=2', '-u', 'a', 'c')
+
+			self.write('input', '2')
+			self.build('--jobs=2', '-u', 'a', 'c')
+			self.assertEquals(self.read('input-checksum'), '2')
+			self.assertEquals(self.read('a'), '1a')
+			self.assertEquals(self.read('b'), '1b')
+			self.assertEquals(self.read('c'), '1bc')
+
 	class TestLocking(TestCase):
 		def test_deps_file_is_write_locked_during_build(self):
 			self.write('target.gup', re.sub(r'^\t{4}', '', '''
