@@ -1,4 +1,4 @@
-{ stdenv, pkgs, callPackage, python3Packages, ocaml-ng, opam2nix, self }:
+{ stdenv, pkgs, callPackage, python3Packages, ocaml-ng, opam2nix, gupSrc ? ../. }:
 let
 	ocamlPackages = ocaml-ng.ocamlPackages_4_08;
 	pythonPackages = python3Packages;
@@ -7,7 +7,7 @@ let
 	wrapImpl = drv: drv.overrideAttrs (o: {
 		# add test inputs and override source
 		buildInputs = (o.buildInputs or []) ++ (with pythonPackages; [ python nose mocktest whichcraft ]);
-		src = self;
+		src = gupSrc;
 	});
 
 	mocktest = callPackage ./mocktest.nix { inherit pythonPackages; };
@@ -16,7 +16,7 @@ let
 	opamArgs = {
 		inherit (ocamlPackages) ocaml;
 		selection = ./opam-selection.nix;
-		src = self;
+		src = gupSrc;
 		override = {selection}: {
 			gup = super: super.overrideAttrs (impl: {
 				buildInputs = (impl.buildInputs or []) ++ [ selection.ounit ];
