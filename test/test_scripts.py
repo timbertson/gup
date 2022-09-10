@@ -1,4 +1,5 @@
 from .util import *
+
 def _tmp_output_files(self):
 	meta_files = os.listdir(self.path('.gup'))
 	meta_files = filter(lambda f: not (f.startswith('lock') or f.startswith('deps')), meta_files)
@@ -45,6 +46,13 @@ class TestInterpreter(TestCase):
 
 		self.write('not_env.gup', '#!/var/not/really/not-env bash\necho 1')
 		self.assertRaises(SafeError, lambda: self.build('not_env'))
+
+	def test_native_exe(self):
+		# regression: reading executable as text (utf-8) to detect shebang fails
+		import subprocess
+		subprocess.check_call(['ln', '-sfn', '/bin/echo', self.path('test.gup')])
+		# subprocess.check_call(['ls', '-l', self.path('.')])
+		self.build('test')
 
 class TestScripts(TestCase):
 	def test_target_name_is_relative_to_Gupfile_without_gup_dir(self):

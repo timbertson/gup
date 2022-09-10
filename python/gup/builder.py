@@ -205,11 +205,11 @@ class Target(object):
 		return proc.wait()
 
 def _guess_executable(p):
-	with open(p) as f:
+	with open(p, 'rb') as f:
 		line = f.readline(255)
-	if not line.startswith('#!'):
+	if not line.startswith(b'#!'):
 		return None
-	args = line[2:].strip().split()
+	args = line[2:].decode('ascii').strip().split()
 	if not args: return None
 
 	bin = args[0]
