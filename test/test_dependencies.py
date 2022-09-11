@@ -71,11 +71,20 @@ class TestDependencies(TestCase):
 
 	def test_builder_listed_in_gupfile_is_buildable_explicitly(self):
 		self.write('actual_builder', echo_to_target("built"))
-		self.write('builder.gup', BASH + 'cp actual_builder "$1"')
-		self.write('Gupfile', 'builder:\n\ttarget\nbuilder.gup:\n\tbuilder')
+		self.write('builder.sh', BASH + 'gup -u actual_builder; cp actual_builder "$1"')
+		self.write('Gupfile', 'builder:\n\ttarget\nbuilder.sh:\n\tbuilder')
 		self.build_u('target')
 
 		self.assertEqual(self.read('target'), 'built')
+
+		self.write('actual_builder', echo_to_target("built2"))
+		self.build_u('target')
+		self.assertEqual(self.read('target'), 'built2')
+
+		# https://github.com/timbertson/gup/issues/20
+		self.write('actual_builder', echo_to_target("built3"))
+		self.build('target')
+		self.assertEqual(self.read('target'), 'built3')
 
 	def test_Gupfile_and_gup_scripts_are_not_buildable_by_gup_scripts(self):
 		self.write('Gupfile.gup', echo_to_target('you shouldn\'t be here!'))

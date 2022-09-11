@@ -28,11 +28,17 @@ def prepare_build(p):
 		return Target(builder)
 	return None
 
+def _build_parent_if_dirty(target, allow_build):
+	if target.builder.parent is not None:
+		return _build_if_dirty(Target(target.builder.parent), allow_build)
+	return False
+
 def _build_if_dirty(target, allow_build):
 	'''
 	Returns whether the dependency was built (or would be).
 	Also builds any targets required to check dirtiness.
 	'''
+	_log.debug("_build_if_dirty: %r", target)
 
 	def perform_build(target):
 		if allow_build:
@@ -40,10 +46,10 @@ def _build_if_dirty(target, allow_build):
 		return True
 
 	def build_target_if_dirty(target):
-		if target.builder.parent is not None:
-			if build_target_if_dirty(Target(target.builder.parent)):
-				_log.debug("DIRTY: builder was rebuilt")
-				return perform_build(target)
+		_log.debug("build_target_if_dirty: %r", target)
+		if _build_parent_if_dirty(target, allow_build):
+			_log.debug("DIRTY: builder was rebuilt")
+			return perform_build(target)
 
 		deps = target.state.deps()
 		if deps is None:
@@ -101,6 +107,7 @@ class Target(object):
 			if not built:
 				_log.trace("no build needed")
 		else:
+			_build_parent_if_dirty(self, True)
 			self.perform_build(False)
 			built = True
 

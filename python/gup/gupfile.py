@@ -296,6 +296,7 @@ class MatchRule(object):
 		return self.match(f)
 
 	def match_exactly(self, f):
+		_log.trace("Exact-matching %r exactly against %r" % (self.text, f))
 		return self.text == f
 
 	def match(self, f):

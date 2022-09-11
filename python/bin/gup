@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # Gup build tool
-# VERSION: 0.8.0
+# VERSION: 0.8.1
 # Copyright (C) 2013  Tim Cuthbertson, Avery Pennarun
 #
 # This library is free software; you can redistribute it and/or
@@ -245,7 +245,7 @@ def traverse_from(base, rel, resolve_final=False):
 
 
 ## --- version.py --- ##
-VERSION = "0.8.0"
+VERSION = "0.8.1"
 
 ## --- error.py --- ##
 UNKNOWN_ERROR_CODE = 1
@@ -1094,6 +1094,7 @@ class MatchRule(object):
 		return self.match(f)
 
 	def match_exactly(self, f):
+		_gupfile_log.trace("Exact-matching %r exactly against %r" % (self.text, f))
 		return self.text == f
 
 	def match(self, f):
@@ -1588,11 +1589,17 @@ def prepare_build(p):
 		return Target(builder)
 	return None
 
+def _builder_build_parent_if_dirty(target, allow_build):
+	if target.builder.parent is not None:
+		return _builder_build_if_dirty(Target(target.builder.parent), allow_build)
+	return False
+
 def _builder_build_if_dirty(target, allow_build):
 	'''
 	Returns whether the dependency was built (or would be).
 	Also builds any targets required to check dirtiness.
 	'''
+	_builder_log.debug("_builder_build_if_dirty: %r", target)
 
 	def perform_build(target):
 		if allow_build:
@@ -1600,10 +1607,10 @@ def _builder_build_if_dirty(target, allow_build):
 		return True
 
 	def build_target_if_dirty(target):
-		if target.builder.parent is not None:
-			if build_target_if_dirty(Target(target.builder.parent)):
-				_builder_log.debug("DIRTY: builder was rebuilt")
-				return perform_build(target)
+		_builder_log.debug("build_target_if_dirty: %r", target)
+		if _builder_build_parent_if_dirty(target, allow_build):
+			_builder_log.debug("DIRTY: builder was rebuilt")
+			return perform_build(target)
 
 		deps = target.state.deps()
 		if deps is None:
@@ -1661,6 +1668,7 @@ class Target(object):
 			if not built:
 				_builder_log.trace("no build needed")
 		else:
+			_builder_build_parent_if_dirty(self, True)
 			self.perform_build(False)
 			built = True
 
