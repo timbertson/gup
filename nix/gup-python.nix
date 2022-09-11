@@ -1,9 +1,9 @@
 { stdenv, fetchFromGitHub, nix-update-source, lib, python, which, pychecker ? null }:
 stdenv.mkDerivation rec {
-  version = "0.7.0";
+  version = "0.8.1";
   src = fetchFromGitHub {
-    rev = "8b4e22e90db0db4296d3806cb4418fbd7874f32e";
-    sha256 = "1zjd76jyb5zc9w3l368723bjmxjl05s096g8ipwncfks1p9hdgf3";
+    rev = "b15680638d5979c133cc87081d15b5d88b7cf161";
+    hash = "sha256-K9gXHPzznxUr1+DUx60nZ6AajYc/O/m9hKmxM/ud1RA";
     repo = "gup";
     owner = "timbertson";
   };

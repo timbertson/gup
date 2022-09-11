@@ -34,11 +34,10 @@ let
 		pychecker = pkgs.callPackage ./nix/pychecker.nix {};
 		resolveSelection = opam2nix.resolve opamArgs [ ../gup.opam "ounit" ];
 		python = wrapImpl (callPackage ./gup-python.nix { inherit python pychecker; });
+		python-upstream = callPackage ./gup-python.nix {};
 		ocaml = wrapImpl (opamSelection.gup);
 		development = withExtraDeps result.ocaml (result.python.buildInputs);
 		inherit opamSelection;
 	};
 in
-result.development.overrideAttrs (o: {
-	passthru = (o.passthru or {}) // result;
-})
+pkgs.lib.extendDerivation true result result.development
