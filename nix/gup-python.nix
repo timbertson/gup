@@ -32,7 +32,7 @@ stdenv.mkDerivation rec {
     inherit (src.meta) homepage;
     description = "A better make, inspired by djb's redo";
     license = lib.licenses.lgpl2Plus;
-    maintainers = [ stdenv.lib.maintainers.timbertson ];
+    maintainers = [ lib.maintainers.timbertson ];
     platforms = stdenv.lib.platforms.all;
   };
 }
