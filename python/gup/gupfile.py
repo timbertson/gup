@@ -89,7 +89,9 @@ class BuildCandidate(object):
 			try:
 				rules = parse_gupfile(f)
 			except AssertionError as e:
-				reason = " (%s)" % (e.message,) if e.message else ""
+				reason = str(e)
+				if reason:
+					reason = " (%s)" % (reason,)
 				raise SafeError("Invalid %s: %s%s" % (GUPFILE, path, reason))
 			_log.trace("Parsed gupfile: %r" % rules)
 	
