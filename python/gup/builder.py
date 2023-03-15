@@ -4,6 +4,7 @@ from os import path
 import errno
 import subprocess
 import logging
+from shlex import quote
 
 from .gupfile import Builder
 from .error import *
@@ -14,11 +15,6 @@ from .var import ROOT_CWD, XTRACE, IS_WINDOWS, keep_failed_outputs
 from .path import resolve_base
 from .parallel import extend_build_env
 _log = getLogger(__name__)
-
-try:
-	from pipes import quote
-except ImportError:
-	from shlex import quote
 
 def prepare_build(p):
 	p = resolve_base(p)
