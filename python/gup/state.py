@@ -92,10 +92,6 @@ class TargetState(object):
 		_log.trace("Loaded serialized state from %s: %r" % (deps_path, rv,))
 		return rv
 
-	def create_lock(self):
-		if self.lockfile is None:
-			self.lockfile = Lock(self.meta_path('lock'))
-
 	def add_dependency(self, dep):
 		lock = Lock(self.meta_path('deps2-lock'))
 		_log.debug('add dep: %s -> %s' % (self.path, dep))
@@ -196,7 +192,7 @@ class Dependencies(object):
 		return False
 	
 	def already_built(self):
-		return self.runid.is_current()
+		return self.runid.is_current() # pylint: disable=E1101; we know it's a RunId, but pylint thinks it's a Dependency
 
 	@classmethod
 	def init_file(cls, f):
@@ -208,6 +204,12 @@ class Dependencies(object):
 
 class Dependency(object):
 	recursive = False
+
+	# abstract
+	tag = NotImplemented
+	fields = NotImplemented
+	num_fields = NotImplemented
+
 	@staticmethod
 	def parse(line):
 		_log.trace("parsing line: %s" % (line,))
@@ -252,6 +254,11 @@ class AlwaysRebuild(Dependency):
 
 class BaseFileDependency(Dependency):
 	num_fields = 3
+
+	# abstract
+	path = NotImplemented
+	checksum = NotImplemented
+	mtime = NotImplemented
 
 	@classmethod
 	def relative_to(cls, rel_root, mtime, path):

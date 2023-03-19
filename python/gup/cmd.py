@@ -259,7 +259,7 @@ def _clean_targets(opts, dests):
 		print("Removing: %s" % (path,), file=sys.stderr)
 		if opts.interactive:
 			print("   [Y/n]: ", file=sys.stderr, end='')
-			if raw_input().strip() not in ('','y','Y'):
+			if input().strip() not in ('','y','Y'):
 				print("Skipped.", file=sys.stderr)
 				return
 

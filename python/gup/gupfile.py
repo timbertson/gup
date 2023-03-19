@@ -301,7 +301,7 @@ class MatchRule(object):
 		_log.trace("Exact-matching %r exactly against %r" % (self.text, f))
 		return self.text == f
 
-	def match(self, f):
+	def match(self, f): # pylint: disable=E0202; method intentilnally shadowed later
 		regexp = '^'
 		for i, part in enumerate(re.split(self._splitter, self.text)):
 			if i % 2 == 0:

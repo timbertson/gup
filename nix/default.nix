@@ -11,7 +11,6 @@ let
 	});
 
 	mocktest = callPackage ./mocktest.nix { inherit pythonPackages; };
-	pychecker = pkgs.callPackage ./pychecker.nix {};
 
 	opamArgs = {
 		inherit (ocamlPackages) ocaml;
@@ -31,9 +30,8 @@ let
 	});
 
 	result = {
-		pychecker = pkgs.callPackage ./nix/pychecker.nix {};
 		resolveSelection = opam2nix.resolve opamArgs [ ../gup.opam "ounit" ];
-		python = wrapImpl (callPackage ./gup-python.nix { inherit python pychecker; });
+		python = wrapImpl (callPackage ./gup-python.nix { inherit python; });
 		python-upstream = callPackage ./gup-python.nix {};
 		ocaml = wrapImpl (opamSelection.gup);
 		development = withExtraDeps result.ocaml (result.python.buildInputs);

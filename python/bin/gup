@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # Gup build tool
-# VERSION: 0.8.2
+# VERSION: 0.8.4
 # Copyright (C) 2013  Tim Cuthbertson, Avery Pennarun
 #
 # This library is free software; you can redistribute it and/or
@@ -245,7 +245,7 @@ def traverse_from(base, rel, resolve_final=False):
 
 
 ## --- version.py --- ##
-VERSION = "0.8.2"
+VERSION = "0.8.4"
 
 ## --- error.py --- ##
 UNKNOWN_ERROR_CODE = 1
@@ -887,7 +887,9 @@ class BuildCandidate(object):
 			try:
 				rules = parse_gupfile(f)
 			except AssertionError as e:
-				reason = " (%s)" % (e.message,) if e.message else ""
+				reason = str(e)
+				if reason:
+					reason = " (%s)" % (reason,)
 				raise SafeError("Invalid %s: %s%s" % (GUPFILE, path, reason))
 			_gupfile_log.trace("Parsed gupfile: %r" % rules)
 
@@ -1097,7 +1099,7 @@ class MatchRule(object):
 		_gupfile_log.trace("Exact-matching %r exactly against %r" % (self.text, f))
 		return self.text == f
 
-	def match(self, f):
+	def match(self, f): # pylint: disable=E0202; method intentilnally shadowed later
 		regexp = '^'
 		for i, part in enumerate(re.split(self._splitter, self.text)):
 			if i % 2 == 0:
@@ -1215,10 +1217,6 @@ class TargetState(object):
 		_state_log.trace("Loaded serialized state from %s: %r" % (deps_path, rv,))
 		return rv
 
-	def create_lock(self):
-		if self.lockfile is None:
-			self.lockfile = Lock(self.meta_path('lock'))
-
 	def add_dependency(self, dep):
 		lock = Lock(self.meta_path('deps2-lock'))
 		_state_log.debug('add dep: %s -> %s' % (self.path, dep))
@@ -1319,7 +1317,7 @@ class Dependencies(object):
 		return False
 
 	def already_built(self):
-		return self.runid.is_current()
+		return self.runid.is_current() # pylint: disable=E1101; we know it's a RunId, but pylint thinks it's a Dependency
 
 	@classmethod
 	def init_file(cls, f):
@@ -1331,6 +1329,12 @@ class Dependencies(object):
 
 class Dependency(object):
 	recursive = False
+
+	# abstract
+	tag = NotImplemented
+	fields = NotImplemented
+	num_fields = NotImplemented
+
 	@staticmethod
 	def parse(line):
 		_state_log.trace("parsing line: %s" % (line,))
@@ -1375,6 +1379,11 @@ class AlwaysRebuild(Dependency):
 
 class BaseFileDependency(Dependency):
 	num_fields = 3
+
+	# abstract
+	path = NotImplemented
+	checksum = NotImplemented
+	mtime = NotImplemented
 
 	@classmethod
 	def relative_to(cls, rel_root, mtime, path):
@@ -1573,13 +1582,9 @@ from os import path
 import errno
 import subprocess
 import logging
+from shlex import quote
 
 _builder_log = getLogger('gup.builder')
-
-try:
-	from pipes import quote
-except ImportError:
-	from shlex import quote
 
 def prepare_build(p):
 	p = resolve_base(p)
@@ -2182,7 +2187,7 @@ def _cmd_clean_targets(opts, dests):
 		print("Removing: %s" % (path,), file=sys.stderr)
 		if opts.interactive:
 			print("   [Y/n]: ", file=sys.stderr, end='')
-			if raw_input().strip() not in ('','y','Y'):
+			if input().strip() not in ('','y','Y'):
 				print("Skipped.", file=sys.stderr)
 				return
 

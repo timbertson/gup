@@ -121,19 +121,12 @@ def main():
 
 	env = os.environ.copy()
 	def check(mods, basedir):
-		if env.get('SKIP_PYCHECKER', '0').strip() == '1':
-			print("WARN: Skipping pychecker check ...", file=sys.stderr)
-			return
 		env['PYTHONPATH'] = basedir
-		args = ['pychecker', '--limit', '100', '--no-reimport', '--no-miximport', '--no-argsused', '--no-shadowbuiltin', '--no-classattr', '--no-returnvalues'] + mods
+		args = ['pylint', '--errors-only' ] + mods
 		print("Running: %r %r" % (args, env['PYTHONPATH']))
-		try:
-			subprocess.check_call(args, env=env, cwd=basedir)
-		except OSError as e:
-			print("\nERROR: Failed to run pychecker - is it installed?\nExport SKIP_PYCHECKER=1 to skip this check", file=sys.stderr)
-			sys.exit(1)
+		subprocess.check_call(args, env=env, cwd=basedir)
 
-	print('\n\n# PYCHECKER')
+	print('\n\n# PYLINT')
 	print('#----- ORIGINAL ------#')
 	check(['gup.' + mod for mod in mods], os.path.dirname(here))
 

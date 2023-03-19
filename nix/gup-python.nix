@@ -1,4 +1,4 @@
-{ stdenv, fetchFromGitHub, nix-update-source, lib, python, which, pychecker ? null }:
+{ stdenv, fetchFromGitHub, nix-update-source, lib, python, which, pylint ? null }:
 stdenv.mkDerivation rec {
   version = "0.8.1";
   src = fetchFromGitHub {
@@ -8,8 +8,7 @@ stdenv.mkDerivation rec {
     owner = "timbertson";
   };
   name = "gup-${version}";
-  buildInputs = lib.remove null [ python which pychecker ];
-  SKIP_PYCHECKER = pychecker == null;
+  buildInputs = lib.remove null [ python which pylint ];
   buildPhase = "make python";
   installPhase = ''
     mkdir $out
