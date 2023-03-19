@@ -1,5 +1,9 @@
 This file lists breaking changes and major features (not each individual bug fix)
 
+## 0.9.x:
+
+ - Drop support for python 3
+
 ## 0.8.x:
 
  - Overhaul of path and symlink code to iron out a number of edge case bugs,
