@@ -2,7 +2,7 @@ This file lists breaking changes and major features (not each individual bug fix
 
 ## 0.9.x:
 
- - Drop support for python 3
+ - Drop support for python 2
 
 ## 0.8.x:
 

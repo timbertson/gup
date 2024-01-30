@@ -75,15 +75,6 @@ directory to your `$PATH` when building).
 
 ----
 
-### Python version requirements
-
-Gup works under both python 2 and 3, so it should work with
-whatever recent python is on your $PATH.
-
-I don't routinely test under old python versions, so if you
-need to run gup in anything below 2.7 and you find
-something broken, patches welcome.
-
 ### Using it via `make`
 
 For convenience, you may wish to provide a `Makefile` that
