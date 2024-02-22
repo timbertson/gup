@@ -267,7 +267,7 @@ def parse_gupfile(f):
 	for line in f:
 		lineno += 1
 		if line.startswith('#'): continue
-		new_rule = not re.match('^\s', line)
+		new_rule = not re.match(r'^\s', line)
 		line = line.strip()
 		if not line: continue
 		if new_rule:
