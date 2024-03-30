@@ -339,7 +339,7 @@ let build_sources (dir:Concrete.t) : build_source OSeq.t =
 	let direct_target = OSeq.return @@ Direct (dir, None) in
 
 	let oseq_range start ~until:end_inclusive =
-		OSeq.iterate start succ |> OSeq.take (end_inclusive+1)
+		OSeq.iterate succ start |> OSeq.take (end_inclusive+1)
 	in
 
 	(* /path/to[/gup]/filename.gup with [/gup] at each directory *)

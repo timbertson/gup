@@ -13,15 +13,8 @@ let print_obj (out: Format.formatter) r = r#print out
 module EnvironmentMap = struct
 	include StringMap
 	let array env =
-		let seq receiver =
-			let bindings = StringMap.to_seq env in
-			bindings (fun (k,v) -> receiver (k^"="^v))
-		in
-		CCArray.of_list (CCList.of_seq seq)
-
-	let of_seq oseq = of_seq (fun receiver ->
-		oseq |> OSeq.iter receiver
-	)
+		let pairs = CCArray.of_list (StringMap.bindings env) in
+		pairs |> CCArray.map (fun (k,v) -> k^"="^v)
 end
 
 module Unix = struct

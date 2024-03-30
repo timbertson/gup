@@ -1,6 +1,6 @@
 { stdenv, pkgs, callPackage, python3Packages, ocaml-ng, opam2nix, self }:
 let
-	ocamlPackages = ocaml-ng.ocamlPackages_4_08;
+	ocamlPackages = ocaml-ng.ocamlPackages_4_14;
 	pythonPackages = python3Packages;
 	python = pythonPackages.python;
 
@@ -32,10 +32,18 @@ let
 
 	result = {
 		pychecker = pkgs.callPackage ./nix/pychecker.nix {};
-		resolveSelection = opam2nix.resolve opamArgs [ ../gup.opam "ounit" ];
+		resolveSelection = opam2nix.resolve opamArgs [
+			../gup.opam
+			"ounit"
+			"ocaml-lsp-server"
+			"utop"
+		];
 		python = wrapImpl (callPackage ./gup-python.nix { inherit python pychecker; });
 		ocaml = wrapImpl (opamSelection.gup);
-		development = withExtraDeps result.ocaml (result.python.buildInputs);
+		development = withExtraDeps result.ocaml (result.python.buildInputs ++ [
+			opamSelection.ocaml-lsp-server
+			opamSelection.utop
+		]);
 		inherit opamSelection;
 	};
 in

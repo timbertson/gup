@@ -57,14 +57,14 @@ let lisdir path =
 
 let which exe =
 	let rec find thunk = match thunk () with
-		| `Nil -> None
-		| `Cons (p, tail) ->
+		| Seq.Nil -> None
+		| Seq.Cons (p, tail) ->
 			let p = Filename.concat p exe in
 			if Sys.file_exists p
 				then (Some p)
 				else find tail
 	in
-	CCString.Split.klist_cpy ~by:":" (Unix.getenv "PATH") |> find
+	CCString.Split.seq_cpy ~by:":" (Unix.getenv "PATH") |> find
 
 let lwt_zip : 'a 'b. 'a Lwt.t -> 'b Lwt.t -> ('a * 'b) Lwt.t = fun a b ->
 	let aref = ref (Obj.magic ())
