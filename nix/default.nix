@@ -6,7 +6,7 @@ let
 
 	wrapImpl = drv: drv.overrideAttrs (o: {
 		# add test inputs and override source
-		buildInputs = (o.buildInputs or []) ++ (with pythonPackages; [ python nose mocktest whichcraft ]);
+		buildInputs = (o.buildInputs or []) ++ (with pythonPackages; [ python pynose mocktest whichcraft ]);
 		src = gupSrc;
 	});
 
