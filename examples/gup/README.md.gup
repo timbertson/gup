@@ -44,7 +44,7 @@ with open(dest, 'w') as output:
 			title = ': ' + title
 		p('\n# `%s/`%s', dir, title)
 
-		dotdirs = filter(lambda d: is_hidden(d[1]), enumerate(dirs))
+		dotdirs = list(filter(lambda d: is_hidden(d[1]), enumerate(dirs)))
 		# delete from the back, to prevent index shifting
 		for idx, _ in reversed(dotdirs):
 			del dirs[idx]
