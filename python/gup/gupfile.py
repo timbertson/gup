@@ -7,11 +7,8 @@ import itertools
 from .whichcraft import which
 from .log import getLogger
 from .error import SafeError
-from .var import INDENT, PY3
+from .var import INDENT
 _log = getLogger(__name__)
-
-if PY3:
-	xrange = range
 
 def _default_gup_files(filename):
 	l = filename.split('.')
@@ -202,12 +199,12 @@ def possible_gup_files(p):
 
 	# find direct match for `{target}.gup` in all possible `/gup` dirs
 	yield BuildCandidate(dirname, None, False, filename)
-	for i in xrange(0, dirdepth):
+	for i in range(0, dirdepth):
 		suff = os.path.sep.join(dirparts[dirdepth - i:])
 		base = path.join(dirname, _up_path(i))
 		yield BuildCandidate(base, suff, False, filename)
 
-	for up in xrange(0, dirdepth):
+	for up in range(0, dirdepth):
 		# `up` controls how "fuzzy" the match is, in terms
 		# of how specific the path is - least fuzzy wins.
 		#
@@ -216,7 +213,7 @@ def possible_gup_files(p):
 		parent_base = path.join(dirname, _up_path(up))
 		target_id = os.path.join(base_suff, filename)
 		yield BuildCandidate(parent_base, None, True, target_id)
-		for i in xrange(0, dirdepth - up):
+		for i in range(0, dirdepth - up):
 			# `i` is how far up the directory tree we're looking for the gup/ directory
 			suff = os.path.sep.join(dirparts[dirdepth - i - up:dirdepth - up])
 			base = path.join(parent_base, _up_path(i))
